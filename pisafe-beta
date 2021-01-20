@@ -10,8 +10,8 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.6.11"
-PRODUCTNAME="Pi Safe"
+SCRIPTVER="0.6.12"
+PRODUCTNAME="Pi Safe Beta"
 PRODUCTCOMMENT="Backup-to or Restore-from an Image File"
 CURRENT_DIR=$(pwd)
 
@@ -1400,7 +1400,7 @@ do_update(){
 }
 
 
-install() {   
+do_install() {   
      
     # check to see if script is already installed.
     
@@ -1415,7 +1415,7 @@ install() {
         WARNING_TEXT=
     fi
     
-    MESSAGE_TEXT="This will install '$PRODUCTNAME' ver '$SCRIPTVER' into '/usr/local/bin' so it can be started from a terminal in any folder.\n\nThen it and put it in the 'Accessories' menu \n\nInstall $PRODUCTNAME? "
+    MESSAGE_TEXT="This will install '$PRODUCTNAME' ver '$SCRIPTVER' into '/usr/local/bin' so it can be started from a terminal in any folder.\n\nIt will also be put it in the 'Accessories' menu \n\nInstall $PRODUCTNAME? "
     
     
     # Prompt to install
@@ -1455,18 +1455,21 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
         sudo mv "$PRODUCTNAME.desktop" "/usr/share/applications"
 
     
-        if [ $INTERFACE = "GUI" ]; then
-            if [ -f "/usr/share/applications/$PRODUCTNAME.desktop" ]; then
-                whiptail  --backtitle "$BACKTITLE" --title DONE --msgbox "$PRODUCTNAME installed" $WT_HEIGHT $WT_MB_WIDTH
-            else
-                whiptail  --backtitle "$BACKTITLE" --title ERROR --msgbox "$PRODUCTNAME NOT installed" $WT_HEIGHT $WT_MB_WIDTH
-            fi
+    
+        #if [ -f "/usr/share/applications/$PRODUCTNAME.desktop" ]; then
+        if [ -f "/usr/local/bin/$SCRIPTNAME" ]; then 
+            MSG="$PRODUCTNAME installed. \
+
+            
+You can execute it from any directory by typing '$SCRIPTNAME'.
+                    
+It is easiest to start it from the directory that holds your image files.
+                        
+            "
+            echo_or_msgbox "INSTALLED" "$MSG"
         else
-            if [ -f "/usr/share/applications/$PRODUCTNAME.desktop" ]; then
-                echo "$PRODUCTNAME installed" 
-            else
-                echo_red ERROR --msgbox "$PRODUCTNAME NOT installed"
-            fi
+            MSG="$PRODUCTNAME not installed.  '/usr/local/bin/$SCRIPTNAME' not found. "
+            echo_or_msgbox "ERROR" "$MSG"
         fi
     
     else
@@ -1516,7 +1519,7 @@ gui_menu(){
             ;;
             
             INSTALL)
-                install
+                do_install
             ;;
             
              HELP)
@@ -1573,7 +1576,7 @@ case $1 in
     ;;
     
     install)
-        install
+        do_install
     ;;
     
     -v)
