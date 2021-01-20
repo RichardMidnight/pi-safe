@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.6.12"
+SCRIPTVER="0.6.13"
 PRODUCTNAME="Pi Safe Beta"
 PRODUCTCOMMENT="Backup-to or Restore-from an Image File"
 CURRENT_DIR=$(pwd)
@@ -79,6 +79,16 @@ do_about(){
     echo
     echo "I hope this is helpful to others."
     echo
+}
+
+
+is_pi () {
+  ARCH=$(dpkg --print-architecture)
+  if [ "$ARCH" = "armhf" ] || [ "$ARCH" = "arm64" ] ; then
+    return 0
+  else
+    return 1
+  fi
 }
 
 
@@ -806,13 +816,19 @@ do_backup(){
     echo_white Step 1 took $(get_elapsed_time $TIME1 $TIME2)
     echo
    
-    echo_white Step 2 of 3 - Shrinking filesystem with PiShrink ...
-    sudo pishrink.sh $OUTFILE_BASE.img
-    echo Done shrinking filesystem
-    echo_white $(ls -s -h $OUTFILE_BASE.img)
-    TIME3=$(date +%s)
-    echo_white Step 2 took $(get_elapsed_time $TIME2 $TIME3)
-
+   
+    if is_pi ; then
+        echo_white Step 2 of 3 - Shrinking filesystem with PiShrink ...
+        sudo pishrink.sh $OUTFILE_BASE.img
+        echo Done shrinking filesystem
+        echo_white $(ls -s -h $OUTFILE_BASE.img)
+        TIME3=$(date +%s)
+        echo_white Step 2 took $(get_elapsed_time $TIME2 $TIME3)
+    else    
+        echo Not running on a Raspberry Pi.  Skipping PiShrink
+    fi
+    
+    
     echo
     echo_white Step 3 of 3 - Compressing $OUTFILE_BASE.img to $OUTFILE ...
     date
@@ -1464,7 +1480,8 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 You can execute it from any directory by typing '$SCRIPTNAME'.
                     
 It is easiest to start it from the directory that holds your image files.
-                        
+
+Or select it from the 'accessories' menu.  Note, this starts from the home directory.                   
             "
             echo_or_msgbox "INSTALLED" "$MSG"
         else
