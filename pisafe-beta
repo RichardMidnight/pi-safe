@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.6.13"
+SCRIPTVER="0.6.15"
 PRODUCTNAME="Pi Safe Beta"
 PRODUCTCOMMENT="Backup-to or Restore-from an Image File"
 CURRENT_DIR=$(pwd)
@@ -643,7 +643,7 @@ do_backup_get_input(){
     OUTFILE=$2   #use global vars
     local OUTFILE_BASE=$(get_file_base $OUTFILE)
     local OUTFILE_EXT=$(get_file_ext $OUTFILE)
-    local COMPRESSION=$3
+    COMPRESSION=$3
     
     
     if [ -z $COMPRESSION ] ; then
@@ -781,6 +781,8 @@ do_backup(){
     # Expecting 2 parameters    INDEV and OUTFILE
     local INDEV=$1
     local OUTFILE=$2
+    local OUTFILE_BASE=$(get_file_base $OUTFILE)
+    local OUTFILE_EXT=$(get_file_ext $OUTFILE)
     
     #echo 1 - sudo dd bs=4M if=/dev/$INDEV of=$OUTFILE.img status=progress conv=fsync 
     #echo 2 - sudo pishrink.sh $OUTFILE.img
@@ -817,16 +819,16 @@ do_backup(){
     echo
    
    
-    if is_pi ; then
+  #  if is_pi ; then
         echo_white Step 2 of 3 - Shrinking filesystem with PiShrink ...
         sudo pishrink.sh $OUTFILE_BASE.img
         echo Done shrinking filesystem
         echo_white $(ls -s -h $OUTFILE_BASE.img)
         TIME3=$(date +%s)
         echo_white Step 2 took $(get_elapsed_time $TIME2 $TIME3)
-    else    
-        echo Not running on a Raspberry Pi.  Skipping PiShrink
-    fi
+  #  else    
+#     echo Not running on a Raspberry Pi.  Skipping PiShrink
+  #  fi
     
     
     echo
@@ -1577,6 +1579,7 @@ FILE_SELECTED=""
 DEVICE_SELECTED=""
 
 INTERFACE="CLI"
+
 
 case $1 in
     
