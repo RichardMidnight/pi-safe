@@ -10,8 +10,8 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.7.0"
-PRODUCTNAME="sd"
+SCRIPTVER="0.7.1"
+PRODUCTNAME="Pi Safe"
 PRODUCTCOMMENT="Backup-to or Restore-from an Image File"
 CURRENT_DIR=$(pwd)
 
@@ -27,6 +27,7 @@ echo_red()          { (echo -e "${RED}$*${NC}") }
 #SDDEV=
 #INFILE=
 #OUTFILE=
+BACKTITLE="$PRODUCTNAME ver $SCRIPTVER"
 
 
 do_help() {
