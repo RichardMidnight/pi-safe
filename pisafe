@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.0"
+SCRIPTVER="0.8.2"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Backup-to or Restore-from an Image File"
 CURRENT_DIR=$(pwd)
@@ -28,6 +28,13 @@ OUTDEV=
 INFILE=
 OUTFILE=
 BACKTITLE="$PRODUCTNAME ver $SCRIPTVER"
+
+
+#OPTIONS to consider. Not fully implemented yet
+COMPRESSION=1
+LOG=false
+NO_SAFETY=false
+verify=false
 
 
 do_help() {
@@ -206,7 +213,6 @@ get_image_size() {
             echo 0
             return 1
         ;;
-        
     esac
 }
 
@@ -394,9 +400,9 @@ check_out_device_size_retired (){
     # Check if SD-card is large... maybe the wrong device
     if [ $(get_sd_size_bytes $OUTDEV) -gt 16000000000 ]; then
         echo
-        echo_red "WARNING... SD-card '$OUTDEV' is larger than 16GB... Are you sure it is the right device?"
-        read -p "You must type 'OK' to continue:"  -r RESULT
-        if [ -z $RESULT ] || [ $RESULT != "OK" ]; then
+        echo_red "WARNING... SD-card '$OUTDEV' '$(get_sd_name $OUTDEV)' is larger than 16GB... Are you sure it is the right device?"
+        read -p "You must type 'BIG' to continue:"  -r RESULT
+        if [ -z $RESULT ] || [ $RESULT != "BIG" ]; then
             echo Exiting...
             return 1
         fi
@@ -564,7 +570,6 @@ do_backup(){
     local OUTFILE=$2
     local OUTFILE_BASE=$(get_file_base $OUTFILE)
     local OUTFILE_EXT=$(get_file_ext $OUTFILE)
-    COMPRESSION=1
     
     #echo 1 - sudo dd bs=4M if=/dev/$INDEV of=$OUTFILE.img status=progress conv=fsync 
     #echo 2 - sudo pishrink.sh $OUTFILE.img
@@ -715,8 +720,7 @@ do_backup(){
     echo
     echo_white Step 3 of 3 - Compressing $OUTFILE_BASE.img to $OUTFILE ...
     date
-    #echo Compression level set to $COMPRESSION out of -9
-    echo $SCRIPTNAME compression level set to $(echo $COMPRESSION | sed 's/-/ /g') of 9
+    echo $SCRIPTNAME compression level set to $COMPRESSION of 9
    
     case $(get_file_ext $OUTFILE) in
         img)
@@ -828,9 +832,9 @@ do_restore(){
     # Warning if device is big
     if [ $(get_sd_size_bytes $OUTDEV) -gt 16000000000 ]; then
         echo
-        echo_red "WARNING... SD-card '$OUTDEV' is larger than 16GB... Are you sure it is the right device?"
-        read -p "You must type 'OK' to continue:"  -r RESULT
-        if [ -z $RESULT ] || [ $RESULT != "OK" ]; then
+        echo_red "WARNING... SD-card '$OUTDEV' '$(get_sd_name $OUTDEV)' is larger than 16GB... Are you sure it is the right device?"
+        read -p "You must type 'BIG' to continue:"  -r RESULT
+        if [ -z $RESULT ] || [ $RESULT != "BIG" ]; then
             echo Exiting...
             return 1
         fi
@@ -925,7 +929,8 @@ do_restore(){
         ;;
 
         gz)
-            pigz -v -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+            #pigz -v -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+            pigz -v -k -c -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
             EXIT_CODE=$?
         ;;
 
@@ -1098,56 +1103,96 @@ function gui_select_dr_file()
     local FILE_MASK='( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" )'
     local ALLOW_BACK=${4:-no}
     local FILES=()
-    FIELD_SEPERATOR="|"
+    FS="~"  # Field Seperator
 
     [ "$ALLOW_BACK" != "no" ] && FILES+=(".." "..")
 
+  #  IFS=$'\n'
+
     # First add folders      
+    # use std IFS for folders
     for DIR in $(find $LOCAL_PATH -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f " | sort 2> /dev/null)
     do
-        FILES+=($DIR $FIELD_SEPERATOR"folder")
+        FILES+=($DIR "folder")
     done
 
+
+
     # Then add the files
+    # change IFS to newline.  Insert ~ as a field seperator 
+IFS=$'\n'  
+#IFS=$FS 
+#unset IFS 
+SKIPPED=0
+
+# "saved:                                   -printf "%f$FS %sFS \n" | sort \"
     for FILE in $(find $LOCAL_PATH -maxdepth 1 \
                                     \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" \) \
                                     -name "[!.]*" \
                                     -type f \
-                                    -printf "%f %s \n" | sort \
+                                    -printf "%f %k\n" | sort \
                                     2> /dev/null)
     do
-        FILES+=($FILE)
+        SPACES_IN_NAME=$(echo $FILE | sed '1s/[^ \t]//g' | wc -c) 
+        if [ $SPACES_IN_NAME = 2 ]; then  # if no extra spaces in the filename
+            FILES+=($FILE)
+        else
+       #     FILES+=($FILE )
+       # i=$((i+1))
+       echo "Skipped '$FILE' due to spaces in the name"
+       SKIPPED=$((SKIPPED+1))
+        fi
     done
-    ###unset IFS
+unset IFS
 
+echo SKIPPED=$SKIPPED
+if [ $SKIPPED != 0 ] ; then
+    whiptail --msgbox "$SKIPPED filenames with spaces were skipped" $WT_MB_HEIGHT $WT_MB_WIDTH
+fi
 
     # sort the array
     #  IFS=$'\n' sorted=($(sort  <<<"${FILES[*]}")) ; unset IFS
-
+    
+#echo pre
+#IFS=$FS
+#echo ""${FILES[@]}""
+#echo 
+#echo "${FILES[@]}"
+#echo loop
     # convert filesizes to mb
     re='^[0-9]+$'
     arraylength=${#FILES[@]}
+#echo arraylength=$arraylength    
     for (( i=0; i<${arraylength}; i++ )); do
-        #    echo "${FILES[$i]}"
+#echo -"${FILES[$i]}"-
             if [[ ${FILES[$i]} =~ $re ]] ; then
-               # echo "error: Not a number" >&2; exit 1
-                   FILES[$i]=$(echo $FIELD_SEPERATOR$(( ${FILES[$i]} / 1024 / 1024 ))mb)
+  #             # echo "error: Not a number" >&2; exit 1
+                
+                  FILES[$i]=$(echo $(( ${FILES[$i]} / 1024 / 1024 ))mb)
+  x=1
             fi
-       #      echo "${FILES[$i]}"
+#echo ""${FILES[$i]}""
+
     done
-   
-    #IFS=$FIELD_SEPERATOR
+ 
+#IFS=$FS   
+#IFS=$'\n' 
+
     # let user select file
     while true
     do
         FILE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$LOCAL_PATH" \
-                                --menu "Choose a file" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT ""${FILES[@]}"" 3>&1 1>&2 2>&3)
+                                --menu "Choose a file" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT ""${FILES[@]}""  3>&1 1>&2 2>&3)
 
         #exit if bad whiptail statement
         FSX=${FILE_SELECTED:0:3}
         echo $FSX
         if [ ! -z $FSX ] && [ $FSX = "Box" ]; then
             echo "ERROR in whiptail in gui_select_dr_file.  Maybe a space in a filename?"
+#echo ""${FILES[@]}""
+#echo 
+echo "${FILES[@]}"
+
             exit 1
         fi
         
@@ -1173,7 +1218,7 @@ function gui_select_dr_file()
         fi
     done
     
-    ###unset IFS
+    unset IFS
 }
 
 
@@ -1210,7 +1255,9 @@ gui_get_indev(){
     # Warning if one and a half times the SD-card is bigger than freespace
     SPACENEEDED=$(( $(get_sd_size_bytes $INDEV) + $(( $(get_sd_size_bytes $INDEV) / 2 )) ))
     if [ $SPACENEEDED -gt $(get_freespace_bytes) ]; then
-        whiptail --backtitle "$BACKTITLE" --title "WARNING" --msgbox "Might not be enough free space on '$PWD'" $WT_MB_HEIGHT $WT_MB_WIDTH   
+        whiptail --backtitle "$BACKTITLE" --title "WARNING" \
+            --msgbox "Might not be enough free space on '$PWD'
+            \nThere are $(get_folder_size /home/pi/.local/share/Trash) in the Trash" $WT_MB_HEIGHT $WT_MB_WIDTH   
     fi
     
     # maybe check and see if it looks like a raspbian disk?
@@ -1252,8 +1299,8 @@ gui_get_outfile(){
         
         #get filename
         MSG="Enter the filename (eg 2020-12-15-Buster32) 
-        \n\nSupported extensions are: .img .zip .xz .gz 
-        \n\nIf you don't include an extension '.zip' will be added. "
+        \nSupported extensions are: .img .zip .xz .gz 
+        \nIf you don't include an extension '.zip' will be added. "
         NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP : Get Filename" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then 
@@ -1318,7 +1365,7 @@ gui_get_outdev(){
     # note the RESULT is not used here... could be cleaned up
     if [ $(get_sd_size_bytes $OUTDEV) -gt 16000000000 ]; then
         if (whiptail  --backtitle "$BACKTITLE" --title RESTORE-WARNING --defaultno \
-            --yesno "WARNING... SD-card '$OUTDEV' is larger than 16GB... Are you sure it is the right device?" $WT_HEIGHT $WT_WIDTH) then
+            --yesno "WARNING... SD-card '$OUTDEV' '$(get_sd_name $OUTDEV)' is larger than 16GB... Are you sure it is the right device?" $WT_HEIGHT $WT_WIDTH) then
             RESULT="YES"
         else
             RESULT="n"
@@ -1339,7 +1386,6 @@ gui_do_backup(){
     OUTFILE=$2   #use global vars
     local OUTFILE_BASE=$(get_file_base $OUTFILE)
     local OUTFILE_EXT=$(get_file_ext $OUTFILE)
-    COMPRESSION=1
     
     #get global variable INDEV
     gui_get_indev
@@ -1358,8 +1404,8 @@ gui_do_backup(){
     #confirm to continue
     whiptail  --backtitle "$BACKTITLE" --title "BACKUP : Create Image-file" --defaultno \
         --yesno "Create image-file '$OUTFILE' from '/dev/$INDEV'  
-        \n\nA good 8GB card on a Pi4 takes about 9 minutes.
-        \n\nThis will switch to terminal screen to watch the progress ...
+        \nA good 8GB card on a Pi4 takes about 9 minutes.
+        \nThis will switch to terminal screen to watch the progress ...
         \n\nAre you sure you want to continue?"   $WT_HEIGHT $WT_WIDTH
     EXIT_CODE=$?       
     if [ $EXIT_CODE != 0 ] ; then
@@ -1380,7 +1426,8 @@ gui_do_backup(){
     # Display results
     whiptail  --backtitle "$BACKTITLE" --title " BACKUP-DONE "  \
         --msgbox "Done creating imagefile '$OUTFILE'
-        \n'$(get_sd_name $INDEV)' compressed to $(get_file_size $OUTFILE) in $(get_elapsed_time $TIME1 $TIME4) 
+        \nfrom '$(get_sd_name $INDEV)' 
+        \ncompressed from '$(get_sd_size $INDEV)' to '$(get_file_size $OUTFILE)' in $(get_elapsed_time $TIME1 $TIME4) 
         \n\nYou can remove '$(get_sd_name $INDEV)' now. " $WT_MB_HEIGHT $WT_WIDTH
 }  
 
@@ -1406,9 +1453,9 @@ gui_do_restore() {
 
     # Confirm to continue
     if (whiptail  --backtitle "$BACKTITLE" --title RESTORE-WARNING --defaultno \
-        --yesno "Write image '$INFILE' \nto SD card  '$OUTDEV'   $(get_sd_name $OUTDEV)
-        \nThis will switch to a terminal screen to watch the progress ... There are currently some safety questions in the terminal screen.
-        \n\nALL existing data on '/dev/$OUTDEV' - will be ERASED!  
+        --yesno "Write image '$INFILE' \nto SD card  '$OUTDEV'   '$(get_sd_name $OUTDEV)'
+        \nThis will switch to a terminal screen to watch the progress ... There are currently some safety prompts in the terminal screen.
+        \n\nALL existing data on '/dev/$OUTDEV' - WILL BE ERASED!  
         \n\nAre you sure you want to continue?" $WT_HEIGHT $WT_WIDTH) then
         #echo "User selected Yes, exit status was $?."
         RESULT="YES"
@@ -1420,7 +1467,7 @@ gui_do_restore() {
 
               
    ###################################################       
-    # do the restore!!
+    # do the restore
     do_restore $INFILE $OUTDEV  
     EXIT_CODE=$?
     read -n 1 -p "Press any key to continue..." 
@@ -1432,8 +1479,8 @@ gui_do_restore() {
     #display the results
     whiptail  --backtitle "$BACKTITLE" --title " RESTORE-DONE " \
         --msgbox "Done writing '$INFILE' 
-        \n\nto '$(get_sd_name $OUTDEV)'
-        \n\nin $(get_elapsed_time $TIME1 $TIME2)
+        \nto '$(get_sd_name $OUTDEV)'
+        \nin $(get_elapsed_time $TIME1 $TIME2)
         \n\nYou can remove '$(get_sd_name $OUTDEV)' now. " $WT_MB_HEIGHT $WT_WIDTH
 }
 
@@ -1481,6 +1528,7 @@ gui_menu(){
                 "BACKUP"      "   Backup an SD-card to an image-file " \
                 "RESTORE"     "   Restore an SD-card from an image-file" \
                 "LIST"      "   List info " \
+                "OPTIONS"   "   Set options " \
                 "INSTALL"   "   Install into the menu" \
                 "HELP"      "   Help " \
                 "ABOUT"     "   About " \
@@ -1502,6 +1550,11 @@ gui_menu(){
                 result="$INFO"
                 whiptail --backtitle "$BACKTITLE"  --title "LIST" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH
             ;;
+            
+            OPTIONS)
+                gui_options
+            ;;
+            
             
             INSTALL)
                 gui_install
