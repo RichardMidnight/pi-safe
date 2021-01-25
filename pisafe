@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.3"
+SCRIPTVER="0.8.4"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Backup-to or Restore-from an Image File"
 CURRENT_DIR=$(pwd)
@@ -114,13 +114,13 @@ get_file_path(){
 
 
 get_file_base() {
-    basename "$1"
+   # basename "$1"
 
-    #local fullfilename=$1
+    local fullfilename=$1
     
-    #filename=$(basename "$fullfilename")
-    #fname="${filename%.*}"
-    #echo $fname
+    filename=$(basename "$fullfilename")
+    fname="${filename%.*}"
+    echo $fname
 }
 
 
@@ -463,6 +463,7 @@ do_list_info() {
         echo
         echo "--- CURRENT SYSTEM ---"
         echo "Root disk = /dev/$(get_root_disk)"
+        echo "Root size = $(get_sd_size /dev/$(get_root_disk) )"
         echo "FreeSpace = $(get_freespace)"
         echo "TrashSize = $(get_folder_size /home/pi/.local/share/Trash)"
         echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
@@ -554,8 +555,9 @@ do_install() {
 
 
 do_update() {
-    
     INTERFACE=$1
+    
+    echo "This ver '$SCRIPTVER'"
     
     # this should not be needed.  the parameter should be passed.
     if [ -z $INTERFACE ]; then
@@ -564,7 +566,7 @@ do_update() {
       
     local SERVER_VER=
     rm $SCRIPTNAME.tmp
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/$SCRIPTNAME -O $SCRIPTNAME.tmp
+    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/$SCRIPTNAME -O $SCRIPTNAME.tmp 2> /dev/null 
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ];  then
         echo "ERROR: Can't connect to server..."
@@ -597,8 +599,8 @@ do_update() {
 do_backup(){
     local INDEV=$1
     local OUTFILE=$2
-    local OUTFILE_BASE=$(get_file_base $OUTFILE)
-    local OUTFILE_EXT=$(get_file_ext $OUTFILE)
+  #  local OUTFILE_BASE=$(get_file_base $OUTFILE)
+   # local OUTFILE_EXT=$(get_file_ext $OUTFILE)
     
     #echo 1 - sudo dd bs=4M if=/dev/$INDEV of=$OUTFILE.img status=progress conv=fsync 
     #echo 2 - sudo pishrink.sh $OUTFILE.img
@@ -681,10 +683,11 @@ do_backup(){
         return 2
     fi  
     
-    if [ -z $OUTFILE_EXT ]; then
+   # if [ -z $OUTFILE_EXT ]; then
+   if [ -z $(get_file_ext $OUTFILE) ]; then
         echo "No extension specified.  Adding '.zip'"
         OUTFILE=$OUTFILE.zip
-        OUTFILE_EXT=$(get_file_ext $OUTFILE)
+        #OUTFILE_EXT=$(get_file_ext $OUTFILE)
         echo "OUT-FILE='$OUTFILE'" 
     fi
 
@@ -738,6 +741,8 @@ do_backup(){
     #################################################
     # this section writes the data
     #################################################
+    OUTFILE_BASE=$(get_file_path $OUTFILE)/$(get_file_base $OUTFILE)
+    
 
     TIME1=$(date +%s)
     echo_white Step 1 of 3 - Reading  \'$INDEV\' to \'$OUTFILE_BASE.img\' ...
@@ -1184,7 +1189,7 @@ SKIPPED=0
     done
 unset IFS
 
-echo SKIPPED=$SKIPPED
+#echo SKIPPED=$SKIPPED
 if [ $SKIPPED != 0 ] ; then
     whiptail --msgbox "$SKIPPED filenames with spaces were skipped" $WT_MB_HEIGHT $WT_MB_WIDTH
 fi
@@ -1279,16 +1284,16 @@ gui_get_indev(){
     # Warning if SD-card is bigger than 16GB
     if [ $(get_sd_size_bytes $INDEV) -gt 16000000000 ]; then
         MESG=" '$INDEV' is larger than 16GB.  \
-         \nUse a smaller SD card if you can, it will copy faster\
-         \nbecause it has to 'copy the entire SD card' before it can compress it.\
-         \nA good 8gb card in a Raspberry Pi 4 takes about 8 minutes"
+         \n\nUse a smaller SD card if you can.  \
+         \nIt will be faster because the entire SD card must be read before it can be compressed.\
+         \n\nA good 8gb card in a Raspberry Pi 4 takes about 8 minutes"
         whiptail --backtitle "$BACKTITLE" --title "WARNING" --msgbox "$MESG" $WT_MB_HEIGHT $WT_MB_WIDTH   
     fi
     
-    # Stop if SD-card is bigger than freespace
+    # Warning if SD-card is bigger than freespace
     if [ $(get_sd_size_bytes $INDEV) -gt $(get_freespace_bytes) ]; then
-        whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox "Not enough free space on '$PWD'" $WT_MB_HEIGHT $WT_MB_WIDTH 
-        return 1
+        whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox "Not enough free space on '$PWD' \n\nBe sure to specify a different drive" $WT_MB_HEIGHT $WT_MB_WIDTH 
+        #return 1
     fi
     
     # Warning if one and a half times the SD-card is bigger than freespace
@@ -1306,11 +1311,11 @@ gui_get_indev(){
 gui_get_outfile(){
     # for backup
     
-    OUTFILE_BASE=$(get_file_base $OUTFILE)
-    OUTFILE_EXT=$(get_file_ext $OUTFILE)
+    #OUTFILE_BASE=$(get_file_base $OUTFILE)
+    #OUTFILE_EXT=$(get_file_ext $OUTFILE)
     OUTFILEDEFAULT=$(date +%Y-%m-%d-newimage)
            
-    while [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] || [ -f "$OUTFILE_BASE.img" ] || [ -z "$(get_file_ext_ok $OUTFILE)" ] || [ ! -d  "$(get_file_path $OUTFILE)" ]  ; do  
+    while [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] || [ -f "$(get_file_base $OUTFILE).img" ] || [ -z "$(get_file_ext_ok $OUTFILE)" ] || [ ! -d  "$(get_file_path $OUTFILE)" ]  ; do  
         
         # if no extension, add .zip
       #  if [ ! -z $OUTFILE ] && [ -z "$OUTFILE_EXT" ]; then
@@ -1319,14 +1324,18 @@ gui_get_outfile(){
       #      OUTFILE_EXT=$(get_file_ext $OUTFILE)
       #  fi
         
+        
+        # Message if ext is blank and base.zip exists
+        
+        
         # Message if OUTFILE exists
         if [ -f "$OUTFILE" ] ; then
             whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "File '$OUTFILE' exists" $WT_MB_HEIGHT $WT_MB_WIDTH 
         fi
         
-        # Message if OUTFILE.img exists
-        if [ -f "$OUTFILE_BASE.img" ] ; then
-            whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "File '$OUTFILE_BASE.img' exists" $WT_MB_HEIGHT $WT_MB_WIDTH 
+        # Message if OUTFILE_BASE.img exists
+        if [ -f "$(get_file_base $OUTFILE).img" ] ; then
+            whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "File '$(get_file_base $OUTFILE).img' exists" $WT_MB_HEIGHT $WT_MB_WIDTH 
         fi
         
         # Message if unsupported ext
@@ -1355,7 +1364,7 @@ gui_get_outfile(){
         #fill out variables based on selected filename
         OUTFILEDEFAULT=$NEWFILE
         OUTFILE=$NEWFILE
-        OUTFILE_BASE=$(get_file_base $OUTFILE)
+        #OUTFILE_BASE=$(get_file_base $OUTFILE)
       
         #OUTFILE_EXT=$(get_file_ext $OUTFILE)
         #EXT_OK=$(check_for_supported_file_extention && echo $?)
@@ -1363,6 +1372,7 @@ gui_get_outfile(){
        # EXT_OK=$?
         
       done     
+      
         if [ -z $(get_file_ext $OUTFILE) ] ; then 
              OUTFILE=$OUTFILE.zip
         fi
@@ -1432,8 +1442,8 @@ gui_get_outdev(){
 gui_do_backup(){
     INDEV=$1  #use global vars  
     OUTFILE=$2   #use global vars
-    local OUTFILE_BASE=$(get_file_base $OUTFILE)
-    local OUTFILE_EXT=$(get_file_ext $OUTFILE)
+    #local OUTFILE_BASE=$(get_file_base $OUTFILE)
+    #local OUTFILE_EXT=$(get_file_ext $OUTFILE)
     
     #get global variable INDEV
     gui_get_indev
@@ -1503,8 +1513,8 @@ gui_do_restore() {
     if (whiptail  --backtitle "$BACKTITLE" --title RESTORE-WARNING --defaultno \
         --yesno "Write image '$INFILE' 
         \nto SD card  '$OUTDEV'   '$(get_sd_name $OUTDEV)'
-        \nThis will switch to a terminal screen to watch the progress ... There are currently some safety prompts in the terminal screen.
-        \n\nALL existing data on '/dev/$OUTDEV' - WILL BE ERASED!  
+        \nThis will switch to a terminal screen to watch the progress ... 
+        \n\nALL existing data on '$OUTDEV' - WILL BE ERASED!  
         \n\nAre you sure you want to continue?" $WT_HEIGHT $WT_WIDTH) then
         #echo "User selected Yes, exit status was $?."
         RESULT="YES"
