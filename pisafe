@@ -10,10 +10,13 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.5"
+SCRIPTVER="0.8.6"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Backup-to or Restore-from an Image File"
 CURRENT_DIR=$(pwd)
+USER=$(whoami)
+CONFIG=/home/$USER/.config/pisafe/pisafe.conf
+
 
 WHITE='\033[1;37m'
 RED='\033[1;31m'
@@ -24,19 +27,9 @@ echo_red()          { (echo -e "${RED}$*${NC}") }
 
 INDEV=
 OUTDEV=
-#SDDEV=
 INFILE=
 OUTFILE=
 BACKTITLE="$PRODUCTNAME ver $SCRIPTVER"
-
-
-#OPTIONS / SETTINGS to consider. Not fully implemented yet
-COMPRESSION=1
-LOG=false
-SAFETY_OFF=false
-verify=false
-DEFAULT_DIR="~"    #or Downloads or Images
-SHOW_ROOTDISK_IN_SOURCELIST=false
 
 
 do_help() {
@@ -93,6 +86,121 @@ do_about(){
 }
 
 
+set_config_var() {
+  lua - "$1" "$2" "$3" <<EOF > "$3.bak"
+local key=assert(arg[1])
+local value=assert(arg[2])
+local fn=assert(arg[3])
+local file=assert(io.open(fn))
+local made_change=false
+for line in file:lines() do
+  if line:match("^#?%s*"..key.."=.*$") then
+    line=key.."="..value
+    made_change=true
+  end
+  print(line)
+end
+
+if not made_change then
+  print(key.."="..value)
+end
+EOF
+mv "$3.bak" "$3"
+}
+
+
+clear_config_var() {
+  lua - "$1" "$2" <<EOF > "$2.bak"
+local key=assert(arg[1])
+local fn=assert(arg[2])
+local file=assert(io.open(fn))
+for line in file:lines() do
+  if line:match("^%s*"..key.."=.*$") then
+    line="#"..line
+  end
+  print(line)
+end
+EOF
+mv "$2.bak" "$2"
+}
+
+
+get_config_var() {
+  lua - "$1" "$2" <<EOF
+local key=assert(arg[1])
+local fn=assert(arg[2])
+local file=assert(io.open(fn))
+local found=false
+for line in file:lines() do
+  local val = line:match("^%s*"..key.."=(.*)$")
+  if (val ~= nil) then
+    print(val)
+    found=true
+    break
+  end
+end
+if not found then
+   print(0)
+end
+EOF
+}
+
+
+do_init_conf(){
+    if [ ! -d $(get_file_path $CONFIG) ]; then
+        mkdir $(get_file_path $CONFIG)
+    fi
+    
+    if [ ! -f $CONFIG ]; then
+        echo " " > $CONFIG
+        set_conf_defaults
+    fi
+}
+
+
+set_conf_defaults(){
+     set_config_var compression_level 1 $CONFIG
+     set_config_var default_dir $HOME $CONFIG
+}
+
+
+get_options(){
+    #OPTIONS / SETTINGS to consider. Not fully implemented yet
+    # try to put in pisafe.config file
+    COMPRESSION=$(get_config_var compression_level $CONFIG)
+    DEFAULT_DIR=$(get_config_var default_dir $CONFIG)
+    LOG=false
+    SAFETY_OFF=false
+    VERIFY=false
+    SHOW_ROOTDISK=false
+}
+
+
+is_number() {
+  case $1 in
+    ''|*[!0-9]*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+
+do_countdown(){  
+    local MAX=${1:-10}
+    #do_beep_if_sound
+    #do_beep_if_sound
+ 
+    echo "Pausing for $MAX seconds... Ctrl-C to abort"
+	echo -n $MAX
+    sleep 1
+    for number in $(seq 1 $MAX) ; do
+		echo -n ".$(($MAX-$number))"
+		sleep 1
+    done 
+    echo ...
+}
+
+
+
 do_beep(){
     #speaker-test -t sine -f 1000 -l 1 & sleep .3 && kill -9 $!
     speaker-test -t sign -f 700 > /dev/null  & sleep .3 && kill -9 $! 
@@ -115,7 +223,6 @@ get_file_path(){
 
 get_file_base() {
    # basename "$1"
-
     local fullfilename=$1
     
     filename=$(basename "$fullfilename")
@@ -135,6 +242,7 @@ get_file_ext() {
     fi
     echo $ext
 }
+
 
 extname() {
     # returns the extension name of a fullfilename
@@ -191,9 +299,7 @@ get_sd_name(){
 
 
 get_sd_size_bytes() {
-    INDEV=$1
-
-    lsblk $INDEV -d -n -b -o size  2> /dev/null
+    lsblk $1 -d -n -b -o size  2> /dev/null
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         echo 0
@@ -203,9 +309,7 @@ get_sd_size_bytes() {
 
 
 get_sd_size() {
-    local INDEV=$1
-    
-    lsblk $INDEV -d -n -o size  2> /dev/null
+    lsblk $1 -d -n -o size  2> /dev/null
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         echo 0
@@ -255,7 +359,7 @@ get_image_size_bytes() {
         ;;
         
         xz)
-            xz -l -v $INFILE | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1
+            xz -l -v $INFILE | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g'
         ;;  
           
         gz)
@@ -336,7 +440,6 @@ get_elapsed_time() {
 
 
 get_ver_to_int() {
-	# this is not currently used... but clever
 	local IFS=.
 	parts=($1)
 	let val=1000000*parts[0]+1000*parts[1]+parts[2]
@@ -467,18 +570,22 @@ do_list_info() {
         echo "FreeSpace = $(get_freespace)"
         echo "TrashSize = $(get_folder_size /home/pi/.local/share/Trash)"
         echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
-        
+        echo
+        echo "--- SETTINGS ---"
+        echo "COMPRESSION= $COMPRESSION"
+        echo "DEF DIR    = $DEFAULT_DIR"
         echo 
         echo "--- SD-CARD DEVICES (excluding root device) ---"
         echo "$(list_sd_devices)"
 
         echo   
-        echo "--- IMAGE FILES ---"
+        echo "--- IMAGE FILES in $DEFAULT_DIR---"
         ls -1 -s -h -w1 *.img *.zip *.xz *.gz 2> /dev/null | sed 's/ /     /'
 }    
 
 list_sd_devices() {
     local DEVICES=
+    
     DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd?  2> /dev/null | grep -v $(get_root_disk) )   
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
@@ -730,13 +837,13 @@ do_backup(){
 
 
     # Safety timer
-    do_beep_if_sound
-    do_beep_if_sound
-    sleep 1
-    echo
+    #do_beep_if_sound
+    #do_beep_if_sound
+    #sleep 1
+    #echo
     echo_red "WARNING starting in 10 seconds ... Ctrl-C to abort"
-    sleep 10
-
+    #sleep 10
+    do_countdown 10
 
     #################################################
     # this section writes the data
@@ -933,12 +1040,13 @@ do_restore(){
     
     
     # Safety timer
+   # do_beep_if_sound
     do_beep_if_sound
-    do_beep_if_sound
-    sleep 1
-    echo
-    echo_red "WARNING '$OUTDEV' '$(get_sd_name $OUTDEV)' will be overwritten starting in 10 seconds ... Ctrl-C to abort"
-    sleep 10
+    sleep 1  # to allow the beep to end
+   # echo
+    echo_red "WARNING '$OUTDEV' '$(get_sd_name $OUTDEV)' "
+    echo_red "Will be overwritten starting in 10 seconds ... Ctrl-C to abort"
+    do_countdown 10
     
     
     #################################################
@@ -1090,7 +1198,7 @@ gui_update(){
 gui_install(){
     do_install
     
-        # create the desktop file    
+    # create the desktop file    
 
         echo "\
 [Desktop Entry]
@@ -1118,6 +1226,44 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
             whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
         fi
 }
+
+
+gui_options_compression(){
+    COMP_CHOICE=$(whiptail --title "- COMPRESSION -" --radiolist \
+            "Choose compression level" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+            "1" "Fastest time  (Recomended)" on \
+            "2" " " off \
+            "3" " " off \
+            "4" " " off \
+            "5" "med" off \
+            "6" "" off \
+            "7" "" off \
+            "8" "" off \
+            "9" "Smallest file, much longer time" off   3>&1 1>&2 2>&3 )
+           
+            echo $COMP_CHOICE
+            COMPRESSION=$COMP_CHOICE
+            set_config_var compression_level $COMP_CHOICE $CONFIG
+}
+
+
+gui_options(){
+    # add a do while true loop to not exit all the way back to menu
+    
+    MENULIST="Compression ___Set_to_$COMPRESSION Default_dir ___$DEFAULT_DIR"
+    
+    MENU_CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "OPTIONS" --menu " choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT ""$MENULIST""  3>&1 1>&2 2>&3)
+    case $MENU_CHOICE in
+        Compression) 
+           gui_options_compression
+        ;;
+        
+    esac
+}
+
+
+
+
 
 
 function gui_select_dr_file()
@@ -1363,7 +1509,6 @@ gui_get_outfile(){
         fi
         
       done     
-       
 }
 
 
@@ -1396,7 +1541,6 @@ gui_get_outdev(){
     fi    
     
     
-    
     # Stop if outdev is the root disk
     if [ $OUTDEV = /dev/$(get_root_disk) ]; then
         #echo "ERROR: Restore to root disk '/dev/$(get_root_disk)' not allowed"
@@ -1404,7 +1548,6 @@ gui_get_outdev(){
         return 1
     fi
     
-
     # Warning if device is larger than 16GB
     # note the RESULT is not used here... could be cleaned up
     if [ $(get_sd_size_bytes $OUTDEV) -gt 16000000000 ]; then
@@ -1428,8 +1571,6 @@ gui_get_outdev(){
 gui_do_backup(){
     INDEV=$1  #use global vars  
     OUTFILE=$2   #use global vars
-    #local OUTFILE_BASE=$(get_file_base $OUTFILE)
-    #local OUTFILE_EXT=$(get_file_ext $OUTFILE)
     
     #get global variable INDEV
     gui_get_indev
@@ -1476,11 +1617,7 @@ gui_do_backup(){
 }  
 
 
-gui_do_restore() {
-    #get parameters
-    #INFILE=$1
-    #OUTDEV=$2
-    
+gui_do_restore() {   
     # get global variable INFILE
     gui_get_infile
     EXIT_CODE=$?
@@ -1632,6 +1769,7 @@ gui_menu(){
     done
 }
 
+
 testing(){
     #testing
     #echo $(( $(zipinfo -t $INFILE | cut -d, -f2 | cut -d" " -f2) / 1024 / 1024 ))M
@@ -1656,6 +1794,12 @@ if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
     echo $SCRIPTVER
     exit
 fi
+
+
+
+do_init_conf
+get_options
+
 
 get_tools
 
