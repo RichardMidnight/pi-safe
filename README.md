@@ -45,7 +45,7 @@ Backup and Restore Raspberry Pi SD cards ... easily create image files
         
    5) Use the menu to select your SD-card and an image-file-name.
    
-   6) Watch your image-file get created!
+   6) Watch your image-file get created, shrunk and compressed automatically.
    
  .
    
