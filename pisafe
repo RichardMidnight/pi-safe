@@ -570,6 +570,7 @@ do_list_info() {
         echo "FreeSpace = $(get_freespace)"
         echo "TrashSize = $(get_folder_size /home/pi/.local/share/Trash)"
         echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
+        echo "ConfigFile= $CONFIG"
         echo
         echo "--- SETTINGS ---"
         echo "COMPRESSION= $COMPRESSION"
