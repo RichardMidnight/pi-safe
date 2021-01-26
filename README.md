@@ -1,4 +1,5 @@
-# Pi-Safe
+# PiSafe  -  Raspberry Pi imaging app
+
 Backup and Restore Raspberry Pi SD cards ... easily create image files
 
  - Easily make compressed images of your Raspberry Pi.
@@ -40,21 +41,9 @@ Backup and Restore Raspberry Pi SD cards ... easily create image files
    
    2) Put your source SD-card in the USB SD reader and insert it in a Pi USB port.
    
-   3) Open a terminal window.
-   
-   4) Change to the 'Downloads' folder (optional).
-   
-    cd Downloads
-   
-   4) Type in the command below to see the name of the SD-device.  If it is the only one in, it should be 'sda'.
-  
-     pisafe list
-         
-   4)  Type in the command below to start reading the SD-card to an image-file
-   
-      pisafe read
+   3) Startup pisafe from the menu.  Or in a terminal, type in 'pisafe'
         
-   5) Follow the prompts to enter the SD-device name (probably 'sda') and the image-file-name you want to use.
+   5) Use the menu to select your SD-card and an image-file-name.
    
    6) Watch your image-file get created!
    
@@ -67,7 +56,8 @@ In a terminal window, type in
 
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe
     bash pisafe
-    Then you can select 'install' from the menu
+    
+    Then you can select 'install' from the menu to install it in your Raspberry Pi menu
     
     
     beta ver: 
@@ -75,23 +65,4 @@ In a terminal window, type in
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe-beta
     bash pisafe-beta
    
-.
-
-# EXAMPLES
-
-List available SD-cards and image-files
-
-     pisafe list 
-     
-To create an image-file from your SD-card in 'sda'
-
-     pisafe backup sda newimage.zip
-     
-To write an image-file to an SD-card in 'sda'
-
-    pisafe restore newimage.zip sda
     
-    
-.
-
-# SAMPLE SESSION CREATING AN IMAGE FILE
