@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.7"
+SCRIPTVER="0.8.8"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -580,8 +580,9 @@ do_list_info() {
         echo "$(list_sd_devices)"
 
         echo   
-        echo "--- IMAGE FILES in $DEFAULT_DIR---"
-        ls -1 -s -h -w1 *.img *.zip *.xz *.gz $DEFAULT_DIR $2> /dev/null | sed 's/ /     /'
+        echo "--- IMAGE FILES in $DEFAULT_DIR ---"
+      #  ls -1 -s -h -w1 *.img *.zip *.xz *.gz $DEFAULT_DIR  $2> /dev/null | sed 's/ /     /'
+        ls -1 -s -h -w1 $DEFAULT_DIR/*.img $DEFAULT_DIR/*.zip $DEFAULT_DIR/*.xz $DEFAULT_DIR/*.gz | sed 's/ /     /'
 }    
 
 list_sd_devices() {
@@ -1366,6 +1367,12 @@ fi
 #echo ""${FILES[$i]}""
 
     done
+ 
+ 
+if [ -z  ${FILES[@]} ]; then
+  FILES=(no __files_found)
+fi
+ 
  
 #IFS=$FS   
 #IFS=$'\n' 
