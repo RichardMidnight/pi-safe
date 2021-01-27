@@ -10,9 +10,9 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.6"
+SCRIPTVER="0.8.7"
 PRODUCTNAME="PiSafe"
-PRODUCTCOMMENT="Backup-to or Restore-from an Image File"
+PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG=/home/$USER/.config/pisafe/pisafe.conf
@@ -29,7 +29,7 @@ INDEV=
 OUTDEV=
 INFILE=
 OUTFILE=
-BACKTITLE="$PRODUCTNAME ver $SCRIPTVER"
+BACKTITLE="$PRODUCTNAME ver $SCRIPTVER. === $PRODUCTCOMMENT === "
 
 
 do_help() {
@@ -69,11 +69,11 @@ do_help() {
 
 do_about(){
     echo "$PRODUCTNAME was started in 2017 as 'sd' by Richard Reed (github RichardMidnight)"\
-        "when he was working on a Raspberry Pi Homebrdge project and needed"\
+        "when he was working on a Raspberry Pi Homebridge project and needed"\
         "to make numerous restore-points.  The image writers available at the"\
         "time were not able to create a new image file" 
     echo
-    echo "It was origionally called 'sd' to simplify command-line-usage."
+    echo "It was originally called 'sd' to simplify command-line-usage."
     echo
     echo "Then in 2021, I added the graphical front-end to make it more usable by others"\
         "and renamed it 'PiSafe' which is a reference to the ventilated cupboards that would let"\
@@ -581,7 +581,7 @@ do_list_info() {
 
         echo   
         echo "--- IMAGE FILES in $DEFAULT_DIR---"
-        ls -1 -s -h -w1 *.img *.zip *.xz *.gz 2> /dev/null | sed 's/ /     /'
+        ls -1 -s -h -w1 *.img *.zip *.xz *.gz $DEFAULT_DIR $2> /dev/null | sed 's/ /     /'
 }    
 
 list_sd_devices() {
@@ -714,9 +714,10 @@ do_backup(){
     #echo 2 - sudo pishrink.sh $OUTFILE.img
     #echo 3 - zip -db -dd -m $OUTFILE.zip $OUTFILE.img
     
-    echo_white $PRODUCTNAME Backup...
+    echo_white Starting $PRODUCTNAME $SCRIPTVER Backup...
     echo "IN-DEV='$INDEV'"
     echo "OUT-FILE='$OUTFILE'"
+    echo  "Compression level set to $COMPRESSION of 9"
         
     
     # check INDEV
@@ -874,7 +875,7 @@ do_backup(){
     echo
     echo_white Step 3 of 3 - Compressing $OUTFILE_BASE.img to $OUTFILE ...
     date
-    echo $SCRIPTNAME compression level set to $COMPRESSION of 9
+    
    
     case $(get_file_ext $OUTFILE) in
         img)
@@ -931,7 +932,7 @@ do_restore(){
     local SAFETY_OFF=${3:-false}   # this lets us bypass some of the safety prompts
     #   local LOCAL_PATH=${2:-$(pwd)}
     
-    echo_white $PRODUCTNAME Restore...
+    echo_white Starting $PRODUCTNAME $SCRIPTVER Restore...
     echo "IN-FILE='$INFILE'"
     echo "OUT-DEV='$OUTDEV'"
     echo "Safety-off='$SAFETY-OFF'"
@@ -1458,7 +1459,7 @@ gui_get_indev(){
 gui_get_outfile(){
     # for backup
     
-    OUTFILEDEFAULT=$(date +%Y-%m-%d-newimage)
+    OUTFILEDEFAULT="$DEFAULT_DIR/$(date +%Y-%m-%d-newimage)"
            
     while [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] || [ -f "$(get_file_base $OUTFILE).img" ] || [ -z "$(get_file_ext_ok $OUTFILE)" ] || [ ! -d  "$(get_file_path $OUTFILE)" ]  ; do  
         
@@ -1516,7 +1517,7 @@ gui_get_outfile(){
 gui_get_infile(){
     # for restore
     
-    if gui_select_dr_file "WRITE : Select an Image-file" "" "" "no" ; then
+    if gui_select_dr_file "WRITE : Select an Image-file" "$DEFAULT_DIR" "" "no" ; then
     INFILE=$FILE_SELECTED
     else
         #echo "Backup cancelled"
