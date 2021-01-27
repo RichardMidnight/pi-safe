@@ -20,7 +20,7 @@ Backup and Restore Raspberry Pi SD cards ... easily create image files
  
  - Supports USB boot (tries to hide the boot disk).
  
- - This is a graphical front-end to my 'sd' project which is a command-line version.
+ - This adds a graphical front-end to my 'sd' project which is a command-line version.
  
 .
  
