@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.8"
+SCRIPTVER="0.8.9"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -30,6 +30,27 @@ OUTDEV=
 INFILE=
 OUTFILE=
 BACKTITLE="$PRODUCTNAME ver $SCRIPTVER. === $PRODUCTCOMMENT === "
+
+
+set_conf_defaults(){
+     set_config_var compression_level 1 $CONFIG
+     set_config_var default_path $HOME $CONFIG
+}
+
+
+get_settings(){
+    #OPTIONS / SETTINGS to consider. Not fully implemented yet
+    # try to put in pisafe.config file
+    COMPRESSION=$(get_config_var compression_level $CONFIG)
+    DEFAULT_PATH=$(get_config_var default_path $CONFIG)
+    LOG=false
+    SAFETY_OFF=false
+    VERIFY=false
+    SHOW_ROOTDISK=false
+}
+
+
+
 
 
 do_help() {
@@ -158,22 +179,7 @@ do_init_conf(){
 }
 
 
-set_conf_defaults(){
-     set_config_var compression_level 1 $CONFIG
-     set_config_var default_dir $HOME $CONFIG
-}
 
-
-get_options(){
-    #OPTIONS / SETTINGS to consider. Not fully implemented yet
-    # try to put in pisafe.config file
-    COMPRESSION=$(get_config_var compression_level $CONFIG)
-    DEFAULT_DIR=$(get_config_var default_dir $CONFIG)
-    LOG=false
-    SAFETY_OFF=false
-    VERIFY=false
-    SHOW_ROOTDISK=false
-}
 
 
 is_number() {
@@ -574,16 +580,17 @@ do_list_info() {
         echo
         echo "--- SETTINGS ---"
         echo "COMPRESSION= $COMPRESSION"
-        echo "DEF DIR    = $DEFAULT_DIR"
+        echo "DEF DIR    = $DEFAULT_PATH"
         echo 
-        echo "--- SD-CARD DEVICES (excluding root device) ---"
+        echo "--- SD-CARD DEVICES (excluding root disk '/dev/$(get_root_disk)') ---"
         echo "$(list_sd_devices)"
 
         echo   
-        echo "--- IMAGE FILES in $DEFAULT_DIR ---"
-      #  ls -1 -s -h -w1 *.img *.zip *.xz *.gz $DEFAULT_DIR  $2> /dev/null | sed 's/ /     /'
-        ls -1 -s -h -w1 $DEFAULT_DIR/*.img $DEFAULT_DIR/*.zip $DEFAULT_DIR/*.xz $DEFAULT_DIR/*.gz | sed 's/ /     /'
+        echo "--- IMAGE FILES in '$DEFAULT_PATH' ---"
+      #  ls -1 -s -h -w1 *.img *.zip *.xz *.gz $DEFAULT_PATH  $2> /dev/null | sed 's/ /     /'
+        ls -1 -s -h -w1 $DEFAULT_PATH/*.img $DEFAULT_PATH/*.zip $DEFAULT_PATH/*.xz $DEFAULT_PATH/*.gz | sed 's/ /     /'
 }    
+
 
 list_sd_devices() {
     local DEVICES=
@@ -1231,7 +1238,7 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 }
 
 
-gui_options_compression(){
+gui_set_compression(){
     COMP_CHOICE=$(whiptail --title "- COMPRESSION -" --radiolist \
             "Choose compression level" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
             "1" "Fastest time  (Recomended)" on \
@@ -1250,18 +1257,94 @@ gui_options_compression(){
 }
 
 
-gui_options(){
-    # add a do while true loop to not exit all the way back to menu
+do_factory_reset(){
+   # echo " " > $CONFIG
+   
+    #do_init_conf
+    set_conf_defaults
+    get_settings
+  
+}
     
-    MENULIST="Compression ___Set_to_$COMPRESSION Default_dir ___$DEFAULT_DIR"
+gui_set_default_path(){
+    MSG="Enter new default path   '$DEFAULT_PATH'"
+    NEWPATH=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS : Set Default Path" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$DEFAULT_PATH" 3>&1 1>&2 2>&3)
+    EXIT_CODE=$?
+    if [ $EXIT_CODE != 0 ]; then 
+        return $EXIT_CODE
+    fi
     
-    MENU_CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "OPTIONS" --menu " choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT ""$MENULIST""  3>&1 1>&2 2>&3)
-    case $MENU_CHOICE in
-        Compression) 
-           gui_options_compression
-        ;;
+    if [ -d $NEWPATH ]; then
+        #DEFAULT_PATH=$NEWPATH
+        DEFAULT_PATH=$(echo $NEWPATH | sed 's/[/\t]*$//')
+        set_config_var default_path $DEFAULT_PATH $CONFIG
+    else
+        whiptail --title ERROR --msgbox "ERROR Directory '$NEWPATH' does not exist" $WT_MB_HEIGHT $WT_MB_WIDTH
+    fi
+}
+
+
+gui_settings(){
+    while true; do
         
-    esac
+        SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --menu " choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT  \
+        "Compression         " "$COMPRESSION of 9" \
+        "Default directory   " "$DEFAULT_PATH" \
+        "Reset               " "To factory defaults" \
+        3>&1 1>&2 2>&3)
+        
+        EXIT_CODE=$?
+        if [ $EXIT_CODE != 0 ]; then
+            return $EXIT_CODE
+        else
+            case "$SELECTION" in
+            Compression*) gui_set_compression ;;
+            Default*) gui_set_default_path ;;
+            Reset*) do_factory_reset ;;
+            
+             *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
+          esac || whiptail --msgbox "There was an error running option $SELECTION" 20 60 1
+        
+        fi
+        
+       
+    done
+}
+
+
+gui_settings_menu_sample(){
+    while true; do
+
+      FUN=$(whiptail --title "Pi Safe (pisafe)" --backtitle "$BACKTITLE" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
+        "1 System Options" "Configure system settings" \
+        "2 Display Options" "Configure display settings" \
+        "3 Interface Options" "Configure connections to peripherals" \
+        "4 Performance Options" "Configure performance settings" \
+        "5 Localisation Options" "Configure language and regional settings" \
+        "6 Advanced Options" "Configure advanced settings" \
+        "8 Update" "Update this tool to the latest version" \
+        "9 About raspi-config" "Information about this configuration tool" \
+        3>&1 1>&2 2>&3)
+
+        RET=$?
+        if [ $RET -eq 1 ]; then
+          do_finish
+        elif [ $RET -eq 0 ]; then
+          case "$FUN" in
+            1\ *) do_system_menu ;;
+            2\ *) do_display_menu ;;
+            3\ *) do_interface_menu ;;
+            4\ *) do_performance_menu ;;
+            5\ *) do_internationalisation_menu ;;
+            6\ *) do_advanced_menu ;;
+            8\ *) do_update ;;
+            9\ *) do_about ;;
+            *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
+          esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
+        else
+          exit 1
+        fi
+      done
 }
 
 
@@ -1466,7 +1549,7 @@ gui_get_indev(){
 gui_get_outfile(){
     # for backup
     
-    OUTFILEDEFAULT="$DEFAULT_DIR/$(date +%Y-%m-%d-newimage)"
+    OUTFILEDEFAULT="$DEFAULT_PATH/$(date +%Y-%m-%d-newimage)"
            
     while [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] || [ -f "$(get_file_base $OUTFILE).img" ] || [ -z "$(get_file_ext_ok $OUTFILE)" ] || [ ! -d  "$(get_file_path $OUTFILE)" ]  ; do  
         
@@ -1524,7 +1607,7 @@ gui_get_outfile(){
 gui_get_infile(){
     # for restore
     
-    if gui_select_dr_file "WRITE : Select an Image-file" "$DEFAULT_DIR" "" "no" ; then
+    if gui_select_dr_file "WRITE : Select an Image-file" "$DEFAULT_PATH" "" "no" ; then
     INFILE=$FILE_SELECTED
     else
         #echo "Backup cancelled"
@@ -1723,7 +1806,7 @@ gui_menu(){
                 "BACKUP"      "   Backup an SD-card to an image-file " \
                 "RESTORE"     "   Restore an SD-card from an image-file" \
                 "LIST"      "   List info " \
-                "OPTIONS"   "   Set options " \
+                "SETTINGS"   "   Change settings " \
                 "INSTALL"   "   Install into the menu" \
                 "HELP"      "   Help " \
                 "ABOUT"     "   About " \
@@ -1746,8 +1829,8 @@ gui_menu(){
                 whiptail --backtitle "$BACKTITLE"  --title "LIST" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH
             ;;
             
-            OPTIONS)
-                gui_options
+            SETTINGS)
+                gui_settings
             ;;
             
             
@@ -1807,7 +1890,7 @@ fi
 
 
 do_init_conf
-get_options
+get_settings
 
 
 get_tools
