@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.10"
+SCRIPTVER="0.8.11"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -186,8 +186,6 @@ is_number() {
 
 do_countdown(){  
     local MAX=${1:-10}
-    #do_beep_if_sound
-    #do_beep_if_sound
  
     echo "Pausing for $MAX seconds... Ctrl-C to abort"
 	echo -n $MAX
@@ -242,7 +240,7 @@ get_file_base() {
     
     filename=$(basename "$fullfilename")
     fname="${filename%.*}"
-    echo $fname
+    echo "$fname"
 }
 
 
@@ -318,14 +316,6 @@ get_sd_size() {
 }
 
 
-get_sd_size_old() {
-    lsblk $1 -d -n -o size  2> /dev/null
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        echo 0
-        return $EXIT_CODE
-    fi
-}
 
 
 get_image_size() {
@@ -361,7 +351,7 @@ get_image_size_bytes() {
     
     case $(get_file_ext "$INFILE") in
         img)
-            echo $((  $(ls -s "$INFILE" | cut -d' ' -f1) * 1024 )) 
+            echo $((  $(ls -s "$INFILE" | cut -d' ' -f1 ) * 1024 )) 
         ;;
         
         zip)
@@ -407,38 +397,30 @@ get_root_disk() {
 
 
 get_freespace() {
-    if [ -z "$OUTFILE" ]; then
-        OUTFILE_LOCAL="."
-    else
-        OUTFILE_LOCAL=$OUTFILE
-    fi
-    local RET
+    # $1 is FILENAME
+    # $2 is optionally -h for human readable
+    # local LOCAL_PATH=${2:-$(pwd)}
+    local FILENAME=${1:-"."}  
+    local FORMAT=${2:-"-B1"}   # -B1 for bytes    -h for humanreadable
+    local FREESPACE
+   # if [ -z "$OUTFILE" ]; then
+   #     OUTFILE_LOCAL="."
+   # else
+   #     OUTFILE_LOCAL=$OUTFILE
+   # fi
+  
     #RET=$(df . -B1 --output=avail | grep -v Avail)
-    RET=$(df $(dirname "$OUTFILE_LOCAL") -h --output=avail | grep -v Avail)
+    #RET=$(df $(dirname "$OUTFILE_LOCAL") -h --output=avail | grep -v Avail)
+    FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
     fi
     
-    echo $RET
+    echo $FREESPACE
 }   
 
-get_freespace_bytes() {
-    if [ -z "$OUTFILE" ]; then
-        OUTFILE_LOCAL="."
-    else
-        OUTFILE_LOCAL=$OUTFILE
-    fi
-    local RET
-    #RET=$(df . -B1 --output=avail | grep -v Avail)
-    RET=$(df $(dirname "$OUTFILE_LOCAL") -B1 --output=avail | grep -v Avail)
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
-    fi
-    
-    echo $RET
-}   
+
 
 
 get_folder_size() {
@@ -495,12 +477,12 @@ check_for_img_file(){
         ;;
         
         xz)
-            IMG=$(xz -l "$INFILE" | grep .xz | sed 's/\s\s*/ /g' | cut -d' ' -f10)
-            IMG=$(echo $IMG | sed 's/.xz/.img/g')
+            IMG=$(xz -l "$INFILE" | grep .xz | sed 's/\s\s*/ /g' | cut -d' ' -f10-)
+            IMG=$(echo "$IMG" | sed 's/.xz/.img/g')
          ;;   
          
          gz)
-            IMG=$(pigz -l "$INFILE" | grep .img | sed 's/\s\s*/ /g'  | cut -d' ' -f4)
+            IMG=$(pigz -l "$INFILE" | grep .img | sed 's/\s\s*/ /g'  | cut -d' ' -f4-)
          ;;
          
          *)
@@ -510,7 +492,7 @@ check_for_img_file(){
     
     
     if [ ! -z $(get_file_ext "$IMG") ] && [ $(get_file_ext "$IMG") = "img" ]; then
-        echo $IMG [OK]
+        echo "$IMG" [OK]
         return 0
     else
         echo "ERROR: No image found in '$INFILE' '$(get_file_ext $IMG)' "
@@ -532,7 +514,7 @@ do_list_info() {
         echo "--- CURRENT SYSTEM ---"
         echo "Root disk = /dev/$(get_root_disk)"
         echo "Size      = $(get_sd_size /dev/$(get_root_disk) -h )"
-        echo "FreeSpace = $(get_freespace)"
+        echo "FreeSpace = $(get_freespace . -h)"
         echo "TrashSize = $(get_folder_size /home/pi/.local/share/Trash)"
         echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
         #echo "ConfigFile= $CONFIG"
@@ -665,7 +647,8 @@ do_update() {
         if [ $RESULT = "y" ]; then 
             sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
             sudo chmod +x /usr/local/bin/$SCRIPTNAME
-            echo "$($SCRIPTNAME -v) installed"
+            echo "$($SCRIPTNAME -v) installed. exiting... "
+            exit 0
         fi
     else    
         echo "Server version is '$SERVER_VER' You are up to date.  "
@@ -720,15 +703,7 @@ do_backup(){
         #return 1
     fi
     
-    
-    
     # Warning if SD-card is bigger than 16GB
-    #check_in_device_size $INDEV
-    #EXIT_CODE=$?
-    #if [ $EXIT_CODE != 0 ] ; then
-    #    echo WARNING $EXIT_CODE in check_in_device_size
-    #    return $EXIT_CODE
-    #fi
     if [ $(get_sd_size $INDEV) -gt 16000000000 ]; then
         MESG=" '$INDEV' is larger than 16GB.  \
          \nUse a smaller SD card if you can, it will copy faster.\
@@ -741,19 +716,18 @@ do_backup(){
     
         
     
-    # Stop if SD-card is bigger than freespace
-    if [ $(get_sd_size $INDEV) -gt $(get_freespace_bytes) ]; then
+    # Stop if SD-card is bigger than freespace on OUTFILE
+    if [ $(get_sd_size $INDEV) -gt $(get_freespace "$OUTFILE") ]; then
         echo
-        echo_red   "ERROR: Not enough free space on '$PWD'"
+        echo_red   "ERROR: Not enough free space on '$(get_file_path $OUTFILE)'"
         return 1
     fi
     
-    #warning if SD-card * 1.5 is bigger than freespace
+    # Warning if SD-card * 1.5 is bigger than freespace
         SPACENEEDED=$(( $(get_sd_size $INDEV) + $(( $(get_sd_size $INDEV) / 2 )) ))
-        if [ $SPACENEEDED -gt $(get_freespace_bytes) ]; then
+        if [ $SPACENEEDED -gt $(get_freespace "$OUTFILE") ]; then
         echo
-        echo_red   "WARNING: Might not be enough free space on '$PWD'"
-        #return 1
+        echo_red   "WARNING: Might not be enough free space on '$(get_file_path $OUTFILE)'"
     fi
     
     
@@ -773,8 +747,6 @@ do_backup(){
     fi
 
   #  check_for_supported_file_extention
-  #  EXIT_CODE=$?
-  #  if [ $EXIT_CODE != 0 ]; then
   if [ -z $(get_file_ext_ok "$OUTFILE") ]; then
         echo
         echo_red "ERROR: Unsupported file extension '$(get_file_ext $OUTFILE)'"
@@ -789,7 +761,7 @@ do_backup(){
 
     if  [ -f "$(get_file_base $OUTFILE)".img ]  ; then
         echo
-        echo_red "ERROR: OUT-FILE '$(get_file_base "$OUTFILE").img' exists"
+        echo_red "ERROR: OUT-FILE '$(get_file_base $OUTFILE).img' exists"
         return 2
     fi 
 
@@ -997,7 +969,7 @@ x=1
     
     
     echo
-    echo Write \'$INFILE\' to \'$OUTDEV\'?
+    echo "Write '$INFILE' to '$OUTDEV' '$(get_sd_name $OUTDEV)' ?"
     echo_red WARNING... All existing data on \'$OUTDEV\' - will be erased!
     read  -p "You must type 'YES' to continue:" -r RESULT
     echo
@@ -1008,7 +980,7 @@ x=1
     fi
     
     
-    do_beep_if_sound
+    #do_beep_if_sound
     sleep 1  # to allow the beep to end
     echo_red "WARNING '$OUTDEV' '$(get_sd_name $OUTDEV)' "
     echo_red "Will be overwritten starting in 10 seconds ... Ctrl-C to abort"
@@ -1028,7 +1000,7 @@ x=1
     echo_white "Writing '$INFILE' to '$OUTDEV' ... "    
     date
     TIME1=$(date +%s)
-    echo "$(get_image_size $INFILE) to write"
+    echo $(get_image_size "$INFILE") to write
     
     case $INFILEEXT in
         img)
@@ -1231,7 +1203,7 @@ gui_set_default_path(){
     
     if [ -d $NEWPATH ]; then
         #DEFAULT_PATH=$NEWPATH
-        DEFAULT_PATH=$(echo $NEWPATH | sed 's/[/\t]*$//')
+        DEFAULT_PATH=$(echo "$NEWPATH" | sed 's/[/\t]*$//')
         set_config_var default_path $DEFAULT_PATH $CONFIG
     else
         whiptail --title ERROR --msgbox "ERROR Directory '$NEWPATH' does not exist" $WT_MB_HEIGHT $WT_MB_WIDTH
@@ -1334,7 +1306,6 @@ function gui_select_dr_file()
     local FILE_MASK='( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" )'
     local ALLOW_BACK=${4:-no}
     local FILES=()
-#    FS="~"  # Field Seperator
 
     [ "$ALLOW_BACK" != "no" ] && FILES+=(".." "..")
 
@@ -1441,14 +1412,14 @@ gui_get_indev(){
     fi
     
     # Warning if SD-card is bigger than freespace
-    if [ $(get_sd_size $INDEV) -gt $(get_freespace_bytes) ]; then
+    if [ $(get_sd_size $INDEV) -gt $(get_freespace "$OUTFILE") ]; then
         whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox "Not enough free space on '$PWD' \n\nBe sure to specify a different drive" $WT_MB_HEIGHT $WT_MB_WIDTH 
-        return 1
+        #return 1
     fi
     
     # Warning if one and a half times the SD-card is bigger than freespace
     SPACENEEDED=$(( $(get_sd_size $INDEV) + $(( $(get_sd_size $INDEV) / 2 )) ))
-    if [ $SPACENEEDED -gt $(get_freespace_bytes) ]; then
+    if [ $SPACENEEDED -gt $(get_freespace "$OUTFILE") ]; then
         whiptail --backtitle "$BACKTITLE" --title "WARNING" \
             --msgbox "Might not be enough free space on '$PWD'
             \nThere are $(get_folder_size /home/pi/.local/share/Trash) in the Trash" $WT_MB_HEIGHT $WT_MB_WIDTH   
@@ -1496,7 +1467,7 @@ gui_get_outfile(){
         \nSupported extensions are: .img .zip .xz .gz 
         \nIf you don't include an extension '.zip' will be added 
         \nYou can put a file path at the beginning
-        \nNo spaces allowed"
+        \nNo spaces is recomended. "
         NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP : Get Filename" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then 
@@ -1526,7 +1497,7 @@ gui_get_infile(){
         return 1
     fi
      
-    check_for_img_file $INFILE
+    check_for_img_file "$INFILE"
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "No image file found in '$INFILE'"  $WT_MB_HEIGHT $WT_MB_WIDTH
