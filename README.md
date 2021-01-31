@@ -1,6 +1,6 @@
 # PiSafe  -  Raspberry Pi imaging app
 
-Backup and Restore Raspberry Pi SD cards ... easily create image files
+Backup/Restore Raspberry Pi SD-card to/from a compressed image-file
 
  - Easily make compressed images of your Raspberry Pi.
  
