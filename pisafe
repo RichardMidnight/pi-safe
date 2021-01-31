@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.11"
+SCRIPTVER="0.8.12"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -30,9 +30,58 @@ OUTFILE=
 BACKTITLE="$PRODUCTNAME ver $SCRIPTVER. === $PRODUCTCOMMENT === "
 
 
+software_testing_notes(){
+    "
+    Ver 0.8.12
+    Comprehensive testing on Pi 4 - buster
+    backup to .img
+    backup to .zip
+    backup to .xz
+    backup to .gz
+
+    restore to .img
+    restore to .zip
+    restore to .xz
+    restore to .gz
+
+
+    pi 4 - lite
+    notes:  need to create .config and Downloads folders
+    backup to .img
+
+
+    Pi 3b+   					- OK
+    Pi 400						- OK
+    Raspberry Pi Desktop (x86)  - OK
+    RaspberryPIOS-64			- OK
+
+
+    Features (to test)
+    BACKUP
+    1) warning if SD-card is boot disk
+    2) Warning if SD-card is bigger than 16gb
+    3) Warning if SC-card is bigger than freespace
+    4) Warning if SD-card*1.5 is bigger than freespace
+
+    5) Add.zip if no extension
+    6) Warning if outfile exists
+    7) Warning if ourfile.img exists
+    8) Warning if not supported extension
+    9) Warning if path does not exist
+
+    RESTORE
+    1) Check that INFILE has a .img file
+
+    2) Warning if outdev is boot disk
+    3) Waring if outdev is bigger than 16gb
+"
+}
+
+
+
 set_conf_defaults(){
     set_config_var compression_level 1 $CONFIG
-    set_config_var default_path $HOME $CONFIG
+    set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var default_ext zip $CONFIG
     set_config_var allow_root_backup no $CONFIG
 
@@ -46,6 +95,9 @@ get_settings(){
     LOG=false
     SAFETY_OFF=false
     VERIFY=false
+    
+    mkdir -p "$DEFAULT_PATH"
+    
 }
 
 
@@ -93,13 +145,25 @@ do_about(){
     echo "It was originally called 'sd' to simplify command-line-usage."
     echo
     echo "Then in 2021, I added the graphical front-end to make it more usable by others"\
-        "and renamed it 'PiSafe' which is a reference to the ventilated cupboards that would let"\
-        "you 'save a pie for later' "
+        "and renamed it 'PiSafe' which is a reference to the ventilated cupboards for storing"\
+        "pies while protecting them from insects and vermin' "
     echo
     echo "Use at your own risk"
     echo
     echo "I hope this is helpful to others."
     echo
+}
+
+do_init_conf(){
+    if [ ! -d $(get_file_path $CONFIG) ]; then
+        mkdir -p $(get_file_path $CONFIG)
+    fi
+    
+    if [ ! -f $CONFIG ]; then
+        #echo " " > $CONFIG
+        touch $CONFIG
+        set_conf_defaults
+    fi
 }
 
 
@@ -163,16 +227,6 @@ EOF
 }
 
 
-do_init_conf(){
-    if [ ! -d $(get_file_path $CONFIG) ]; then
-        mkdir $(get_file_path $CONFIG)
-    fi
-    
-    if [ ! -f $CONFIG ]; then
-        echo " " > $CONFIG
-        set_conf_defaults
-    fi
-}
 
 # -------------------------------------------------------------
 
@@ -1466,8 +1520,9 @@ gui_get_outfile(){
         MSG="Enter the filename (eg 2020-12-15-Buster32) 
         \nSupported extensions are: .img .zip .xz .gz 
         \nIf you don't include an extension '.zip' will be added 
+        \n.img files are shrunk but NOT compressed
         \nYou can put a file path at the beginning
-        \nNo spaces is recomended. "
+        \nRecomended to have NO SPACES in the name "
         NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP : Get Filename" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then 
