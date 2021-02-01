@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.12"
+SCRIPTVER="0.8.13"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -78,26 +78,26 @@ software_testing_notes(){
 }
 
 
-
 set_conf_defaults(){
     set_config_var compression_level 1 $CONFIG
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var default_ext zip $CONFIG
     set_config_var allow_root_backup no $CONFIG
-
+    set_config_var sound false $CONFIG
 }
 
 
 get_settings(){
     COMPRESSION=$(get_config_var compression_level $CONFIG)
     DEFAULT_PATH=$(get_config_var default_path $CONFIG)
+    DEFAULT_EXT=$(get_config_var default_ext $CONFIG)
     ALLOW_ROOT_BACKUP=$(get_config_var allow_root_backup $CONFIG)
+    SOUND=$(get_config_var sound $CONFIG)
     LOG=false
     SAFETY_OFF=false
     VERIFY=false
     
     mkdir -p "$DEFAULT_PATH"
-    
 }
 
 
@@ -110,7 +110,7 @@ do_help() {
     echo "  $SCRIPTNAME [function] [xxx] [yyy]"
     echo
     echo "Function is:"
-    echo "  gui                       - startup the gui menu (this is recomended)"
+    echo "  [gui]                     - startup the gui menu (this is recomended)"
     echo "  list                      - list SD-devices and image-files "
     echo "  backup [device] [file]    - backup SD-card to image-file"
     echo "  restore [file] [device]   - restore image-file to SD-card"
@@ -153,6 +153,7 @@ do_about(){
     echo "I hope this is helpful to others."
     echo
 }
+
 
 do_init_conf(){
     if [ ! -d $(get_file_path $CONFIG) ]; then
@@ -255,11 +256,12 @@ do_countdown(){
 do_beep(){
     #speaker-test -t sine -f 1000 -l 1 & sleep .3 && kill -9 $!
     speaker-test -t sign -f 700 > /dev/null  & sleep .3 && kill -9 $! 
+    sleep 1  # to allow the beep to end
 }
 
 
 do_beep_if_sound(){
-     if $SOUND ; then
+    if [ $SOUND = true ] ; then
         do_beep
     fi
 }
@@ -370,8 +372,6 @@ get_sd_size() {
 }
 
 
-
-
 get_image_size() {
     local INFILE=$*
     
@@ -449,7 +449,6 @@ get_root_disk() {
 }
 
 
-
 get_freespace() {
     # $1 is FILENAME
     # $2 is optionally -h for human readable
@@ -473,8 +472,6 @@ get_freespace() {
     
     echo $FREESPACE
 }   
-
-
 
 
 get_folder_size() {
@@ -554,14 +551,7 @@ check_for_img_file(){
     fi    
 }
 
-
-
-
-
-
-
 # -----------------------------------------------
-
 
 do_list_info() {
         echo
@@ -605,7 +595,6 @@ get_sd_devices() {
   }
 
 # --------------------------------------
-
 
 get_tools() {   
     #echo -n Checking to see if required tools are installed ...
@@ -702,6 +691,7 @@ do_update() {
             sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
             sudo chmod +x /usr/local/bin/$SCRIPTNAME
             echo "$($SCRIPTNAME -v) installed. exiting... "
+            read -n 1
             exit 0
         fi
     else    
@@ -794,8 +784,11 @@ do_backup(){
     
    # if [ -z $OUTFILE_EXT ]; then
    if [ -z $(get_file_ext "$OUTFILE") ]; then
-        echo "No extension specified.  Adding '.zip'"
-        OUTFILE=$OUTFILE.zip
+        #echo "No extension specified.  Adding '.zip'"
+        #OUTFILE=$OUTFILE.zip
+        echo "No extension specified.  Adding '$DEFAULT_EXT'"
+        OUTFILE=$OUTFILE.$DEFAULT_EXT
+        
         #OUTFILE_EXT=$(get_file_ext $OUTFILE)
         echo "OUT-FILE='$OUTFILE'" 
     fi
@@ -834,9 +827,8 @@ do_backup(){
         return 2
     fi  
 
-
+    do_beep_if_sound
     echo_red "WARNING starting in 10 seconds ... Ctrl-C to abort"
-    #sleep 10
     do_countdown 10
 
     #################################################
@@ -914,6 +906,7 @@ do_backup(){
     fi
     
     echo
+    do_beep_if_sound
     echo_white "Backup done. '$OUTFILE' created from '$INDEV' in $(get_elapsed_time $TIME1 $TIME4)." 
 }
 
@@ -1034,8 +1027,7 @@ x=1
     fi
     
     
-    #do_beep_if_sound
-    sleep 1  # to allow the beep to end
+    do_beep_if_sound
     echo_red "WARNING '$OUTDEV' '$(get_sd_name $OUTDEV)' "
     echo_red "Will be overwritten starting in 10 seconds ... Ctrl-C to abort"
     do_countdown 10
@@ -1093,6 +1085,7 @@ x=1
         echo_red  "ERROR. $EXIT_CODE"
         return $EXIT_CODE
     else
+        do_beep_if_sound
         echo_white "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
     fi
 }
@@ -1247,6 +1240,7 @@ do_factory_reset(){
   
 }
     
+    
 gui_set_default_path(){
     MSG="Enter new default path   '$DEFAULT_PATH'"
     NEWPATH=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS : Set Default Path" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$DEFAULT_PATH" 3>&1 1>&2 2>&3)
@@ -1271,9 +1265,11 @@ gui_settings(){
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --menu " choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT  \
         "Compression         " "$COMPRESSION of 9" \
         "Default directory   " "$DEFAULT_PATH" \
+        "Default extension   " "$DEFAULT_EXT" \
+        "Allow root backup   " "$ALLOW_ROOT_BACKUP" \
         "                    " "      " \
-        "Edit config         " "Edit the config file" \
-        "Reset               " "Reset to factory defaults" \
+        "Edit config         " "Edit the settings (config) file" \
+        "Reset               " "Reset settings to factory defaults" \
         3>&1 1>&2 2>&3)
         
         EXIT_CODE=$?
@@ -1281,11 +1277,17 @@ gui_settings(){
             return $EXIT_CODE
         else
             case "$SELECTION" in
-            Compression*) gui_set_compression ;;
-            Default*) gui_set_default_path ;;
+            "Compression"*) gui_set_compression ;;
+            "Default d"*) gui_set_default_path ;;
+            "Default e"*) x=1 ;;
+            "Allow root"*) x=1 ;;
             "    "*)  x=1 ;;
-            Edit*) mousepad $CONFIG ;;
-            Reset*) do_factory_reset ;;
+            Edit*) mousepad $CONFIG; get_settings ;;
+            Reset*) 
+                whiptail --title WARNING --defaultno --yesno "Are you sure you want to reset the settings to factory defaults?" $WT_MB_HEIGHT $WT_MB_WIDTH 
+                if [ $? = 0 ] ; then
+                    do_factory_reset 
+                fi ;;
             
              *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
           esac || whiptail --msgbox "There was an error running option $SELECTION" 20 60 1
@@ -1328,9 +1330,6 @@ sample_gui_settings_menu(){
         fi
       done
 }
-
-
-
 
 
 function gui_select_dr_file()
@@ -1490,9 +1489,9 @@ gui_get_outfile(){
            
     while [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] || [ -f "$(get_file_base $OUTFILE).img" ] || [ -z "$(get_file_ext_ok $OUTFILE)" ] || [ ! -d  "$(get_file_path $OUTFILE)" ]  ; do  
         
-        # Add Zip ifn no extension
+        # Add Zip if no extension
         if [ ! -z "$OUTFILE" ] && [ -z "$(get_file_ext $OUTFILE)" ] ; then 
-             OUTFILE=$OUTFILE.zip
+             OUTFILE=$OUTFILE.$DEFAULT_EXT
         fi
         
         # Message if OUTFILE exists
@@ -1535,7 +1534,7 @@ gui_get_outfile(){
         
         # add .zip if no extension
         if [ ! -z "$OUTFILE" ] && [ -z "$(get_file_ext $OUTFILE)" ] ; then 
-             OUTFILE=$OUTFILE.zip
+             OUTFILE=$OUTFILE.$DEFAULT_EXT
         fi
         
       done     
@@ -1703,7 +1702,7 @@ gui_do_restore() {
 gui_select_sddevice(){
     FIELD_SEPERATOR="|"
 
-    #get this list of sd divices and add a field seperator |    
+    #get this list of sd devices and add a field seperator |    
     IFS=$'\n'
     #options=($(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? | sed 's/ ./ | /'))
     options=($(get_sd_devices | sed 's/ ./ '$FIELD_SEPERATOR' /'))
@@ -1802,8 +1801,6 @@ gui_menu(){
 }
 
 
-
-
 # if arg = -v, then show version and exit the script
 if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
     echo $SCRIPTVER
@@ -1811,15 +1808,8 @@ if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
 fi
 
 
-
 do_init_conf
 get_settings
-
-
 get_tools
-
-#testing
-#exit
-
 
 cli_menu $1 $2 $3
