@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.13"
+SCRIPTVER="0.8.16"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -1362,11 +1362,13 @@ function gui_select_dr_file()
 
     [ "$ALLOW_BACK" != "no" ] && FILES+=(".." "..")
 
-    IFS=$'~'
+    #IFS=$'~'
+    IFS=$'\t\n'
 
     # First add folders      
     # use std IFS for folders
-    for DIR in $(find $LOCAL_PATH -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f~" | sort 2> /dev/null)
+#    for DIR in $(find $LOCAL_PATH -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f~" | sort 2> /dev/null)
+    for DIR in $(find $LOCAL_PATH -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f\t" | sort 2> /dev/null)
     do
         FILES+=($DIR  "     folder")
     done
@@ -1374,12 +1376,17 @@ function gui_select_dr_file()
 
     # Then add the files
     # change IFS to newline.  Insert ~ as a field seperator 
+#    for FILE in $(find $LOCAL_PATH -maxdepth 1 \
+#                                    \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" \) \
+#                                    -name "[!.]*" \
+#                                    -type f \
+#                                    -printf "%f~     %k~" | sort  2> /dev/null)
+
     for FILE in $(find $LOCAL_PATH -maxdepth 1 \
                                     \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" \) \
                                     -name "[!.]*" \
                                     -type f \
-                                    -printf "%f~     %k~" | sort \
-                                    2> /dev/null)
+                                    -printf "%f\t     %k\n" | sort  2> /dev/null)                                
     do
            FILES+=($FILE)
     done
@@ -1516,7 +1523,7 @@ gui_get_outfile(){
         
         
         #get filename
-        MSG="Enter the filename (eg 2020-12-15-Buster32) 
+        MSG="Enter the filename (eg 2020-12-15-buster32) 
         \nSupported extensions are: .img .zip .xz .gz 
         \nIf you don't include an extension '.zip' will be added 
         \n.img files are shrunk but NOT compressed
