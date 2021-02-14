@@ -59,11 +59,6 @@ In a terminal window, type in
     
     Then you can select 'install' from the menu to install it in your Raspberry Pi menu
     
-    
-    beta ver: 
-    
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe-beta
-    bash pisafe-beta
    
    
  # REFERENCES
