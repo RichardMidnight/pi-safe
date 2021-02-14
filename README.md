@@ -22,7 +22,7 @@ Backup or Restore Raspberry Pi SD-cards to/from a compressed image-file right on
  
 # SETUP
  
-   1) Install Raspberry PI OS on an SD card that is large enought to hold some SD image-files.  32GB or 64GB will do.  This is your Master SD-card.
+   1) Install Raspberry PI OS on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This is your Master SD-card.
    
    2) Install Pi-Safe as described below.
    
