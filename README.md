@@ -1,24 +1,20 @@
 # PiSafe  -  Raspberry Pi imaging app
 
-Backup/Restore Raspberry Pi SD-card to/from a compressed image-file
+Backup/Restore Raspberry Pi SD-card to/from a compressed image-file right on your Pi
 
- - Easily make compressed images of your Raspberry Pi.
- 
- - Easily restore images to an SD card.
+ - Backup an SD card to an image-file.
 
- - Read an image-file from an sd card.
+ - Restore an image-file to an SD card.
 
- - Write an image-file to an sd card.
-
- - Works entirely on a Raspberry Pi in terminal.  No Windows or Mac needed. 
+ - Works entirely on a Raspberry Pi.  No Windows or Mac needed. 
  
  - Creates a compressed image-file that will resize to fill the new card it is put on (thanks to PiShrink!).
  
  - Supports .img .zip .xz and .gz file formats.
  
- - Supports all USB storage.
+ - Supports all USB storage (I think).
  
- - Supports USB boot (tries to hide the boot disk).
+ - Supports USB boot (tries to hide the boot disk).  You have to set "allow root backup" to yes in settings.
  
  - This adds a graphical front-end to my 'sd' project which is a command-line version.
  
@@ -39,16 +35,18 @@ Backup/Restore Raspberry Pi SD-card to/from a compressed image-file
    
 # TO MAKE AN IMAGE FILE  
    
-   1) Boot your Pi with your Master SD-card as above.
+   1) Remove your source SD card (8GB) and Boot your Pi with your Master SD-card as above.
    
-   2) Put your source SD-card in the USB SD reader and insert it in a Pi USB port.
+   2) Put your source SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
    
-   3) Startup pisafe from the menu.  Or in a terminal, type in 'pisafe'
+   3) Startup Pi-Safe from the menu.  Or in a terminal, type in 'pisafe'
         
-   5) Use the menu to select your SD-card and an image-file-name.
+   5) Use the menu to select BACKUP, select your SD-card and give the image-file a name.
    
    6) Watch your image-file get created, shrunk and compressed automatically.
    
+   7) Note: At this point, I have left several safeties in place.  I may add an option to remove them in the future.  For ezample you have to type in "YES"
+ before it will RESTORE an image file to an SD card.   
  .
    
 
