@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.17"
+SCRIPTVER="0.8.18"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -34,11 +34,12 @@ set_conf_defaults(){
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var default_extension zip $CONFIG
     set_config_var compression_level 1 $CONFIG
-    set_config_var allow_root_backup no $CONFIG
-    set_config_var debug_mode on $CONFIG
+    set_config_var allow_root_backup off $CONFIG
+    set_config_var debug_mode off $CONFIG
     set_config_var sound on $CONFIG
+    set_config_var shrink_fs on $CONFIG
     
-    set_config_var safety_off false $CONFIG
+    set_config_var safeties on $CONFIG
 }
 
 
@@ -54,14 +55,17 @@ fix_settings(){
     if [ $COMPRESSION = 0 ]; then 
         set_config_var compression_level 1 $CONFIG
     fi
-    if [ $ALLOW_ROOT_BACKUP = 0 ]; then 
-        set_config_var allow_root_backup no $CONFIG
+    if [ $ALLOW_ROOT_BACKUP != "on" ] && [ $ALLOW_ROOT_BACKUP != "off" ]; then 
+        set_config_var allow_root_backup off $CONFIG
     fi
     if [ $DEBUG_MODE = 0 ]; then 
         set_config_var debug_mode on $CONFIG
     fi
     if [ $SOUND = 0 ]; then 
         set_config_var sound on $CONFIG
+    fi
+    if [ $SHRINK_FS = 0 ]; then 
+        set_config_var shrink_fs on $CONFIG
     fi
     get_settings
 }
@@ -75,9 +79,10 @@ get_settings(){
     DEBUG_MODE=$(get_config_var debug_mode $CONFIG)
     SOUND=$(get_config_var sound $CONFIG)
      
-    SAFETY_OFF=$(get_config_var safety_off $CONFIG)
-    LOG=false
-    VERIFY=false
+    SHRINK_FS=$(get_config_var shrink_fs $CONFIG)
+    SAFETIES=$(get_config_var safeties $CONFIG)
+    LOG=off
+    VERIFY=off
     
     mkdir -p "$DEFAULT_PATH"
 }
@@ -123,10 +128,10 @@ do_about(){
         "to make numerous restore-points.  The image writers available at the"\
         "time did not run on the pi itself and were not able to create a new image file." 
     echo
-    echo "It was originally called 'sd' to simplify command-line-usage."
+    echo "It was originally called 'sd' and only had a CLI."
     echo
     echo "Then in 2021, he added the graphical front-end to make it more usable by others"\
-        "and renamed it 'PiSafe' which is a reference to the 'ventilated cupboards for storing"\
+        "and renamed it 'PiSafe'.  PiSafe is a reference to the 'ventilated cupboards for storing"\
         "pies while protecting them from insects and vermin'. "
     echo
     echo "Use at your own risk."
@@ -568,7 +573,7 @@ do_list_info() {
 get_sd_devices() {
 #echo   " $(get_root_disk) "
     local DEVICES=
-    if [ $(get_config_var allow_root_backup $CONFIG) = "yes" ]; then
+    if [ $(get_config_var allow_root_backup $CONFIG) = "on" ]; then
         DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? /dev/$(get_root_disk) 2> /dev/null  )   
         EXIT_CODE=$?
     else
@@ -840,12 +845,15 @@ do_backup(){
     echo
    
     echo_white Step 2 of 3 - Shrinking filesystem with PiShrink ...
-    if [ 1 = 1 ]; then
+    if [  $SHRINK_FS != "off" ]; then
         sudo pishrink.sh "$OUTFILE_BASE".img
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then
-            return $EXIT_CODE
+            echo Continuing without shrinking file system
+            #return $EXIT_CODE
         fi
+    else
+        echo "Filesystem not shrunk.  Setting is 'off'."
     fi
     echo Done shrinking filesystem
     echo_white \'$(ls -s -h "$OUTFILE_BASE".img)\'
@@ -919,7 +927,6 @@ do_backup(){
         do_beep_if_sound
         echo_white "Backup done. '$INDEV' backed up to '$OUTFILE' in $(get_elapsed_time $TIME1 $TIME4)." 
     fi
-    
 }
 
 
@@ -1030,6 +1037,7 @@ x=1
     echo
     echo "Write '$INFILE' to '$OUTDEV' '$(get_sd_name $OUTDEV)' ?"
     echo_red WARNING... All existing data on \'$OUTDEV\' - will be erased!
+    do_beep_if_sound
     read  -p "You must type 'YES' to continue:" -r RESULT
     echo
     
@@ -1161,7 +1169,7 @@ calc_wt_size() {
   # output from tput. However in this case, tput detects neither stdout or 
   # stderr is a tty and so only gives default 80, 24 values
 
-  WT_HEIGHT=18
+  WT_HEIGHT=20
   WT_HEIGHT_TALL=$(($(tput lines)-7))
   WT_WIDTH=$(tput cols)
 
@@ -1175,8 +1183,8 @@ calc_wt_size() {
   WT_WIDTH=80
   WT_MENU_HEIGHT=$(($WT_HEIGHT-7))
   
-  WT_MB_HEIGHT=20
-  WT_MB_WIDTH=60
+  WT_MB_HEIGHT=18
+  WT_MB_WIDTH=70
   
   # use for pasting
   # $WT_HEIGHT  $WT_WIDTH
@@ -1229,11 +1237,11 @@ gui_set_compression(){
             "2" " " off \
             "3" " " off \
             "4" " " off \
-            "5" "med" off \
+            "5" "medium" off \
             "6" "" off \
             "7" "" off \
             "8" "" off \
-            "9" "Smallest file, much longer time" off   3>&1 1>&2 2>&3 )
+            "9" "Smallest file, MUCH longer time" off   3>&1 1>&2 2>&3 )
            
             #echo $CHOICE
             if [ ! -z $CHOICE ]; then
@@ -1292,8 +1300,8 @@ gui_set_default_extention(){
 gui_set_allow_root_backup(){
     CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
             "Allow Root Backup" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "no" "Hide the root drive (default)" on \
-            "yes" "Show the root drive " off   3>&1 1>&2 2>&3 )
+            "off" "Hide the root drive (default)" on \
+            "on" "Show the root drive " off   3>&1 1>&2 2>&3 )
     
     echo $CHOICE
     if [ ! -z $CHOICE ]; then
@@ -1303,20 +1311,47 @@ gui_set_allow_root_backup(){
 }
 
 
+gui_set_shrink_fs(){
+    CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
+            "Shrink File System" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+            "on" "Shrink the file system on backup (default)" on \
+            "off" "Don's shrink the filesystem on backup" off   3>&1 1>&2 2>&3 )
+    
+    echo $CHOICE
+    if [ ! -z $CHOICE ]; then
+        SHRINK_FS=$CHOICE
+        set_config_var shrink_fs $CHOICE $CONFIG
+    fi
+}
+
+
+gui_set_debug_mode(){
+    CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
+            "Debug Mode" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+            "on" "Show many terminals screens (default)" on \
+            "off" "Don't show many terminals screens" off   3>&1 1>&2 2>&3 )
+    
+    echo $CHOICE
+    if [ ! -z $CHOICE ]; then
+        DEBUG_MODE=$CHOICE
+        set_config_var debug_mode $CHOICE $CONFIG
+    fi
+}
+
+
 gui_settings(){
     while true; do
         
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --menu " choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT  \
         "Default directory   " "$DEFAULT_PATH" \
+        "Shrink file system  " "$SHRINK_FS" \
         "Default extension   " "$DEFAULT_EXTENSION" \
         "Compression         " "$COMPRESSION of 9" \
         "Allow root backup   " "$ALLOW_ROOT_BACKUP" \
         "Sound               " "$SOUND" \
         "Debug mode          " "$DEBUG_MODE" \
         "                    " "      " \
-        "View terminal       " "View terminal screen for debugging" \
-        "Update              "  "Check for updates" \
-        "Edit config         " "Edit the settings file (pisafe.conf)" \
+        "Edit config         " "Edit the settings file manually (pisafe.conf)" \
         "Reset               " "Reset settings to factory defaults" \
         3>&1 1>&2 2>&3)
         
@@ -1325,22 +1360,24 @@ gui_settings(){
             return $EXIT_CODE
         else
             case "$SELECTION" in
+            "Default d"*)   gui_set_default_path ;;
+            "Shrink"*)      gui_set_shrink_fs ;;
+            "Default e"*)   gui_set_default_extention ;;
             "Compression"*) gui_set_compression ;;
-            "Default d"*) gui_set_default_path ;;
-            "Default e"*) gui_set_default_extention ;;
-            Allow*) gui_set_allow_root_backup ;;
-            
-            View*) read -n 1 -p "Press any key to return"   ;;
-            Update*) gui_update  ;;
-            "    "*)  x=1 ;;
-            Edit*) mousepad $CONFIG; get_settings ;;
+            Allow*)         gui_set_allow_root_backup ;;
+            Sound*) ;;
+            Debug*)         gui_set_debug_mode ;;
+            View*)          read -n 1 -p "Press any key to return"   ;;
+            Update*)        gui_update  ;;
+            "    "*)        ;;
+            Edit*)          mousepad $CONFIG; get_settings ;;
             Reset*) 
                 whiptail --title WARNING --defaultno --yesno "Are you sure you want to reset the settings to factory defaults?" $WT_MB_HEIGHT $WT_MB_WIDTH 
                 if [ $? = 0 ] ; then
                     do_factory_reset 
                 fi ;;
             
-             *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
+             *)             whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
           esac || whiptail --msgbox "There was an error running option $SELECTION" 20 60 1
         fi
     done
@@ -1434,14 +1471,13 @@ function gui_select_dr_file()
 	unset IFS
 
 
-    # convert filesizes to mb
+    # convert filesizes from kb to mb
     num='^[0-9]+$'
     arraylength=${#FILES[@]}
     
     if [ $arraylength = 0 ]; then
         FILES=(no files)
     fi
-    
     
     for (( i=0; i<${arraylength}; i++ )); do
 		arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
@@ -1790,6 +1826,37 @@ gui_select_sddevice(){
 }
 
 
+gui_tools_retired(){
+    local SELECTION
+    while true; do
+        SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "TOOLS" --menu " Choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+        "INSTALL"           "Install $PRODUCTNAME into the menu" \
+        "UPDATE"            "Check for updates" \
+        "VIEW TERMINAL   "     "View terminal screen for debugging" \
+        "HELP"              "Help" \
+        3>&1 1>&2 2>&3)
+        
+        EXIT_CODE=$?
+        if [ $EXIT_CODE != 0 ]; then
+            return $EXIT_CODE
+        else
+            case "$SELECTION" in
+            INSTALL)    gui_install  ;;
+            UUPDATE)    gui_update     ;;
+
+            VIEW*)      read -n 1 -p "Press any key to return"   ;;
+            HELP)
+                INFO=$(do_help)
+                result="$INFO"
+                whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH
+                ;;
+            *)           whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
+            esac 
+        fi
+    done
+}
+
+
 gui_menu(){
     calc_wt_size
     INTERFACE="GUI"
@@ -1802,60 +1869,55 @@ gui_menu(){
                 --ok-button "Select" \
                 --cancel-button "Exit" \
                 --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-                "BACKUP"      "   Backup an SD-card to an image-file " \
-                "RESTORE"     "   Restore an SD-card from an image-file" \
-                "LIST"      "   List info " \
-                "  "        " " \
-                "SETTINGS"   "   Change settings " \
-                "INSTALL"   "   Install $SCRIPTNAME into the menu" \
-                "HELP"      "   Help " \
-                "ABOUT"     "   About " \
-                 3>&1 1>&2 2>&3)
-        
+                "BACKUP"    "   Backup an SD-card to an image-file" \
+                "RESTORE"   "   Restore an SD-card from an image-file" \
+                "LIST"      "   List info" \
+                                "  "        "   " \
+                "SETTINGS"  "   Change settings" \
+                "INSTALL"   "   Install $PRODUCTNAME into the menu" \
+                "UPDATE"    "   Check for updates" \
+                "VIEW TERMINAL" "   View the terminal for debugging" \
+                "HELP"      "   Help" \
+                "ABOUT"     "   About $PRODUCTNAME" \
+                3>&1 1>&2 2>&3)
+                
         #echo $MENU_CHOICE
         case $MENU_CHOICE in
-            BACKUP)
-                gui_do_backup
-            ;;
+            BACKUP)         gui_do_backup   ;;
             
-            RESTORE)
-                gui_do_restore
-            ;;
+            RESTORE)        gui_do_restore  ;;
             
             LIST)
                 INFO=$(do_list_info)
                 result="$INFO"
                 whiptail --backtitle "$BACKTITLE"  --title "LIST" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH
-            ;;
+                ;;
             
-            SETTINGS)
-                gui_settings
-            ;;
+            SETTINGS)       gui_settings    ;;
             
+            INSTALL)        gui_install     ;;
             
-            INSTALL)
-                gui_install
-            ;;
+            UPDATE)         do_update       ;;
             
-             HELP)
+            VIEW*) read -n 1 -p "Press any key to return"   ;;
+            
+            HELP)
                 INFO=$(do_help)
                 result="$INFO"
                 whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH
-            ;;
+                ;;
             
             ABOUT)
                 INFO=$(do_about)
-                 result="$INFO"
-                 whiptail --backtitle "$BACKTITLE"  --title "ABOUT" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH
-            ;;   
+                result="$INFO"
+                whiptail --backtitle "$BACKTITLE"  --title "ABOUT" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH
+                ;;   
             
-            UPDATE)
-                do_update
-            ;;
+            TOOLS)          gui_tools       ;;
             
-            *)
-                return
-            ;;
+            "  "*)     x=1                     ;;
+            
+            *)              return          ;;
         esac
     done
 }
