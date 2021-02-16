@@ -14,7 +14,10 @@ Backup or Restore Raspberry Pi SD-cards to/from a compressed image-file right on
  
  - Supports all USB storage (I think).
  
- - Supports USB boot (tries to hide the boot disk).  You have to set "allow root backup" to yes in settings.
+ - Supports USB boot 
+ 
+ - Seems to support backing up the live boot SD-card.  You have to enable "allow root backup".  
+    CAUTION: Reboot first, close everything and don't use the system while it is backing up!  Send your backup image to a different drive!
  
  - This adds a graphical front-end to my 'sd' project which is a command-line version.
  
@@ -41,11 +44,11 @@ Backup or Restore Raspberry Pi SD-cards to/from a compressed image-file right on
    
    3) Startup Pi-Safe from the menu.  Or in a terminal, type in 'pisafe'
         
-   5) Use the menu to select BACKUP, select your SD-card and give the image-file a name.
+   5) Use the menu to select BACKUP, select your SD-card and the image-file a name.
    
    6) Watch your image-file get created, shrunk and compressed automatically.
    
-   7) Note: At this point, I have left several safeties in place.  I may add an option to remove them in the future.  For ezample you have to type in "YES"
+   7) Note: At this point, I have left several safeties in place.  I may add an option to remove them in the future.  For example you have to type in "YES"
  before it will RESTORE an image file to an SD card.   
  .
    
