@@ -68,9 +68,9 @@ In a terminal window, type in
    
  # REFERENCES
  
-Thanks to https://github.com/Drewsif/PiShrink for the PiShrink engine
-
 Thanks to Raspberry Pi for how to read and write an image file.
+
+Thanks to https://github.com/Drewsif/PiShrink for the PiShrink engine.
 
 Thanks to all the people who posted code snipets on the web.
 
