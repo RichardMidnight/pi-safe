@@ -21,7 +21,9 @@ Backup or Restore Raspberry Pi SD-cards to/from a compressed image-file right on
  
  - This adds a graphical front-end to my 'sd' project which is a command-line version.
  
-.- See Leepspvideo review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0&t=2s
+ - See Leepspvideo review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0&t=2s
+ 
+ .
  
 # SETUP
  
