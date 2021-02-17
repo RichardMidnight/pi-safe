@@ -1,6 +1,6 @@
 # PiSafe  -  Raspberry Pi imaging app
 
-Backup or Restore Raspberry Pi SD-cards to/from a compressed image-file right on your Pi!
+Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a compressed image-file right on your Pi!
 
  - Backup an SD card to an image-file.
 
@@ -8,7 +8,7 @@ Backup or Restore Raspberry Pi SD-cards to/from a compressed image-file right on
 
  - Works entirely on a Raspberry Pi.  No Windows or Mac needed. 
  
- - Creates a compressed image-file that will resize to fill the new card it is put on (thanks to PiShrink!).
+ - Creates a compressed image-file that will resize to fill the new card it is restored to (thanks to PiShrink!).
  
  - Supports .img .zip .xz and .gz file formats.
  
@@ -18,6 +18,10 @@ Backup or Restore Raspberry Pi SD-cards to/from a compressed image-file right on
  
  - Seems to support backing up the live boot SD-card.  You have to enable "allow root backup".  
     CAUTION: Reboot first, close everything and don't use the system while it is backing up!  Send your backup image to a different drive!
+    
+ - Compatible with RPI Imager that comes with the pi.
+
+ - Create a library of your own pi images, then restore them to whatever device you want, whenever you want.  
  
  - This adds a graphical front-end to my 'sd' project which is a command-line version.
  
