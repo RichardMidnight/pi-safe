@@ -33,7 +33,7 @@ BACKTITLE="$PRODUCTNAME ver $SCRIPTVER. === $PRODUCTCOMMENT === "
 set_conf_defaults(){
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var default_extension zip $CONFIG
-    set_config_var compression_level 1 $CONFIG
+    set_config_var compression_level 5 $CONFIG
     set_config_var hide_root_disk on $CONFIG
     set_config_var debug_mode off $CONFIG
     set_config_var sound on $CONFIG
@@ -54,7 +54,7 @@ fix_settings(){
         set_config_var default_extension zip $CONFIG
     fi
     if [ $COMPRESSION = 0 ]; then 
-        set_config_var compression_level 1 $CONFIG
+        set_config_var compression_level 5 $CONFIG
     fi
     if [ $HIDE_ROOT_DISK != "off" ] ; then 
         set_config_var hide_root_disk on $CONFIG
@@ -906,8 +906,13 @@ do_backup(){
             #echo ".........20........40........60........80........100%"
             #sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
             #EXIT_CODE=$?
-            sudo pv "$OUTFILE_BASE".img | sudo pigz -K -$COMPRESSION > "$OUTFILE"
-            EXIT_CODE=$?  
+            sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION -K > "$OUTFILE"
+            EXIT_CODE=$? 
+            sleep 1
+            if [ -f "$OUTFILE" ] ; then
+                sudo rm "$OUTFILE_BASE".img -y
+            fi
+           
             
             
         ;;
@@ -1268,12 +1273,12 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 
 gui_set_compression(){
     CHOICE=$(whiptail --title "SETTINGS" --radiolist \
-            "Choose compression level" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "1" "Fastest time  (default)" on \
+            "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+            "1" "Fastest time (slightly faster)" off \
             "2" "" off \
             "3" "" off \
             "4" "" off \
-            "5" "" off \
+            "5" "(default)" on \
             "6" "" off \
             "7" "" off \
             "8" "" off \
@@ -1325,10 +1330,10 @@ gui_set_default_path(){
 gui_set_default_extention(){
      CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
             "Choose default extension (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "zip" "default" on \
-            "xz" "a little smaller, a lot slower" off \
-            "gz" "same compression, faster, no progress bar" off  \
-            "img" "No compression (twice the size, half the time)" off 3>&1 1>&2 2>&3 )
+            "zip" "Default" on \
+            "xz" "~25% smaller, ~4x time" off \
+            "gz" "Same as zip" off  \
+            "img" "Twice the size, half the time (No compression)" off 3>&1 1>&2 2>&3 )
     
     echo $CHOICE
     if [ ! -z $CHOICE ]; then
