@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.18"
+SCRIPTVER="0.8.19"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -34,10 +34,11 @@ set_conf_defaults(){
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var default_extension zip $CONFIG
     set_config_var compression_level 1 $CONFIG
-    set_config_var allow_root_backup off $CONFIG
+    set_config_var hide_root_disk on $CONFIG
     set_config_var debug_mode off $CONFIG
     set_config_var sound on $CONFIG
     set_config_var shrink_fs on $CONFIG
+    set_config_var auto_expand_fs on $CONFIG
     
     set_config_var safeties on $CONFIG
 }
@@ -55,8 +56,8 @@ fix_settings(){
     if [ $COMPRESSION = 0 ]; then 
         set_config_var compression_level 1 $CONFIG
     fi
-    if [ $ALLOW_ROOT_BACKUP != "on" ] && [ $ALLOW_ROOT_BACKUP != "off" ]; then 
-        set_config_var allow_root_backup off $CONFIG
+    if [ $HIDE_ROOT_DISK != "off" ] ; then 
+        set_config_var hide_root_disk on $CONFIG
     fi
     if [ $DEBUG_MODE = 0 ]; then 
         set_config_var debug_mode on $CONFIG
@@ -67,6 +68,9 @@ fix_settings(){
     if [ $SHRINK_FS = 0 ]; then 
         set_config_var shrink_fs on $CONFIG
     fi
+    if [ $AUTO_EXPAND_FS = 0 ]; then 
+        set_config_var auto_expand_fs on $CONFIG
+    fi
     get_settings
 }
 
@@ -75,11 +79,12 @@ get_settings(){
     DEFAULT_PATH=$(get_config_var default_path $CONFIG)
     DEFAULT_EXTENSION=$(get_config_var default_extension $CONFIG)
     COMPRESSION=$(get_config_var compression_level $CONFIG)
-    ALLOW_ROOT_BACKUP=$(get_config_var allow_root_backup $CONFIG)
+    HIDE_ROOT_DISK=$(get_config_var hide_root_disk $CONFIG)
     DEBUG_MODE=$(get_config_var debug_mode $CONFIG)
     SOUND=$(get_config_var sound $CONFIG)
-     
     SHRINK_FS=$(get_config_var shrink_fs $CONFIG)
+    AUTO_EXPAND_FS=$(get_config_var auto_expand_fs $CONFIG)
+    
     SAFETIES=$(get_config_var safeties $CONFIG)
     LOG=off
     VERIFY=off
@@ -107,8 +112,8 @@ do_help() {
     echo "  help | -h                 - help"
     echo
     echo "Notes: "
-    echo " - Supports .img .zip .xz and .gz files.  Appends '.zip' if no extension is specified "
-    echo " - Specifying an '.img' extension is faster, but twice the size because it is not compressed with zip."
+    echo " - Supports .img .zip .xz and .gz files.  Appends '.$DEFAULT_EXTENSION' if no extension is specified "
+    echo " - Specifying an '.img' extension is faster, but twice the size because it is not compressed with $DEFAULT_EXTENSION."
     echo
     #echo It will run dd, then pishrink, then compress to create a smallimage file of the SD card
     echo
@@ -213,7 +218,6 @@ if not found then
 end
 EOF
 }
-
 
 
 # -------------------------------------------------------------
@@ -428,7 +432,7 @@ get_root_disk() {
     ROOT_PARTITION=$(lsblk -l | grep "/$" | cut -d' ' -f1 2> /dev/null) 
     
     if [ -z $ROOT_PARTITION ]; then
-        return 1  # can't find root partition or root drive
+        return 1  # can't find root partition or root disk
     fi
     
     if [[ $ROOT_PARTITION =~ "p" ]]; then
@@ -449,16 +453,17 @@ get_freespace() {
     local FILENAME=${1:-"."}  
     local FORMAT=${2:-"-B1"}   # -B1 for bytes    -h for humanreadable
     local FREESPACE
-   # if [ -z "$OUTFILE" ]; then
-   #     OUTFILE_LOCAL="."
-   # else
-   #     OUTFILE_LOCAL=$OUTFILE
-   # fi
-  
-    #RET=$(df . -B1 --output=avail | grep -v Avail)
-    #RET=$(df $(dirname "$OUTFILE_LOCAL") -h --output=avail | grep -v Avail)
-    FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
-    EXIT_CODE=$?
+    
+    if [ -d "$FILENAME" ]; then
+        FREESPACE=$(df "$FILENAME" $FORMAT --output=avail | grep -v Avail)
+        EXIT_CODE=$?
+    else
+        FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
+        EXIT_CODE=$?
+    fi
+    
+    #FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
+    #EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
     fi
@@ -484,7 +489,7 @@ get_folder_size() {
 # ---------------------------------------------------------
 
 get_file_ext_ok(){
-#check_for_supported_file_extention(){
+    #check_for_supported_file_extention(){
     #returns 0 if good, 1 if bad
     OUTFILE_EXT=$(get_file_ext "$1")
 
@@ -556,25 +561,37 @@ do_list_info() {
         echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
         #echo "ConfigFile= $CONFIG"
         echo
-        echo "--- SETTINGS ---"
-        echo "COMPRESSION= $COMPRESSION"
-        echo "DEF DIR    = $DEFAULT_PATH"
-        echo 
-        echo "--- SD-CARD DEVICES (excluding root disk '/dev/$(get_root_disk)') ---"
+       # echo "--- SETTINGS ---"
+       # echo "COMPRESSION= $COMPRESSION"
+       # echo "DEF DIR    = $DEFAULT_PATH"
+       # echo 
+        echo "--- SD-CARD DEVICES ---  (Hide root disk = $HIDE_ROOT_DISK)"
         echo "$(get_sd_devices)"
 
         echo   
         echo "--- IMAGE FILES in '$DEFAULT_PATH' ---"
       #  ls -1 -s -h -w1 *.img *.zip *.xz *.gz $DEFAULT_PATH  $2> /dev/null | sed 's/ /     /'
-        ls -1 -s -h -w1 $DEFAULT_PATH/*.img $DEFAULT_PATH/*.zip $DEFAULT_PATH/*.xz $DEFAULT_PATH/*.gz | sed 's/ /     /'
+        ls -1 -s -h -w1 $DEFAULT_PATH/*.img $DEFAULT_PATH/*.zip $DEFAULT_PATH/*.xz $DEFAULT_PATH/*.gz 2> /dev/null | sed 's/ /     /'
 }    
 
 
+msgbox(){
+   whiptail --msgbox "$*" $WT_MB_HEIGHT $WT_MB_WIDTH
+}
+
+
 get_sd_devices() {
-#echo   " $(get_root_disk) "
-    local DEVICES=
-    if [ $(get_config_var allow_root_backup $CONFIG) = "on" ]; then
-        DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? /dev/$(get_root_disk) 2> /dev/null  )   
+    local DEVICES= 
+    if [ $(get_config_var hide_root_disk $CONFIG) = "off" ]; then
+        ROOT_DISK=$(get_root_disk)      
+        if [ ${ROOT_DISK:0:2} != "sd" ]; then
+            ROOT_DISK="/dev/$(get_root_disk)"
+        else
+            ROOT_DISK=
+        fi
+        #lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? /dev/$(get_root_disk)
+        # DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? /dev/$(get_root_disk) 2> /dev/null  )   
+        DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? $ROOT_DISK 2> /dev/null  )  
         EXIT_CODE=$?
     else
         DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd?  2> /dev/null | grep -v $(get_root_disk))   
@@ -744,7 +761,7 @@ do_backup(){
     if [ $(get_sd_size $INDEV) -gt 16000000000 ]; then
         MESG=" '$INDEV' is larger than 16GB.  \
          \nUse a smaller SD card if you can, it will copy faster.\
-         \nA good 8gb card in a Raspberry Pi 4 takes about 8 minutes \n"
+         \nA good 8gb card in a Raspberry Pi 4 takes about 9 minutes \n"
          echo
         echo_red "WARNING... $MESG"   
     fi
@@ -845,8 +862,12 @@ do_backup(){
     echo
    
     echo_white Step 2 of 3 - Shrinking filesystem with PiShrink ...
-    if [  $SHRINK_FS != "off" ]; then
-        sudo pishrink.sh "$OUTFILE_BASE".img
+    PI_SHRINK_OPTS=
+    if [ $AUTO_EXPAND_FS = "off" ] ; then 
+        PI_SHRINK_OPTS="-s"
+    fi
+    if [ $SHRINK_FS != "off" ]; then
+        sudo pishrink.sh $PI_SHRINK_OPTS "$OUTFILE_BASE".img
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then
             echo Continuing without shrinking file system
@@ -879,7 +900,6 @@ do_backup(){
             echo ".........20........40........60........80........100%"
             sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
             EXIT_CODE=$?
-
         ;;
         
         xz)
@@ -1062,6 +1082,9 @@ x=1
     
     local INFILEEXT=$(get_file_ext "$INFILE")
     
+    echo_white "Erasing MBR, signature, and partition table from '$OUTDEV'..."
+	sudo dd if=/dev/zero of=$OUTDEV bs=512 count=1
+    
     echo        
     echo_white "Writing '$INFILE' to '$OUTDEV' ... "    
     date
@@ -1197,7 +1220,7 @@ gui_update(){
 }
 
 
-gui_install(){
+gui_do_install(){
     do_install
     
     # create the desktop file    
@@ -1219,9 +1242,8 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 
         if [ -f "/usr/local/bin/$SCRIPTNAME" ]; then 
             MSG="$PRODUCTNAME $SCRIPTVER installed.            
-            \nYou can execute it from any directory by typing '$SCRIPTNAME'.
-            \nIt is easiest to start it from the directory that holds your image files.
-            \nOr select it from the 'accessories' menu.  Note, this starts from the home directory."
+            \nSelect it from the 'accessories' menu.
+            \n\nOr you can execute it from any directory by typing '$SCRIPTNAME'."
             whiptail --backtitle "$BACKTITLE" --title "INSTALLED" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
         else
             MSG="$PRODUCTNAME not installed.  '/usr/local/bin/$SCRIPTNAME' not found. "
@@ -1241,7 +1263,7 @@ gui_set_compression(){
             "6" "" off \
             "7" "" off \
             "8" "" off \
-            "9" "Smallest file, MUCH longer time" off   3>&1 1>&2 2>&3 )
+            "9" "10%-15% smaller, 3x-4x more time " off   3>&1 1>&2 2>&3 )
            
             #echo $CHOICE
             if [ ! -z $CHOICE ]; then
@@ -1261,33 +1283,38 @@ do_factory_reset(){
     
 gui_set_default_path(){
     MSG="Enter new default path   '$DEFAULT_PATH'"
-    NEWPATH=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$DEFAULT_PATH" 3>&1 1>&2 2>&3)
-   # EXIT_CODE=$?
-   # if [ $EXIT_CODE != 0 ]; then 
-   #     return $EXIT_CODE
-   # fi
-    
-    if [ ! -z $NEWPATH ]; then
-    
-        if [ -d $NEWPATH ]; then
-            #DEFAULT_PATH=$NEWPATH
-            DEFAULT_PATH=$(echo "$NEWPATH" | sed 's/[/\t]*$//')
-            set_config_var default_path $DEFAULT_PATH $CONFIG
-        else
-            whiptail --title ERROR --msgbox "ERROR Directory '$NEWPATH' does not exist" $WT_MB_HEIGHT $WT_MB_WIDTH
+    TEMP_PATH="$DEFAULT_PATH"
+    while true; do
+        NEWPATH=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$TEMP_PATH" 3>&1 1>&2 2>&3)
+        EXIT_CODE=$?
+        if [ $EXIT_CODE != 0 ]; then 
+            return $EXIT_CODE
         fi
-    
-    fi
+        
+        if [ ! -z $NEWPATH ]; then
+        
+            if [ -d $NEWPATH ]; then
+                #DEFAULT_PATH=$NEWPATH
+                DEFAULT_PATH=$(echo "$NEWPATH" | sed 's/[/\t]*$//')
+                set_config_var default_path $DEFAULT_PATH $CONFIG
+                return 0
+            else
+                whiptail --title ERROR --msgbox "ERROR Directory '$NEWPATH' does not exist" $WT_MB_HEIGHT $WT_MB_WIDTH
+                TEMP_PATH="$NEWPATH"
+            fi
+        
+        fi
+    done
 }
 
 
 gui_set_default_extention(){
      CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
-            "Choose default extension" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+            "Choose default extension (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
             "zip" "Compress with zip (default)" on \
-            "xz" "Compress with xz" off \
+            "xz" "Compress with xz (80% size, 2x time)" off \
             "gz" "Compress with gz" off  \
-            "img" "No compression" off 3>&1 1>&2 2>&3 )
+            "img" "No compression (2x size, 50% time)" off 3>&1 1>&2 2>&3 )
     
     echo $CHOICE
     if [ ! -z $CHOICE ]; then
@@ -1297,16 +1324,16 @@ gui_set_default_extention(){
 }
 
 
-gui_set_allow_root_backup(){
+gui_set_hide_root_disk(){
     CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
-            "Allow Root Backup" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "off" "Hide the root drive (default)" on \
-            "on" "Show the root drive " off   3>&1 1>&2 2>&3 )
+            "Hide Root Disk" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+            "on" "Hide the root disk (default)" on \
+            "off" "Don't hide the root disk " off   3>&1 1>&2 2>&3 )
     
     echo $CHOICE
     if [ ! -z $CHOICE ]; then
-        ALLOW_ROOT_BACKUP=$CHOICE
-        set_config_var allow_root_backup $CHOICE $CONFIG
+        HIDE_ROOT_DISK=$CHOICE
+        set_config_var hide_root_disk $CHOICE $CONFIG
     fi
 }
 
@@ -1328,8 +1355,8 @@ gui_set_shrink_fs(){
 gui_set_debug_mode(){
     CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
             "Debug Mode" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "on" "Show many terminals screens (default)" on \
-            "off" "Don't show many terminals screens" off   3>&1 1>&2 2>&3 )
+            "on" "Show many terminal screens (default)" on \
+            "off" "Don't show many terminal screens" off   3>&1 1>&2 2>&3 )
     
     echo $CHOICE
     if [ ! -z $CHOICE ]; then
@@ -1339,15 +1366,44 @@ gui_set_debug_mode(){
 }
 
 
+gui_set_sound(){
+    CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
+            "Sound" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+            "on" "Sound on (default)" on \
+            "off" "Sound off" off   3>&1 1>&2 2>&3 )
+    
+    echo $CHOICE
+    if [ ! -z $CHOICE ]; then
+        SOUND=$CHOICE
+        set_config_var sound $CHOICE $CONFIG
+    fi
+}
+
+
+gui_set_auto_expand_fs(){
+    CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
+            "Auto-unshrink filesystem" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+            "on" "Create a BACKUP that auto-unshrinks on first boot (default)" on \
+            "off" "Create a Backup that will NOT auto-unshrink"  off   3>&1 1>&2 2>&3 )
+    
+    echo $CHOICE
+    if [ ! -z $CHOICE ]; then
+        AUTO_EXPAND_FS=$CHOICE
+        set_config_var auto_expand_fs $CHOICE $CONFIG
+    fi
+}
+
+
 gui_settings(){
     while true; do
         
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --menu " choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT  \
         "Default directory   " "$DEFAULT_PATH" \
-        "Shrink file system  " "$SHRINK_FS" \
+        "Shrink filesystem  " "$SHRINK_FS" \
+        "Auto unshrink filesystem" "$AUTO_EXPAND_FS" \
         "Default extension   " "$DEFAULT_EXTENSION" \
         "Compression         " "$COMPRESSION of 9" \
-        "Allow root backup   " "$ALLOW_ROOT_BACKUP" \
+        "Hide root disk   "    "$HIDE_ROOT_DISK" \
         "Sound               " "$SOUND" \
         "Debug mode          " "$DEBUG_MODE" \
         "                    " "      " \
@@ -1362,10 +1418,11 @@ gui_settings(){
             case "$SELECTION" in
             "Default d"*)   gui_set_default_path ;;
             "Shrink"*)      gui_set_shrink_fs ;;
+            "Auto "*)       gui_set_auto_expand_fs ;;
             "Default e"*)   gui_set_default_extention ;;
             "Compression"*) gui_set_compression ;;
-            Allow*)         gui_set_allow_root_backup ;;
-            Sound*) ;;
+            Hide*)          gui_set_hide_root_disk ;;
+            Sound*)         gui_set_sound ;;
             Debug*)         gui_set_debug_mode ;;
             View*)          read -n 1 -p "Press any key to return"   ;;
             Update*)        gui_update  ;;
@@ -1378,7 +1435,8 @@ gui_settings(){
                 fi ;;
             
              *)             whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
-          esac || whiptail --msgbox "There was an error running option $SELECTION" 20 60 1
+#         esac || whiptail --msgbox "There was an error running option $SELECTION" 20 60 1
+            esac
         fi
     done
 }
@@ -1543,25 +1601,31 @@ gui_get_indev(){
     
     # Warning if SD-card is bigger than 16GB
     if [ $(get_sd_size $INDEV) -gt 16000000000 ]; then
-        MESG=" '$INDEV' is larger than 16GB.  \
+        MESG=" '$(get_sd_name $INDEV)' is larger than 16GB.  \
          \n\nUse a smaller SD card if you can.  \
          \nIt will be faster because the entire SD card must be read before it can be compressed.\
-         \n\nA good 8gb card in a Raspberry Pi 4 takes about 8 minutes"
+         \n\nA good 8gb card in a Raspberry Pi 4 takes about 9 minutes"
         whiptail --backtitle "$BACKTITLE" --title "WARNING" --msgbox "$MESG" $WT_MB_HEIGHT $WT_MB_WIDTH   
     fi
     
     # Warning if SD-card is bigger than freespace
-    if [ $(get_sd_size $INDEV) -gt $(get_freespace "$OUTFILE") ]; then
-        whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox "Not enough free space on '$PWD' \n\nBe sure to specify a different drive" $WT_MB_HEIGHT $WT_MB_WIDTH 
+    if [ $(get_sd_size $INDEV) -gt $(get_freespace "$DEFAULT_PATH") ]; then
+        whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox \
+        "Not enough free space on '$DEFAULT_PATH' 
+         \n'$(get_sd_name  $INDEV)' is $(get_sd_size $INDEV -h)
+         \nfreespace on '$DEFAULT_PATH' is $(get_freespace "$DEFAULT_PATH" -h)
+         \n\nBe sure to specify a different drive" $WT_MB_HEIGHT $WT_MB_WIDTH 
         #return 1
     fi
     
     # Warning if one and a half times the SD-card is bigger than freespace
     SPACENEEDED=$(( $(get_sd_size $INDEV) + $(( $(get_sd_size $INDEV) / 2 )) ))
-    if [ $SPACENEEDED -gt $(get_freespace "$OUTFILE") ]; then
+    if [ $SPACENEEDED -gt $(get_freespace "$DEFAULT_PATH") ]; then
         whiptail --backtitle "$BACKTITLE" --title "WARNING" \
-            --msgbox "Might not be enough free space on '$PWD'
-            \nThere are $(get_folder_size /home/pi/.local/share/Trash) in the Trash" $WT_MB_HEIGHT $WT_MB_WIDTH   
+            --msgbox "Might not be enough free space on '$DEFAULT_PATH'
+            \n'$(get_sd_name $INDEV)' is $(get_sd_size $INDEV -h)mb
+            \nfreespace on '$DEFAULT_PATH' is $(get_freespace "$DEFAULT_PATH" -h)
+            \nThere is $(get_folder_size /home/pi/.local/share/Trash) in the Trash" $WT_MB_HEIGHT $WT_MB_WIDTH   
     fi
     
     # maybe check and see if it looks like a raspbian disk?
@@ -1657,7 +1721,7 @@ gui_get_outdev(){
     # Stop if outdev is the root disk
     if [ $OUTDEV = /dev/$(get_root_disk) ]; then
         #echo "ERROR: Restore to root disk '/dev/$(get_root_disk)' not allowed"
-        whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "Restore to root drive not allowed" $WT_HEIGHT $WT_WIDTH
+        whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "Restore to root disk not allowed" $WT_HEIGHT $WT_WIDTH
         return 1
     fi
     
@@ -1675,7 +1739,9 @@ gui_get_outdev(){
      
     # Stop if imagefile is bigger than device
     if [ $(get_image_size_bytes "$INFILE") -gt $(get_sd_size $OUTDEV) ]; then
-        whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "The image in '$INFILE' is bigger than device '$OUTDEV'" $WT_HEIGHT $WT_WIDTH
+        whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "Not enough room
+        \nThe image in '$INFILE' is ' $(get_image_size "$INFILE")' 
+        \nand '$OUTDEV' is only '$(get_sd_size $OUTDEV -h)'" $WT_HEIGHT $WT_WIDTH
         return 1
     fi
 }
@@ -1812,7 +1878,8 @@ gui_select_sddevice(){
     fi
 
     IFS=$FIELD_SEPERATOR
-    DEVICE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE" --menu "Choose an SD card" 30 80 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
+    DEVICE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE"\
+     --menu "Choose an SD card (Hide root disk = $HIDE_ROOT_DISK)" 30 80 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
     EXIT_CODE=$?
     unset IFS   
      
@@ -1841,8 +1908,8 @@ gui_tools_retired(){
             return $EXIT_CODE
         else
             case "$SELECTION" in
-            INSTALL)    gui_install  ;;
-            UUPDATE)    gui_update     ;;
+            INSTALL)    gui_do_install  ;;
+            UPDATE)    gui_update     ;;
 
             VIEW*)      read -n 1 -p "Press any key to return"   ;;
             HELP)
@@ -1876,7 +1943,7 @@ gui_menu(){
                 "SETTINGS"  "   Change settings" \
                 "INSTALL"   "   Install $PRODUCTNAME into the menu" \
                 "UPDATE"    "   Check for updates" \
-                "VIEW TERMINAL" "   View the terminal for debugging" \
+                "VIEW TERMINAL" "   View the terminal (for debugging)" \
                 "HELP"      "   Help" \
                 "ABOUT"     "   About $PRODUCTNAME" \
                 3>&1 1>&2 2>&3)
@@ -1895,11 +1962,11 @@ gui_menu(){
             
             SETTINGS)       gui_settings    ;;
             
-            INSTALL)        gui_install     ;;
+            INSTALL)        gui_do_install     ;;
             
             UPDATE)         do_update       ;;
             
-            VIEW*) read -n 1 -p "Press any key to return"   ;;
+            VIEW*)          read -n 1 -p "Press any key to return to $PRODUCTNAME"   ;;
             
             HELP)
                 INFO=$(do_help)
@@ -1915,7 +1982,7 @@ gui_menu(){
             
             TOOLS)          gui_tools       ;;
             
-            "  "*)     x=1                     ;;
+            "  "*)                          ;;
             
             *)              return          ;;
         esac
@@ -1934,5 +2001,7 @@ do_init_conf
 get_settings
 fix_settings
 get_tools
+calc_wt_size
+
 
 cli_menu $1 $2 $3
