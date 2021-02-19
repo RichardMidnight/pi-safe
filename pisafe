@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.8.19"
+SCRIPTVER="0.9.0"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -33,14 +33,18 @@ BACKTITLE="$PRODUCTNAME ver $SCRIPTVER. === $PRODUCTCOMMENT === "
 set_conf_defaults(){
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var default_extension zip $CONFIG
-    set_config_var compression_level 1 $CONFIG
+    set_config_var compression_level 5 $CONFIG
     set_config_var hide_root_disk on $CONFIG
     set_config_var debug_mode off $CONFIG
     set_config_var sound on $CONFIG
     set_config_var shrink_fs on $CONFIG
     set_config_var auto_expand_fs on $CONFIG
-    
-    set_config_var safeties on $CONFIG
+    if [ -z $(which mousepad) ]; then
+        set_config_var text_editor nano $CONFIG
+    else
+        set_config_var text_editor mousepad $CONFIG
+    fi
+    set_config_var safety on $CONFIG
 }
 
 
@@ -54,7 +58,7 @@ fix_settings(){
         set_config_var default_extension zip $CONFIG
     fi
     if [ $COMPRESSION = 0 ]; then 
-        set_config_var compression_level 1 $CONFIG
+        set_config_var compression_level 5 $CONFIG
     fi
     if [ $HIDE_ROOT_DISK != "off" ] ; then 
         set_config_var hide_root_disk on $CONFIG
@@ -71,6 +75,12 @@ fix_settings(){
     if [ $AUTO_EXPAND_FS = 0 ]; then 
         set_config_var auto_expand_fs on $CONFIG
     fi
+    if [ $TEXT_EDITOR = 0 ]; then 
+        set_config_var text_editor nano $CONFIG
+    fi    
+    if [ $SAFETY = 0 ]; then 
+        set_config_var safety on $CONFIG
+    fi    
     get_settings
 }
 
@@ -84,8 +94,8 @@ get_settings(){
     SOUND=$(get_config_var sound $CONFIG)
     SHRINK_FS=$(get_config_var shrink_fs $CONFIG)
     AUTO_EXPAND_FS=$(get_config_var auto_expand_fs $CONFIG)
-    
-    SAFETIES=$(get_config_var safeties $CONFIG)
+    TEXT_EDITOR=$(get_config_var text_editor $CONFIG)
+    SAFETY=$(get_config_var safety $CONFIG)
     LOG=off
     VERIFY=off
     
@@ -364,8 +374,6 @@ get_sd_size() {
 # an alternative way:
 # echo $(( $(sudo blockdev --getsize64 /dev/sda) ))
 # echo $(( $(sudo blockdev --getsize64 /dev/sda)/1024/1024 ))mb    
-    
-    
 }
 
 
@@ -609,9 +617,9 @@ get_sd_devices() {
 get_tools() {   
     #echo -n Checking to see if required tools are installed ...
     
-    if [ ! -f /usr/local/bin/pishrink.sh ] || [ ! -f /usr/bin/zip ] || [ ! -f /usr/bin/xz ] || [ ! -f /usr/bin/pigz ]  || [ ! -f /usr/bin/whiptail ] ; then
+    if [ ! -f /usr/local/bin/pishrink.sh ] || [ ! -f /usr/bin/pv ] || [ ! -f /usr/bin/xz ] || [ ! -f /usr/bin/pigz ]  || [ ! -f /usr/bin/whiptail ] ; then
        
-        read  -p "Install needed tools:  PiShrink, zip,  and xz-tools?" -n 1 -r RESULT
+        read  -p "Install needed tools:  PiShrink, pv, and a few others?" -n 1 -r RESULT
         echo
 
         if [ $RESULT = "y" ]; then
@@ -626,10 +634,10 @@ get_tools() {
             fi
 
             # get zip if needed
-            if [ ! -f /usr/bin/zip ]; then
-                echo_white Installing zip...
-                sudo apt install zip -y
-            fi
+            #if [ ! -f /usr/bin/zip ]; then
+            #    echo_white Installing zip...
+            #    sudo apt install zip -y
+            #fi
             
             # get xz if needed
             if [ ! -f /usr/bin/xz ]; then
@@ -641,6 +649,12 @@ get_tools() {
             if [ ! -f /usr/bin/pigz ]; then
                 echo_white Installing pigz...
                 sudo apt install pigz -y
+            fi
+            
+            # get pv if needed
+            if [ ! -f /usr/bin/pv ]; then
+                echo_white Installing pv...
+                sudo apt install pv -y
             fi
             
             echo_white DONE installing tools. 
@@ -761,7 +775,7 @@ do_backup(){
     if [ $(get_sd_size $INDEV) -gt 16000000000 ]; then
         MESG=" '$INDEV' is larger than 16GB.  \
          \nUse a smaller SD card if you can, it will copy faster.\
-         \nA good 8gb card in a Raspberry Pi 4 takes about 9 minutes \n"
+         \nA good 8gb card in a Raspberry Pi 4 takes about 8 minutes \n"
          echo
         echo_red "WARNING... $MESG"   
     fi
@@ -835,21 +849,21 @@ do_backup(){
         return 2
     fi  
 
-    do_beep_if_sound
-    echo_red "WARNING starting in 10 seconds ... Ctrl-C to abort"
-    do_countdown 10
+    #do_beep_if_sound
+    #echo_red "WARNING starting in 10 seconds ... Ctrl-C to abort"
+    #do_countdown 10
 
     #################################################
     # this section writes the data
     #################################################
     OUTFILE_BASE=$(get_file_path "$OUTFILE")/$(get_file_base "$OUTFILE")
-    
 
     TIME1=$(date +%s)
     echo_white "Step 1 of 3 - Reading  '$INDEV' to '$OUTFILE_BASE.img' ... "
     date
     echo $(get_sd_size $INDEV -h) to read
     sudo dd bs=4M if=$INDEV of="$OUTFILE_BASE".img status=progress conv=fsync 
+    #sudo pv -s 7000000000 "$INFILE" | sudo dd bs=4M of="$OUTFILE_BASE".img conv=fsync 
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
@@ -893,13 +907,22 @@ do_backup(){
         ;;
         
         zip)
-            local FILESIZE_M=$(( $(get_file_size_kbytes "$OUTFILE_BASE".img) / 1024))
-            local DOTSIZE=$(( $FILESIZE_M / 50 ))
-            echo Each dot represents=$DOTSIZE MB
-            echo -n "                      $(get_file_path $OUTFILE)/$(get_file_base $OUTFILE).img"
-            echo ".........20........40........60........80........100%"
-            sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
-            EXIT_CODE=$?
+            #local FILESIZE_M=$(( $(get_file_size_kbytes "$OUTFILE_BASE".img) / 1024))
+            #local DOTSIZE=$(( $FILESIZE_M / 50 ))
+            #echo Each dot represents=$DOTSIZE MB
+            #echo -n "                      $(get_file_path $OUTFILE)/$(get_file_base $OUTFILE).img"
+            #echo ".........20........40........60........80........100%"
+            #sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
+            #EXIT_CODE=$?
+            sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION -K > "$OUTFILE"
+            EXIT_CODE=$? 
+            #sleep 1
+            #if [ -f "$OUTFILE" ] ; then
+                sudo rm -f "$OUTFILE_BASE".img 
+            #fi
+           
+            
+            
         ;;
         
         xz)
@@ -909,9 +932,11 @@ do_backup(){
         ;;
         
         gz)
-            sudo pigz -v -$COMPRESSION "$OUTFILE_BASE".img
+            #sudo pigz -v -$COMPRESSION "$OUTFILE_BASE".img
+            sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE"
             EXIT_CODE=$?        
-            sudo mv "$OUTFILE_BASE".img.gz "$OUTFILE"
+            #sudo mv "$OUTFILE_BASE".img.gz "$OUTFILE"
+            sudo rm -f "$OUTFILE_BASE".img 
         ;;
         
         *)
@@ -953,13 +978,14 @@ do_backup(){
 do_restore(){
     local INFILE=$1
     local OUTDEV=$2
-    local SAFETY_OFF=${3:-false}   # this lets us bypass some of the safety prompts
+    local SAFETY=${3:-on}   # this lets us bypass some of the safety prompts
+    local INTERFACE${4:-CLI}  #CLI or GUI
     #   local LOCAL_PATH=${2:-$(pwd)}
     
     echo_white Starting $PRODUCTNAME $SCRIPTVER Restore...
     echo "IN-FILE='$INFILE'"
     echo "OUT-DEV='$OUTDEV'"
-    echo "Safety-off='$SAFETY-OFF'"
+    echo "Safety='$SAFETY'"
     
     
     #check INFILE
@@ -979,7 +1005,6 @@ do_restore(){
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
-x=1
     fi
     
     
@@ -1019,7 +1044,7 @@ x=1
             echo_red "WARNING... SD-card '$OUTDEV' '$(get_sd_name $OUTDEV)' is larger than 16GB... Are you sure it is the right device?"
             read -p "You must type 'BIG' to continue:"  -r RESULT
             if [ -z $RESULT ] || [ $RESULT != "BIG" ]; then
-                echo Exiting...
+                echo Press any key to exit...
                 return 1
             fi
         fi
@@ -1038,6 +1063,17 @@ x=1
         echo [OK]
     fi
     
+    #stop if drive is pisafe_locked
+  #  $(get_config_var safety $CONFIG)
+  VENDOR=$(lsblk -n -d --output vendor /dev/sda)
+  SERIAL=$(lsblk -n -d --output serial /dev/sda)
+  echo Device Vendor and Serial_number=$VENDOR $SERIAL
+  #if [ $(get_config_var device_$VENDOR$SERIAL $CONFIG) = "locked" ]; then
+  #  do_beep_if_sound
+  #  echo Drive $OUTDEV serial number $VENDOR$SERIAL is $PRODUCTNAME locked.  exiting.
+  #  return 1
+  #fi
+    
 
 
     # Final check before writing data
@@ -1054,24 +1090,27 @@ x=1
     fi
     
     
-    echo
-    echo "Write '$INFILE' to '$OUTDEV' '$(get_sd_name $OUTDEV)' ?"
-    echo_red WARNING... All existing data on \'$OUTDEV\' - will be erased!
-    do_beep_if_sound
-    read  -p "You must type 'YES' to continue:" -r RESULT
-    echo
     
-    if [ -z $RESULT ] || [ $RESULT != "YES" ]; then
-        echo "You did not answer 'YES'"
-        return 1
-    fi
+    if [ $SAFETY != "off" ]; then
+        echo
+        echo "Write '$INFILE' to '$OUTDEV' '$(get_sd_name $OUTDEV)' ?"
+        echo_red WARNING... All existing data on \'$OUTDEV\' - will be erased!
+        do_beep_if_sound
+        read  -p "You must type 'YES' to continue:" -r RESULT
+        echo
+    
+        if [ -z $RESULT ] || [ $RESULT != "YES" ]; then
+            echo "You did not answer 'YES'"
+            return 1
+        fi
+    fi    
     
     
+    # might move this up to the "safety=on" section above sometime...
     do_beep_if_sound
     echo_red "WARNING '$OUTDEV' '$(get_sd_name $OUTDEV)' "
     echo_red "Will be overwritten starting in 10 seconds ... Ctrl-C to abort"
     do_countdown 10
-    
     
     #################################################
     # this section writes the data
@@ -1097,19 +1136,32 @@ x=1
             EXIT_CODE=$?
         ;;
         
-        zip)
-            unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
-            EXIT_CODE=$?
+        zip|gz)
+            #unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+            #sudo pv "$INFILE" | pigz -k -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync 
+            if [ $INTERFACE = "GUI" ] && [ $DEBUG_MODE != "on" ]; then
+                (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --gauge "Writing '$(get_file_base "$INFILE")' to '$(get_sd_name $OUTDEV)' ..." 10 70 0
+                EXIT_CODE=$?
+            else
+                sudo pv "$INFILE" | pigz -k -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync 
+                EXIT_CODE=$?
+            fi
+            
         ;;
         
         xz)
-            xz -v -d -c "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+            #xz -v -d -c "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+            (sudo pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --gauge "Writing '$(get_file_base "$INFILE")' to '$(get_sd_name $OUTDEV)' ..." 10 70 0
             EXIT_CODE=$?
         ;;
 
-        gz)
+        gz_old)
             #pigz -v -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
-            pigz -v -k -c -d "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+            ##pigz -v -k -c -d "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+            #sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE"
+            #sudo pv "$INFILE" | pigz -k -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync 
+            (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --gauge "Writing to $OUTDEV, please wait..." 10 70 0
+            EXIT_CODE=$?
             EXIT_CODE=$?
         ;;
 
@@ -1254,16 +1306,16 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 
 gui_set_compression(){
     CHOICE=$(whiptail --title "SETTINGS" --radiolist \
-            "Choose compression level" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "1" "Fastest time  (default)" on \
-            "2" " " off \
-            "3" " " off \
-            "4" " " off \
-            "5" "medium" off \
+            "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+            "1" "Fastest time (slightly faster)" off \
+            "2" "" off \
+            "3" "" off \
+            "4" "" off \
+            "5" "(default)" on \
             "6" "" off \
             "7" "" off \
             "8" "" off \
-            "9" "10%-15% smaller, 3x-4x more time " off   3>&1 1>&2 2>&3 )
+            "9" "Smallest file (MUCH slower)" off   3>&1 1>&2 2>&3 )
            
             #echo $CHOICE
             if [ ! -z $CHOICE ]; then
@@ -1311,10 +1363,10 @@ gui_set_default_path(){
 gui_set_default_extention(){
      CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
             "Choose default extension (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "zip" "Compress with zip (default)" on \
-            "xz" "Compress with xz (80% size, 2x time)" off \
-            "gz" "Compress with gz" off  \
-            "img" "No compression (2x size, 50% time)" off 3>&1 1>&2 2>&3 )
+            "zip" "Default" on \
+            "xz" "~25% smaller, 3x-4x more time" off \
+            "gz" "Same as zip" off  \
+            "img" "Twice the size, half the time (No compression)" off 3>&1 1>&2 2>&3 )
     
     echo $CHOICE
     if [ ! -z $CHOICE ]; then
@@ -1355,8 +1407,8 @@ gui_set_shrink_fs(){
 gui_set_debug_mode(){
     CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
             "Debug Mode" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "on" "Show many terminal screens (default)" on \
-            "off" "Don't show many terminal screens" off   3>&1 1>&2 2>&3 )
+            "on" "Show critical terminal screens" off \
+            "off" "Hide most terminal screens (default)" on   3>&1 1>&2 2>&3 )
     
     echo $CHOICE
     if [ ! -z $CHOICE ]; then
@@ -1406,9 +1458,10 @@ gui_settings(){
         "Hide root disk   "    "$HIDE_ROOT_DISK" \
         "Sound               " "$SOUND" \
         "Debug mode          " "$DEBUG_MODE" \
+        "Text editor"        "$TEXT_EDITOR" \
         "                    " "      " \
         "Edit config         " "Edit the settings file manually (pisafe.conf)" \
-        "Reset               " "Reset settings to factory defaults" \
+        "Factory defaults    " "Reset settings to factory defaults" \
         3>&1 1>&2 2>&3)
         
         EXIT_CODE=$?
@@ -1426,9 +1479,10 @@ gui_settings(){
             Debug*)         gui_set_debug_mode ;;
             View*)          read -n 1 -p "Press any key to return"   ;;
             Update*)        gui_update  ;;
+            Text*)          ;;
             "    "*)        ;;
-            Edit*)          mousepad $CONFIG; get_settings ;;
-            Reset*) 
+            Edit*)          $TEXT_EDITOR $CONFIG; get_settings ;;
+            Factory*) 
                 whiptail --title WARNING --defaultno --yesno "Are you sure you want to reset the settings to factory defaults?" $WT_MB_HEIGHT $WT_MB_WIDTH 
                 if [ $? = 0 ] ; then
                     do_factory_reset 
@@ -1441,41 +1495,6 @@ gui_settings(){
     done
 }
 
-
-sample_gui_settings_menu(){
-    while true; do
-
-      FUN=$(whiptail --title "Pi Safe (pisafe)" --backtitle "$BACKTITLE" --menu "Setup Options" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT --cancel-button Finish --ok-button Select \
-        "1 System Options" "Configure system settings" \
-        "2 Display Options" "Configure display settings" \
-        "3 Interface Options" "Configure connections to peripherals" \
-        "4 Performance Options" "Configure performance settings" \
-        "5 Localisation Options" "Configure language and regional settings" \
-        "6 Advanced Options" "Configure advanced settings" \
-        "8 Update" "Update this tool to the latest version" \
-        "9 About raspi-config" "Information about this configuration tool" \
-        3>&1 1>&2 2>&3)
-
-        RET=$?
-        if [ $RET -eq 1 ]; then
-          do_finish
-        elif [ $RET -eq 0 ]; then
-          case "$FUN" in
-            1\ *) do_system_menu ;;
-            2\ *) do_display_menu ;;
-            3\ *) do_interface_menu ;;
-            4\ *) do_performance_menu ;;
-            5\ *) do_internationalisation_menu ;;
-            6\ *) do_advanced_menu ;;
-            8\ *) do_update ;;
-            9\ *) do_about ;;
-            *) whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
-          esac || whiptail --msgbox "There was an error running option $FUN" 20 60 1
-        else
-          exit 1
-        fi
-      done
-}
 
 
 function gui_select_dr_file()
@@ -1604,15 +1623,15 @@ gui_get_indev(){
         MESG=" '$(get_sd_name $INDEV)' is larger than 16GB.  \
          \n\nUse a smaller SD card if you can.  \
          \nIt will be faster because the entire SD card must be read before it can be compressed.\
-         \n\nA good 8gb card in a Raspberry Pi 4 takes about 9 minutes"
+         \n\nA good 8gb card in a Raspberry Pi 4 takes about 8 minutes"
         whiptail --backtitle "$BACKTITLE" --title "WARNING" --msgbox "$MESG" $WT_MB_HEIGHT $WT_MB_WIDTH   
     fi
     
     # Warning if SD-card is bigger than freespace
     if [ $(get_sd_size $INDEV) -gt $(get_freespace "$DEFAULT_PATH") ]; then
-        whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox \
-        "Not enough free space on '$DEFAULT_PATH' 
-         \n'$(get_sd_name  $INDEV)' is $(get_sd_size $INDEV -h)
+        whiptail --backtitle "$BACKTITLE" --title "ERROR" \
+        --msgbox "Not enough free space on '$DEFAULT_PATH' 
+         \n\n'$(get_sd_name  $INDEV)' is $(get_sd_size $INDEV -h)
          \nfreespace on '$DEFAULT_PATH' is $(get_freespace "$DEFAULT_PATH" -h)
          \n\nBe sure to specify a different drive" $WT_MB_HEIGHT $WT_MB_WIDTH 
         #return 1
@@ -1623,7 +1642,7 @@ gui_get_indev(){
     if [ $SPACENEEDED -gt $(get_freespace "$DEFAULT_PATH") ]; then
         whiptail --backtitle "$BACKTITLE" --title "WARNING" \
             --msgbox "Might not be enough free space on '$DEFAULT_PATH'
-            \n'$(get_sd_name $INDEV)' is $(get_sd_size $INDEV -h)mb
+            \n\n'$(get_sd_name $INDEV)' is $(get_sd_size $INDEV -h)mb
             \nfreespace on '$DEFAULT_PATH' is $(get_freespace "$DEFAULT_PATH" -h)
             \nThere is $(get_folder_size /home/pi/.local/share/Trash) in the Trash" $WT_MB_HEIGHT $WT_MB_WIDTH   
     fi
@@ -1670,9 +1689,9 @@ gui_get_outfile(){
         \nSupported extensions are: .img .zip .xz .gz 
         \nIf you don't include an extension '.$DEFAULT_EXTENSION' will be added 
         \n.img files are shrunk but NOT compressed
-        \nYou can put a file path at the beginning
+        \n.gz is ~25% smaller but takes 3x-4x longer
         \nRecomended to have NO SPACES in the name "
-        NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP : Get Filename" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
+        NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP : Enter Filename" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then 
             return $EXIT_CODE
@@ -1769,8 +1788,9 @@ gui_do_backup(){
     whiptail  --backtitle "$BACKTITLE" --title "BACKUP : Create Image-file" --defaultno \
         --yesno "Backup '$(get_sd_name $INDEV)' on '$INDEV' 
         \nto '$OUTFILE'.
-        \nA good 8GB card on a Pi4 takes about 9 minutes.
+        \n\nA good 8GB card on a Pi4 takes about 8 minutes.
         \nThis will switch to terminal screen to watch the progress ...
+        \nLast chance before creating image-file.
         \n\nAre you sure you want to continue?"   $WT_HEIGHT $WT_WIDTH
     EXIT_CODE=$?       
     if [ $EXIT_CODE != 0 ] ; then
@@ -1818,13 +1838,15 @@ gui_do_restore() {
         return $EXIT_CODE
     fi
 
+
     # Confirm to continue
-    if (whiptail  --backtitle "$BACKTITLE" --title RESTORE-WARNING --defaultno \
+    #do_beep_if_sound
+    if (whiptail  --backtitle "$BACKTITLE" --title "RESTORE - WARNING" --defaultno \
         --yesno "Restore '$INFILE' 
         \nto SD card '$(get_sd_name $OUTDEV)' on '$OUTDEV' 
-        \nThis will switch to a terminal screen to watch the progress ... 
         \n\nALL existing data on '$OUTDEV' - WILL BE ERASED!  
-        \n\nAre you sure you want to continue?" $WT_HEIGHT $WT_WIDTH) then
+        \nLAST CHANCE BEFORE OVERWRITING DATA ...
+        \nAre you sure you want to continue?" $WT_HEIGHT $WT_WIDTH) then
         #echo "User selected Yes, exit status was $?."
         RESULT="YES"
     else
@@ -1836,11 +1858,9 @@ gui_do_restore() {
               
    ###################################################       
     # do the restore
-    # the third parameter turns "SAFETY_OFF" to "true".  this is because we already check with the GUI.
+    # the third parameter turns "SAFETY" to "off".  this is because we already checked with the GUI.
     
-    #whiptail --infobox HIDE_TERMINAL 10 $WT_MB_WIDTH
-    
-    do_restore "$INFILE" $OUTDEV "true"
+    do_restore "$INFILE" $OUTDEV off GUI
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ] || [ $DEBUG_MODE = "on" ]; then
         echo Debug_mode=$DEBUG_MODE
@@ -1899,8 +1919,9 @@ gui_tools_retired(){
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "TOOLS" --menu " Choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
         "INSTALL"           "Install $PRODUCTNAME into the menu" \
         "UPDATE"            "Check for updates" \
-        "VIEW TERMINAL   "     "View terminal screen for debugging" \
+        "VIEW TERMINAL   "  "View terminal screen for debugging" \
         "HELP"              "Help" \
+        "ABOUT"             "ABOUT $PRODUCTNAME" \
         3>&1 1>&2 2>&3)
         
         EXIT_CODE=$?
@@ -1909,14 +1930,19 @@ gui_tools_retired(){
         else
             case "$SELECTION" in
             INSTALL)    gui_do_install  ;;
-            UPDATE)    gui_update     ;;
+            UPDATE)    gui_update  ;;
 
-            VIEW*)      read -n 1 -p "Press any key to return"   ;;
+            VIEW*)      read -n 1 -p "Press any key to return"  ;;
             HELP)
                 INFO=$(do_help)
                 result="$INFO"
                 whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH
                 ;;
+            ABOUT)
+                INFO=$(do_about)
+                result="$INFO"
+                whiptail --backtitle "$BACKTITLE"  --title "ABOUT" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH
+                ;;   
             *)           whiptail --msgbox "Programmer error: unrecognized option" 20 60 1 ;;
             esac 
         fi
