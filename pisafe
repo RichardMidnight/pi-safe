@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.0"
+SCRIPTVER="0.9.1"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -28,6 +28,21 @@ OUTDEV=
 INFILE=
 OUTFILE=
 BACKTITLE="$PRODUCTNAME ver $SCRIPTVER. === $PRODUCTCOMMENT === "
+
+
+get_opts(){
+while getopts ":pdhv" opt; do
+  case "${opt}" in
+    p) parallel=off;;
+    d) debug=on;;
+    h) help;;
+    a) autoexpand=off ;;
+    v) verbose=on;;
+    *) help;;
+  esac
+done
+shift $((OPTIND-1))
+}
 
 
 set_conf_defaults(){
@@ -529,8 +544,9 @@ check_for_img_file(){
             IMG=$INFILE
         ;;
         
-        zip)
-            IMG=$(zipinfo -1 "$INFILE")  
+        zip|gz)
+            #IMG=$(zipinfo -1 "$INFILE")  
+            IMG=$(pigz -l "$INFILE" | grep .img | sed 's/\s\s*/ /g'  | cut -d' ' -f4-)
         ;;
         
         xz)
@@ -538,9 +554,9 @@ check_for_img_file(){
             IMG=$(echo "$IMG" | sed 's/.xz/.img/g')
          ;;   
          
-         gz)
-            IMG=$(pigz -l "$INFILE" | grep .img | sed 's/\s\s*/ /g'  | cut -d' ' -f4-)
-         ;;
+         #gz)
+         #   IMG=$(pigz -l "$INFILE" | grep .img | sed 's/\s\s*/ /g'  | cut -d' ' -f4-)
+         #;;
          
          *)
             IMG=
@@ -560,6 +576,7 @@ check_for_img_file(){
 # -----------------------------------------------
 
 do_list_info() {
+        DIR=${1:-$PWD}
         echo
         echo "--- CURRENT SYSTEM ---"
         echo "Root disk = /dev/$(get_root_disk)"
@@ -567,19 +584,18 @@ do_list_info() {
         echo "FreeSpace = $(get_freespace . -h)"
         echo "TrashSize = $(get_folder_size /home/pi/.local/share/Trash)"
         echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
-        #echo "ConfigFile= $CONFIG"
         echo
-       # echo "--- SETTINGS ---"
-       # echo "COMPRESSION= $COMPRESSION"
-       # echo "DEF DIR    = $DEFAULT_PATH"
-       # echo 
         echo "--- SD-CARD DEVICES ---  (Hide root disk = $HIDE_ROOT_DISK)"
         echo "$(get_sd_devices)"
-
         echo   
-        echo "--- IMAGE FILES in '$DEFAULT_PATH' ---"
-      #  ls -1 -s -h -w1 *.img *.zip *.xz *.gz $DEFAULT_PATH  $2> /dev/null | sed 's/ /     /'
-        ls -1 -s -h -w1 $DEFAULT_PATH/*.img $DEFAULT_PATH/*.zip $DEFAULT_PATH/*.xz $DEFAULT_PATH/*.gz 2> /dev/null | sed 's/ /     /'
+        echo "--- IMAGE FILES in '$DIR' ---"
+        SAVED_PWD=$PWD
+        #echo $OLD_DIR
+        #echo $DEFAULT_PATH
+        cd $DIR
+        ls -1 -s -h -w1 *.img *.zip *.xz *.gz 2> /dev/null | sed 's/ /     /'
+        #ls -1 -s -h -w1 $DEFAULT_PATH/*.img $DEFAULT_PATH/*.zip $DEFAULT_PATH/*.xz $DEFAULT_PATH/*.gz 2> /dev/null | sed 's/ /     /'
+        cd $SAVED_PWD
 }    
 
 
@@ -617,7 +633,7 @@ get_sd_devices() {
 get_tools() {   
     #echo -n Checking to see if required tools are installed ...
     
-    if [ ! -f /usr/local/bin/pishrink.sh ] || [ ! -f /usr/bin/pv ] || [ ! -f /usr/bin/xz ] || [ ! -f /usr/bin/pigz ]  || [ ! -f /usr/bin/whiptail ] ; then
+    if [ ! -f /usr/local/bin/pishrink.sh ] || [ ! -f /usr/bin/pv ] || [ ! -f /usr/bin/xz ] || [ ! -f /usr/bin/zip ] || [ ! -f /usr/bin/pigz ]  || [ ! -f /usr/bin/whiptail ] ; then
        
         read  -p "Install needed tools:  PiShrink, pv, and a few others?" -n 1 -r RESULT
         echo
@@ -633,11 +649,11 @@ get_tools() {
                 echo pishrink installed.
             fi
 
-            # get zip if needed
-            #if [ ! -f /usr/bin/zip ]; then
-            #    echo_white Installing zip...
-            #    sudo apt install zip -y
-            #fi
+             #get zip if needed
+            if [ ! -f /usr/bin/zip ]; then
+                echo_white Installing zip...
+                sudo apt install zip -y
+            fi
             
             # get xz if needed
             if [ ! -f /usr/bin/xz ]; then
@@ -907,21 +923,20 @@ do_backup(){
         ;;
         
         zip)
-            #local FILESIZE_M=$(( $(get_file_size_kbytes "$OUTFILE_BASE".img) / 1024))
-            #local DOTSIZE=$(( $FILESIZE_M / 50 ))
-            #echo Each dot represents=$DOTSIZE MB
-            #echo -n "                      $(get_file_path $OUTFILE)/$(get_file_base $OUTFILE).img"
-            #echo ".........20........40........60........80........100%"
-            #sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
-            #EXIT_CODE=$?
-            sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION -K > "$OUTFILE"
-            EXIT_CODE=$? 
-            #sleep 1
-            #if [ -f "$OUTFILE" ] ; then
-                sudo rm -f "$OUTFILE_BASE".img 
-            #fi
-           
-            
+            local FILESIZE_M=$(( $(get_file_size_kbytes "$OUTFILE_BASE".img) / 1024))
+            local DOTSIZE=$(( $FILESIZE_M / 50 ))
+            echo Each dot represents=$DOTSIZE MB
+            echo -n "                      $(get_file_path $OUTFILE)/$(get_file_base $OUTFILE).img"
+            echo ".........20........40........60........80........100%"
+            sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
+            EXIT_CODE=$?
+
+            ##sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION -K > "$OUTFILE"
+            ##EXIT_CODE=$? 
+            ##sleep 1
+            ##if [ -f "$OUTFILE" ] ; then
+             ##   sudo rm -f "$OUTFILE_BASE".img 
+            ##fi
             
         ;;
         
@@ -932,11 +947,11 @@ do_backup(){
         ;;
         
         gz)
-            #sudo pigz -v -$COMPRESSION "$OUTFILE_BASE".img
-            sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE"
+            sudo pigz -v -$COMPRESSION "$OUTFILE_BASE".img
+            ##sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE"
             EXIT_CODE=$?        
-            #sudo mv "$OUTFILE_BASE".img.gz "$OUTFILE"
-            sudo rm -f "$OUTFILE_BASE".img 
+            sudo mv "$OUTFILE_BASE".img.gz "$OUTFILE"
+            ##sudo rm -f "$OUTFILE_BASE".img 
         ;;
         
         *)
@@ -1981,7 +1996,7 @@ gui_menu(){
             RESTORE)        gui_do_restore  ;;
             
             LIST)
-                INFO=$(do_list_info)
+                INFO=$(do_list_info $DEFAULT_PATH)
                 result="$INFO"
                 whiptail --backtitle "$BACKTITLE"  --title "LIST" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH
                 ;;
