@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.4"
+SCRIPTVER="0.9.5"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -46,24 +46,107 @@ shift $((OPTIND-1))
 }
 
 
+do_help() {
+    echo "$PRODUCTNAME v$SCRIPTVER  - Designed for Raspberry Pi"
+    echo " - Backup your SD card to an image file"
+    echo " - Restore your SD card from an image file"
+    echo
+    echo "Usage: "
+    echo "  $SCRIPTNAME [function] [device/file] [file/device]"
+    echo
+    echo "Function is:"
+    echo "                            - startup the gui menu (this is recomended)"
+    echo "  list                      - list SD-devices and image-files "
+    echo "  backup [device] [file]    - backup SD-card to image-file"
+    echo "  restore [file] [device]   - restore image-file to SD-card"
+    echo "  install                   - install this script"
+    echo "  update                    - update script from webiste"
+    echo "  -v                        - display version"
+    echo "  help | -h                 - help"
+    echo
+    echo "Notes: "
+    echo " - Supports .img .zip .xz and .gz files.  Appends '.$DEFAULT_EXTENSION' if no extension is specified "
+    echo " - Specifying an '.img' extension is faster, but twice the size because it is not compressed with $DEFAULT_EXTENSION."
+    echo
+    #echo It will run dd, then pishrink, then compress to create a smallimage file of the SD card
+    echo
+    echo "Examples:"
+    echo $SCRIPTNAME 
+    echo $SCRIPTNAME list
+    echo $SCRIPTNAME backup sda newimage
+    echo $SCRIPTNAME backup /dev/sdb newimage.xz
+    echo $SCRIPTNAME restore newimage.zip sda
+    echo
+}
+
+
+do_about(){
+    echo "$PRODUCTNAME was started in 2017 as 'sd' by 'RichardMidnight on github'"\
+        "when he was working on a Raspberry Pi Homebridge project and needed"\
+        "to make numerous restore-points.  The image writers available at the"\
+        "time did not run on the pi itself and were not able to create a new image file." 
+    echo
+    echo "It was originally called 'sd' and only had a CLI."
+    echo
+    echo "Then in 2021, he added the graphical front-end to make it more usable by others"\
+        "and renamed it 'PiSafe'.  PiSafe is a reference to the 'ventilated cupboards for storing"\
+        "pies while protecting them from insects and vermin'. "
+    echo
+    echo "Use at your own risk."
+    echo
+    echo "I hope this is helpful to others."
+    echo
+}
+
+#  Settings #########################################
+
+
+do_factory_reset(){
+   # echo " " > $CONFIG
+
+    set_conf_defaults
+    get_settings
+}
+
+
+do_init_conf(){
+    if [ ! -d $(get_file_path $CONFIG) ]; then
+        mkdir -p $(get_file_path $CONFIG)
+    fi
+    
+    if [ ! -f $CONFIG ]; then
+        #echo " " > $CONFIG
+        touch $CONFIG
+        echo "# $CONFIG" > $CONFIG
+        set_conf_defaults
+    fi
+}
+
+
 set_conf_defaults(){
     set_config_var default_path $HOME/Downloads $CONFIG
-    set_config_var default_extension zip $CONFIG
-    set_config_var compression_level 5 $CONFIG
     set_config_var hide_root_disk on $CONFIG
-    set_config_var debug_mode off $CONFIG
-    set_config_var sound on $CONFIG
+
+#backup settings
     set_config_var shrink_fs on $CONFIG
     set_config_var auto_expand_fs on $CONFIG
+    set_config_var default_extension zip $CONFIG
+    set_config_var compression_level 5 $CONFIG
+    set_config_var large_device_read_warning 17179869184 $CONFIG
+    
+#restore settings
+    set_config_var large_device_write_warning 17179869184 $CONFIG
+    set_config_var safety on $CONFIG    
+
+#other    
+    set_config_var debug_mode off $CONFIG
+    set_config_var sound on $CONFIG
+    set_config_var log on $CONFIG
     if [ -z $(which mousepad) ]; then
         set_config_var text_editor nano $CONFIG
     else
         set_config_var text_editor mousepad $CONFIG
     fi
-    set_config_var log on $CONFIG
-    set_config_var safety on $CONFIG
-    set_config_var large_device_read_warning 17179869184 $CONFIG
-    set_config_var large_device_write_warning 17179869184 $CONFIG
 }
 
 
@@ -122,73 +205,6 @@ get_settings(){
     LARGE_DEVICE_WRITE_WARNING=$(get_config_var large_device_write_warning $CONFIG) 
     
     mkdir -p "$DEFAULT_PATH"
-}
-
-
-do_help() {
-    echo "$PRODUCTNAME v$SCRIPTVER  - Designed for Raspberry Pi"
-    echo " - Backup your SD card to an image file"
-    echo " - Restore your SD card from an image file"
-    echo
-    echo "Usage: "
-    echo "  $SCRIPTNAME [function] [device/file] [file/device]"
-    echo
-    echo "Function is:"
-    echo "                            - startup the gui menu (this is recomended)"
-    echo "  list                      - list SD-devices and image-files "
-    echo "  backup [device] [file]    - backup SD-card to image-file"
-    echo "  restore [file] [device]   - restore image-file to SD-card"
-    echo "  install                   - install this script"
-    echo "  update                    - update script from webiste"
-    echo "  -v                        - display version"
-    echo "  help | -h                 - help"
-    echo
-    echo "Notes: "
-    echo " - Supports .img .zip .xz and .gz files.  Appends '.$DEFAULT_EXTENSION' if no extension is specified "
-    echo " - Specifying an '.img' extension is faster, but twice the size because it is not compressed with $DEFAULT_EXTENSION."
-    echo
-    #echo It will run dd, then pishrink, then compress to create a smallimage file of the SD card
-    echo
-    echo "Examples:"
-    echo $SCRIPTNAME 
-    echo $SCRIPTNAME list
-    echo $SCRIPTNAME backup sda newimage
-    echo $SCRIPTNAME backup /dev/sdb newimage.xz
-    echo $SCRIPTNAME restore newimage.zip sda
-    echo
-}
-
-
-do_about(){
-    echo "$PRODUCTNAME was started in 2017 as 'sd' by 'RichardMidnight on github'"\
-        "when he was working on a Raspberry Pi Homebridge project and needed"\
-        "to make numerous restore-points.  The image writers available at the"\
-        "time did not run on the pi itself and were not able to create a new image file." 
-    echo
-    echo "It was originally called 'sd' and only had a CLI."
-    echo
-    echo "Then in 2021, he added the graphical front-end to make it more usable by others"\
-        "and renamed it 'PiSafe'.  PiSafe is a reference to the 'ventilated cupboards for storing"\
-        "pies while protecting them from insects and vermin'. "
-    echo
-    echo "Use at your own risk."
-    echo
-    echo "I hope this is helpful to others."
-    echo
-}
-
-
-do_init_conf(){
-    if [ ! -d $(get_file_path $CONFIG) ]; then
-        mkdir -p $(get_file_path $CONFIG)
-    fi
-    
-    if [ ! -f $CONFIG ]; then
-        #echo " " > $CONFIG
-        touch $CONFIG
-        echo "# $CONFIG" > $CONFIG
-        set_conf_defaults
-    fi
 }
 
 
@@ -256,7 +272,15 @@ EOF
 
 
 do_write_log(){
-    x=1
+    INFO=$1
+    
+    touch $LOG_FILE
+    echo "$(date "+%Y-%m-%d %H:%M"), $INFO" >> $LOG_FILE
+}
+
+
+msgbox(){
+   whiptail --msgbox "$*" $WT_MB_HEIGHT $WT_MB_WIDTH
 }
 
 
@@ -314,6 +338,42 @@ get_ver_to_int() {
 }
 
 
+get_bytes_h(){
+    BYTES=$1
+    # currently shows 3 significant digits.
+    
+    [ -z "$BYTES" ] && return
+    #need some error checking that it is a number
+    
+    k_ilo=1024;
+    m_ega=$k_ilo*$k_ilo;
+    g_iga=$m_ega*$k_ilo;
+    t_era=$g_iga*$k_ilo;
+    p_eta=$t_era*$k_ilo;
+    
+    LEN=${#BYTES}
+    
+    case $LEN in
+        4) echo $(echo "scale=2; $BYTES/($k_ilo)" | bc)kb ;;
+        5) echo $(echo "scale=1; $BYTES/($k_ilo)" | bc)kb ;;
+        6) echo $(echo "scale=0; $BYTES/($k_ilo)" | bc)kb ;;
+        
+        7) echo $(echo "scale=2; $BYTES/($m_ega)" | bc)mb ;;
+        8) echo $(echo "scale=1; $BYTES/($m_ega)" | bc)mb ;;
+        9) echo $(echo "scale=0; $BYTES/($m_ega)" | bc)mb ;;
+        
+        10) echo $(echo "scale=2; $BYTES/($g_iga)" | bc)gb ;;
+        11) echo $(echo "scale=1; $BYTES/($g_iga)" | bc)gb ;;
+        12) echo $(echo "scale=0; $BYTES/($g_iga)" | bc)gb ;;
+        
+        13) echo $(echo "scale=2; $BYTES/($t_era)" | bc)tb ;;
+        14) echo $(echo "scale=1; $BYTES/($t_era)" | bc)tb ;;
+        15) echo $(echo "scale=0; $BYTES/($t_era)" | bc)tb ;;
+        *)  echo $BYTES bytes;;
+    esac
+}
+
+
 get_file_path(){
     dirname "$*"
 }
@@ -343,64 +403,21 @@ get_file_ext(){
 }
 
 
-get_file_size_kbytes() {
-    local FILE=$*
+get_file_size() {
+    local FILE=$1
+    local HUMAN=${2:-"no"}
+    # $2 can be -h
     
     if [ -f "$FILE" ] ; then
-        ls -s "$FILE" | cut -d' ' -f1
+        SIZE_BYTES="$(($(ls -s "$FILE" | cut -d' ' -f1) * 1024))"
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then
             return $EXIT_CODE
         fi
-    else
-        echo 0
-    fi
-}
-
-
-get_bytes_h(){
-    BYTES=$1
-    # currently shows 3 significant digits.
-    
-    [ -z "$BYTES" ] && return
-    #need some error checking that it is a number
-    
-    k_ilo=1024;
-    m_ega=$k_ilo*$k_ilo;
-    g_iga=$m_ega*$k_ilo;
-    t_era=$g_iga*$k_ilo;
-    p_eta=$t_era*$k_ilo;
-    
-    LEN=${#BYTES}
-    
-    case $LEN in
-        4) echo $(echo "scale=2; $BYTES/($k_ilo)" | bc) kb ;;
-        5) echo $(echo "scale=1; $BYTES/($k_ilo)" | bc) kb ;;
-        6) echo $(echo "scale=0; $BYTES/($k_ilo)" | bc) kb ;;
-        
-        7) echo $(echo "scale=2; $BYTES/($m_ega)" | bc) mb ;;
-        8) echo $(echo "scale=1; $BYTES/($m_ega)" | bc) mb ;;
-        9) echo $(echo "scale=0; $BYTES/($m_ega)" | bc) mb ;;
-        
-        10) echo $(echo "scale=2; $BYTES/($g_iga)" | bc) gb ;;
-        11) echo $(echo "scale=1; $BYTES/($g_iga)" | bc) gb ;;
-        12) echo $(echo "scale=0; $BYTES/($g_iga)" | bc) gb ;;
-        
-        13) echo $(echo "scale=2; $BYTES/($t_era)" | bc) tb ;;
-        14) echo $(echo "scale=1; $BYTES/($t_era)" | bc) tb ;;
-        15) echo $(echo "scale=0; $BYTES/($t_era)" | bc) tb ;;
-        *)  echo $BYTES bytes;;
-    esac
-}
-
-get_file_size() {
-    local FILE=$*
-    
-    if [ -f "$FILE" ] ; then
-        ls -s -h "$FILE" | cut -d' ' -f1
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then
-            return $EXIT_CODE
+        if [ $HUMAN = "-h" ]; then
+            echo $(get_bytes_h $SIZE_BYTES)
+        else
+            echo $SIZE_BYTES
         fi
     else
         echo 0
@@ -420,19 +437,22 @@ get_sd_name(){
 
 get_sd_size() {
     # $1 is devicename
-    # $2 is -h human readable
-    if [ ! -z $2 ] && [ $2 = "-h" ]; then
-        lsblk $1 -d -n -o size  2> /dev/null
-        EXIT_CODE=$?
-    else
-        lsblk $1 -d -n -b -o size  2> /dev/null
-        EXIT_CODE=$?
-    fi
+   local HUMAN=${2:-"no"}
+   
+    SIZE_BYTES=$(lsblk $1 -d -n -b -o size  2> /dev/null)
+    EXIT_CODE=$?
         
     if [ $EXIT_CODE != 0 ]; then
         echo 0
         return $EXIT_CODE       
     fi
+    
+    if [ $HUMAN = "-h" ]; then
+        echo $(get_bytes_h $SIZE_BYTES)
+    else
+        echo $SIZE_BYTES
+    fi
+    
     
 # an alternative way:
 # echo $(( $(sudo blockdev --getsize64 /dev/sda) ))
@@ -448,53 +468,25 @@ get_device_serial(){
 }
 
 
-
 get_image_size() {
-    local INFILE=$*
+    local INFILE=$1
+    local HUMAN=${2:-"no"}
     
     case $(get_file_ext "$INFILE") in
         img)
-            ls -s -h "$INFILE" | cut -d' ' -f1
+            SIZE_BYTES=$(echo $((  $(ls -s "$INFILE" | cut -d' ' -f1 ) * 1024 )) )
         ;;
         
         zip)
-            echo $(( $(zipinfo -t "$INFILE" | cut -d, -f2 | cut -d" " -f2) / 1024 / 1024 ))M
+            SIZE_BYTES=$(zipinfo -t "$INFILE" | cut -d, -f2 | cut -d" " -f2)
         ;;
         
         xz)
-            xz -l "$INFILE" | grep -v Strms | sed 's/\s\s*/ /g' | cut -d' ' -f6,7
-        ;;    
-        
-        gz)
-            echo $(( $(pigz -l "$INFILE" | grep -v compressed | sed 's/\s\s*/ /g' | cut -d' ' -f2 | sed 's/?/0/g') /1024 / 1024 ))M
-        ;;
-        
-        *)
-            echo 0
-            return 1
-        ;;
-    esac
-}
-
-
-get_image_size_bytes() {
-    local INFILE=$*
-    
-    case $(get_file_ext "$INFILE") in
-        img)
-            echo $((  $(ls -s "$INFILE" | cut -d' ' -f1 ) * 1024 )) 
-        ;;
-        
-        zip)
-            zipinfo -t "$INFILE" | cut -d, -f2 | cut -d" " -f2
-        ;;
-        
-        xz)
-            xz -l -v "$INFILE" | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g'
+            SIZE_BYTES=$(xz -l -v "$INFILE" | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g')
         ;;  
           
         gz)
-            pigz -l "$INFILE" | grep -v compressed | sed 's/\s\s*/ /g' | cut -d' ' -f2 | sed 's/?/0/g'
+            SIZE_BYTES=$(pigz -l "$INFILE" | grep -v compressed | sed 's/\s\s*/ /g' | cut -d' ' -f2 | sed 's/?/0/g')
         ;;
         
         *)
@@ -502,6 +494,12 @@ get_image_size_bytes() {
             return 1
         ;;
     esac
+    
+    if [ $HUMAN = "-h" ]; then
+        echo $(get_bytes_h $SIZE_BYTES)
+    else
+        echo $SIZE_BYTES
+    fi
 }    
 
 
@@ -660,10 +658,6 @@ do_list_info() {
 }    
 
 
-msgbox(){
-   whiptail --msgbox "$*" $WT_MB_HEIGHT $WT_MB_WIDTH
-}
-
 
 get_sd_devices() {
     local DEVICES= 
@@ -818,6 +812,7 @@ do_backup(){
     echo "IN-DEV='$INDEV'"
     echo "OUT-FILE='$OUTFILE'"
     echo  "Compression set to level $COMPRESSION of 9"
+    do_write_log "Starting $PRODUCTNAME $SCRIPTVER Backup, '$INDEV' $(get_sd_size $INDEV -h), '$OUTFILE', Compression=$COMPRESSION"
         
     
     # check INDEV
@@ -984,7 +979,7 @@ do_backup(){
         ;;
         
         zip)
-            local FILESIZE_M=$(( $(get_file_size_kbytes "$OUTFILE_BASE".img) / 1024))
+            local FILESIZE_M=$(( $(get_file_size "$OUTFILE_BASE".img)/1024/1024 ))
             local DOTSIZE=$(( $FILESIZE_M / 50 ))
             echo Each dot represents=$DOTSIZE MB
             echo -n "                      $(get_file_path $OUTFILE)/$(get_file_base $OUTFILE).img"
@@ -1046,10 +1041,14 @@ do_backup(){
     if [ $EXIT_CODE != 0 ]; then
         echo
         echo_red  "ERROR. $EXIT_CODE"
+        do_write_log "FAILED $PRODUCTNAME $SCRIPTVER Backup, IN-DEV='$INDEV',  OUT-FILE='$OUTFILE', Compression set to level $COMPRESSION"
+   
         return $EXIT_CODE
     else
         do_beep_if_sound
         echo_white "Backup done. '$INDEV' backed up to '$OUTFILE' in $(get_elapsed_time $TIME1 $TIME4)." 
+        do_write_log "Finished $PRODUCTNAME $SCRIPTVER Backup,  $(get_sd_size $INDEV -h) to  $(get_file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4) " 
+   
     fi
 }
 
@@ -1065,6 +1064,8 @@ do_restore(){
     echo "IN-FILE='$INFILE'"
     echo "OUT-DEV='$OUTDEV'"
     echo "Safety='$SAFETY'"
+    do_write_log "Starting $PRODUCTNAME $SCRIPTVER Restore, '$INFILE', '$OUTDEV'"
+ 
     
     
     #check INFILE
@@ -1134,10 +1135,10 @@ do_restore(){
     
     # Stop if image is bigger than device
     echo -n "Checking that Image file will fit on '$OUTDEV' ..."
-    if [ $(get_image_size_bytes "$INFILE") -gt $(get_sd_size "$OUTDEV") ]; then
+    if [ $(get_image_size "$INFILE") -gt $(get_sd_size "$OUTDEV") ]; then
         echo
         echo_red ERROR... Image file is larger than SD-card.
-        echo "Image size =$(get_image_size $INFILE)"
+        echo "Image size =$(get_image_size $INFILE -h)"
         echo "Device size=$(get_sd_size $OUTDEV -h)"
         return 1
     else
@@ -1207,21 +1208,23 @@ do_restore(){
     echo_white "Writing '$INFILE' to '$OUTDEV' ... "    
     date
     TIME1=$(date +%s)
-    echo $(get_image_size "$INFILE") to write
+    echo $(get_image_size "$INFILE" -h) to write
     
     case $INFILEEXT in
         img)
             sudo dd if="$INFILE" of=$OUTDEV bs=4M conv=fsync status=progress
-            (sudo pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --gauge "Writing '$(get_file_base "$INFILE")' to '$(get_sd_name $OUTDEV)' ..." 10 70 0
+            (sudo pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
+            --gauge "Writing '$INFILE' \nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
             EXIT_CODE=$?
         ;;
         
         zip)
-            RESTORE_BYTES=$(get_image_size_bytes "$INFILE")
+            RESTORE_BYTES=$(get_image_size "$INFILE")
             echo $RESTORE_BYTES
             #unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
             #sudo unzip -p "$INFILE" | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync 
-            (unzip -p "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --gauge "Writing '$(get_file_base "$INFILE")' \nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
+            (unzip -p "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
+            --gauge "Writing '$INFILE' \nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
             
             #if [ $INTERFACE = "GUI" ] && [ $DEBUG_MODE != "on" ]; then
             #    (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "Writing..." --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
@@ -1234,7 +1237,8 @@ do_restore(){
         
         xz)
             #xz -v -d -c "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
-            (sudo pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --gauge "Writing '$(get_file_base "$INFILE")' to '$(get_sd_name $OUTDEV)' ..." 10 70 0
+            (sudo pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
+            --gauge "Writing '$INFILE' to '$(get_sd_name $OUTDEV)' ..." 10 70 0
             EXIT_CODE=$?
         ;;
 
@@ -1243,8 +1247,8 @@ do_restore(){
             ##pigz -v -k -c -d "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
             #sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE"
             #sudo pv "$INFILE" | pigz -k -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync 
-            (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --gauge "Writing to $OUTDEV, please wait..." 10 70 0
-            EXIT_CODE=$?
+            (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
+            --gauge "Writing '$INFILE' to '$(get_sd_name $OUTDEV)' ..." 10 70 0
             EXIT_CODE=$?
         ;;
 
@@ -1261,10 +1265,12 @@ do_restore(){
     if [ $EXIT_CODE != 0 ]; then
         echo
         echo_red  "ERROR. $EXIT_CODE"
+        do_write_log "Restore failed $EXIT_CODE"
         return $EXIT_CODE
     else
         do_beep_if_sound
         echo_white "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
+        do_write_log "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
     fi
 }
 
@@ -1350,6 +1356,113 @@ whiptail_calc_wt_size() {
 }
 
 
+function whiptail_fselect()
+# maybe call something like dialog's fselect
+#
+#  Arguments
+#     1  Dialog title
+#     2  Source path to list files and directories
+#     3  File mask (by default *)
+#     4  "yes" to allow go back in the file system.
+#
+#  Returns
+#     0  if a file was selected and loads the FILE_SELECTED variable 
+#        with the selected file.
+#     1  if the user cancels.
+#
+#if whiptail_fselect "Please, select a file" /home/user ; then
+#        echo "File Selected: \"$FILE_SELECTED\"."
+#else
+#        echo "Cancelled!"
+#fi
+# ----------------------------------------------------------------------
+{
+    # note: does not handle spaces in file names!!!
+    local TITLE=${1:-$MSG_INFO_TITLE}
+    local LOCAL_PATH=${2:-$(pwd)}
+    local FILE_MASK=${3:-"*"}
+    #local FILE_MASK='( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" )'
+    local ALLOW_BACK=${4:-no}
+    local FILES=()
+
+    [ "$ALLOW_BACK" != "no" ] && FILES+=(".." "..")
+
+    IFS=$'\t\n'
+
+    # First add folders      
+    for DIR in $(find $LOCAL_PATH -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f\t" | sort 2> /dev/null)
+    do
+        FILES+=($DIR  "     folder")
+    done
+
+
+    # Then add the files
+    for FILE in $(find $LOCAL_PATH -maxdepth 1 \
+                                    \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" \) \
+                                    -name "[!.]*" \
+                                    -type f \
+                                    -printf "%f\t     %k\n" | sort  2> /dev/null)                                
+    do
+           FILES+=($FILE)
+    done
+	unset IFS
+
+
+    # convert filesizes from kb to mb
+    num='^[0-9]+$'
+    arraylength=${#FILES[@]}
+    
+    if [ $arraylength = 0 ]; then
+        FILES=(no files)
+    fi
+    
+    for (( i=0; i<${arraylength}; i++ )); do
+		arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
+		if [[ "$arrayelement" =~ $num ]] ; then  
+            FILES[$i]=$(echo "    " $(( $arrayelement / 1024 ))mb)			  
+		fi
+    done
+ 
+ 
+
+    # let user select file
+    while true
+    do
+        FILE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$LOCAL_PATH" \
+                                --menu "Choose a file" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT "${FILES[@]}"  3>&1 1>&2 2>&3)
+
+        #exit if bad whiptail statement
+        FSX=${FILE_SELECTED:0:3}
+        if [ ! -z $FSX ] && [ $FSX = "Box" ]; then
+            echo "ERROR in whiptail in gui_select_dr_file.  Maybe a space in a filename?"
+			echo "${FILES[@]}"
+            exit 1
+        fi
+        
+        if [ -z "$FILE_SELECTED" ]; then
+            return 1
+        else
+            if [ "$FILE_SELECTED" = ".." ] && [ "$ALLOW_BACK" != "no" ]; then
+                return 0
+
+            elif [ -d "$LOCAL_PATH/$FILE_SELECTED" ] ; then
+                if gui_select_dr_file "$TITLE" "$LOCAL_PATH/$FILE_SELECTED" "$FILE_MASK" "yes" ; then
+                    if [ "$FILE_SELECTED" != ".." ]; then
+                        return 0
+                    fi
+                else
+                    return 1
+                fi
+
+            elif [ -f "$LOCAL_PATH/$FILE_SELECTED" ] ; then
+                FILE_SELECTED="$LOCAL_PATH/$FILE_SELECTED"
+                return 0
+            fi
+        fi
+    done
+}
+
+
 whiptail_countdown(){  
     local MAX=${1:-10}
     local TITLE=${2:-"COUNTDOWN... press any key to abort"}
@@ -1427,14 +1540,6 @@ gui_set_compression(){
             fi
 }
 
-
-do_factory_reset(){
-   # echo " " > $CONFIG
-
-    set_conf_defaults
-    get_settings
-}
-    
     
 gui_set_default_path(){
     MSG="Enter new default path   '$DEFAULT_PATH'"
@@ -1600,113 +1705,6 @@ gui_settings(){
 
 
 
-function whiptail_fselect()
-# maybe call something like dialog's fselect
-#
-#  Arguments
-#     1  Dialog title
-#     2  Source path to list files and directories
-#     3  File mask (by default *)
-#     4  "yes" to allow go back in the file system.
-#
-#  Returns
-#     0  if a file was selected and loads the FILE_SELECTED variable 
-#        with the selected file.
-#     1  if the user cancels.
-#
-#if whiptail_fselect "Please, select a file" /home/user ; then
-#        echo "File Selected: \"$FILE_SELECTED\"."
-#else
-#        echo "Cancelled!"
-#fi
-# ----------------------------------------------------------------------
-{
-    # note: does not handle spaces in file names!!!
-    local TITLE=${1:-$MSG_INFO_TITLE}
-    local LOCAL_PATH=${2:-$(pwd)}
-    local FILE_MASK=${3:-"*"}
-    #local FILE_MASK='( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" )'
-    local ALLOW_BACK=${4:-no}
-    local FILES=()
-
-    [ "$ALLOW_BACK" != "no" ] && FILES+=(".." "..")
-
-    IFS=$'\t\n'
-
-    # First add folders      
-    for DIR in $(find $LOCAL_PATH -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f\t" | sort 2> /dev/null)
-    do
-        FILES+=($DIR  "     folder")
-    done
-
-
-    # Then add the files
-    for FILE in $(find $LOCAL_PATH -maxdepth 1 \
-                                    \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" \) \
-                                    -name "[!.]*" \
-                                    -type f \
-                                    -printf "%f\t     %k\n" | sort  2> /dev/null)                                
-    do
-           FILES+=($FILE)
-    done
-	unset IFS
-
-
-    # convert filesizes from kb to mb
-    num='^[0-9]+$'
-    arraylength=${#FILES[@]}
-    
-    if [ $arraylength = 0 ]; then
-        FILES=(no files)
-    fi
-    
-    for (( i=0; i<${arraylength}; i++ )); do
-		arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
-		if [[ "$arrayelement" =~ $num ]] ; then  
-            FILES[$i]=$(echo "    " $(( $arrayelement / 1024 ))mb)			  
-		fi
-    done
- 
- 
-
-    # let user select file
-    while true
-    do
-        FILE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$LOCAL_PATH" \
-                                --menu "Choose a file" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT "${FILES[@]}"  3>&1 1>&2 2>&3)
-
-        #exit if bad whiptail statement
-        FSX=${FILE_SELECTED:0:3}
-        if [ ! -z $FSX ] && [ $FSX = "Box" ]; then
-            echo "ERROR in whiptail in gui_select_dr_file.  Maybe a space in a filename?"
-			echo "${FILES[@]}"
-            exit 1
-        fi
-        
-        if [ -z "$FILE_SELECTED" ]; then
-            return 1
-        else
-            if [ "$FILE_SELECTED" = ".." ] && [ "$ALLOW_BACK" != "no" ]; then
-                return 0
-
-            elif [ -d "$LOCAL_PATH/$FILE_SELECTED" ] ; then
-                if gui_select_dr_file "$TITLE" "$LOCAL_PATH/$FILE_SELECTED" "$FILE_MASK" "yes" ; then
-                    if [ "$FILE_SELECTED" != ".." ]; then
-                        return 0
-                    fi
-                else
-                    return 1
-                fi
-
-            elif [ -f "$LOCAL_PATH/$FILE_SELECTED" ] ; then
-                FILE_SELECTED="$LOCAL_PATH/$FILE_SELECTED"
-                return 0
-            fi
-        fi
-    done
-}
-
-
 gui_get_indev(){
     # for backup
     
@@ -1868,10 +1866,10 @@ gui_get_outdev(){
     fi
      
     # Stop if imagefile is larger than device
-    if [ $(get_image_size_bytes "$INFILE") -gt $(get_sd_size $OUTDEV) ]; then
+    if [ $(get_image_size "$INFILE") -gt $(get_sd_size $OUTDEV) ]; then
         whiptail --backtitle "$BACKTITLE" --title " RESTORE ABORTED " \
         --msgbox "Not enough room
-        \nThe image in '$INFILE' is ' $(get_image_size "$INFILE")' 
+        \nThe image in '$INFILE' is ' $(get_image_size "$INFILE" -h)' 
         \nand '$OUTDEV' is only '$(get_sd_size $OUTDEV -h)'" $WT_HEIGHT $WT_WIDTH
         return 1
     fi
@@ -1930,7 +1928,7 @@ gui_do_backup(){
     whiptail  --backtitle "$BACKTITLE" --title " BACKUP-DONE "  \
         --msgbox "'$(get_sd_name $INDEV)' backed up to 
         \n'$OUTFILE' 
-        \ncompressed from '$(get_sd_size $INDEV -h)' to '$(get_file_size $OUTFILE)' in $(get_elapsed_time $TIME1 $TIME4) 
+        \ncompressed from '$(get_sd_size $INDEV -h)' to '$(get_file_size $OUTFILE -h)' in $(get_elapsed_time $TIME1 $TIME4) 
         \n\nYou can remove '$(get_sd_name $INDEV)' now. " $WT_MB_HEIGHT $WT_WIDTH
 }  
 
@@ -1952,10 +1950,10 @@ gui_do_restore() {
 
     # Confirm to continue
     #do_beep_if_sound
-    if (whiptail  --backtitle "$BACKTITLE" --title "RESTORE - WARNING" --defaultno \
+    if (whiptail  --backtitle "$BACKTITLE" --title "RESTORE" --defaultno \
         --yesno "Restore '$INFILE' 
-        \nto SD card '$(get_sd_name $OUTDEV)' on '$OUTDEV' 
-        \n\nALL existing data on '$OUTDEV' - WILL BE ERASED!  
+        \nto '$(get_sd_name $OUTDEV)' on '$OUTDEV' 
+        \n\nALL existing data on '$(get_sd_name $OUTDEV)' - WILL BE ERASED!  
         \nAre you sure you want to continue?" $WT_HEIGHT $WT_WIDTH) then
         #echo "User selected Yes, exit status was $?."
         RESULT="YES"
@@ -1970,7 +1968,7 @@ gui_do_restore() {
     whiptail_countdown 10 "" "Overwriting '$(get_sd_name $OUTDEV)' in "
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
-        whiptail --backtitle "$BACKTITLE" --title " RESTORE-ABORTED " --msgbox "Key Pressed.  \n\nRestore Aborted. " $WT_MB_HEIGHT $WT_MB_WIDTH
+        whiptail --backtitle "$BACKTITLE" --title "RESTORE" --msgbox "Restore Aborted... \n\n a key was pressed. " $WT_MB_HEIGHT $WT_MB_WIDTH
         return $EXIT_CODE
     fi    
               
@@ -2146,6 +2144,10 @@ fi
 ##get_bytes_h 120000003
 #get_bytes_h 7400000000
 #get_bytes_h 24000003000000
+
+#get_file_size_new test1.gz
+#get_file_size_new test1.gz -h
+
 #exit
 
 
