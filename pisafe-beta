@@ -10,13 +10,15 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.5"
+SCRIPTVER="0.9.6"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG=/home/$USER/.config/pisafe/pisafe.conf
 LOG_FILE=/home/$USER/PiSafe.log
+REQUIRED_TOOLS="lua pv whiptail zip pigz "
+REQUIRED_TOOLS_SPECIAL_INSTALL="pishrink.sh xz"
 
 WHITE='\033[1;37m'
 RED='\033[1;31m'
@@ -28,7 +30,7 @@ INDEV=
 OUTDEV=
 INFILE=
 OUTFILE=
-BACKTITLE="$PRODUCTNAME ver $SCRIPTVER. === $PRODUCTCOMMENT === "
+BACKTITLE="$PRODUCTNAME ver $SCRIPTVER   === $PRODUCTCOMMENT === "
 
 
 get_opts(){
@@ -124,6 +126,7 @@ do_init_conf(){
 
 
 set_conf_defaults(){
+    set_config_var settings_script_ver $SCRIPTVER $CONFIG
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var hide_root_disk on $CONFIG
 
@@ -131,7 +134,8 @@ set_conf_defaults(){
     set_config_var shrink_fs on $CONFIG
     set_config_var auto_expand_fs on $CONFIG
     set_config_var default_extension zip $CONFIG
-    set_config_var compression_level 5 $CONFIG
+    set_config_var compression_level 1 $CONFIG
+    set_config_var parallel_compression on $CONFIG
     set_config_var large_device_read_warning 17179869184 $CONFIG
     
 #restore settings
@@ -142,6 +146,7 @@ set_conf_defaults(){
     set_config_var debug_mode off $CONFIG
     set_config_var sound on $CONFIG
     set_config_var log on $CONFIG
+    
     if [ -z $(which mousepad) ]; then
         set_config_var text_editor nano $CONFIG
     else
@@ -188,6 +193,7 @@ fix_settings(){
 
 
 get_settings(){
+    SETTINGS_SCRIPT_VER=$(get_config_var settings_script_ver $CONFIG)
     DEFAULT_PATH=$(get_config_var default_path $CONFIG)
     DEFAULT_EXTENSION=$(get_config_var default_extension $CONFIG)
     COMPRESSION=$(get_config_var compression_level $CONFIG)
@@ -273,9 +279,10 @@ EOF
 
 do_write_log(){
     INFO=$1
-    
-    touch $LOG_FILE
-    echo "$(date "+%Y-%m-%d %H:%M"), $INFO" >> $LOG_FILE
+    if [ $LOG = "on" ]; then
+        touch $LOG_FILE
+        echo "$(date "+%Y-%m-%d %H:%M"), $INFO" >> $LOG_FILE
+    fi
 }
 
 
@@ -525,9 +532,6 @@ get_root_disk() {
 
 
 get_freespace() {
-    # $1 is FILENAME
-    # $2 is optionally -h for human readable
-    # local LOCAL_PATH=${2:-$(pwd)}
     local FILENAME=${1:-"."}  
     local FORMAT=${2:-"-B1"}   # -B1 for bytes    -h for humanreadable
     local FREESPACE
@@ -539,9 +543,7 @@ get_freespace() {
         FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
         EXIT_CODE=$?
     fi
-    
-    #FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
-    #EXIT_CODE=$?
+
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
     fi
@@ -552,6 +554,7 @@ get_freespace() {
 
 get_folder_size() {
     local FOLDER=$*
+    # returns hunam readable
     
     if [ -d "$FOLDER" ] ; then
         sudo du -sh "$FOLDER" | cut -d'/' -f1 | sed 's/\s\s*/ /g'
@@ -641,7 +644,7 @@ do_list_info() {
         echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
         echo
         echo "~~~ PiSafe LOCKED DEVICES ~~~"
-        echo $(cat $CONFIG | grep "device")
+        echo "$(cat $CONFIG | grep "device_lock")"
         echo
         echo
         echo "~~~ SD-CARD DEVICES ~~~  (Hide root disk = $HIDE_ROOT_DISK)"
@@ -685,54 +688,50 @@ get_sd_devices() {
 
 # --------------------------------------
 
+
 get_tools() {   
-    #echo -n Checking to see if required tools are installed ...
     
-    if [ ! -f /usr/local/bin/pishrink.sh ] || [ ! -f /usr/bin/pv ] || [ ! -f /usr/bin/xz ] || [ ! -f /usr/bin/zip ] || [ ! -f /usr/bin/pigz ]  || [ ! -f /usr/bin/whiptail ] ; then
-       
-        read  -p "Install needed tools:  Zip, PiShrink, pv, xz, and gzip?" -n 1 -r RESULT
+    TOOL_MISSING=false
+    TOOLS=$(echo $REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)
+    
+    for TOOL in $TOOLS ; do
+        if [ ! $(which $TOOL) ]; then
+            TOOL_MISSING=true
+        fi
+    done
+    
+    if [ $TOOL_MISSING = "true" ]; then
+        echo "Install required tools y/n ... $REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL"
+        read -n 1 -r RESULT
         echo
-
-        if [ $RESULT = "y" ]; then
-        
-            # Install PiShrink if needed
-            if [ ! -f /usr/local/bin/pishrink.sh ]; then
-                echo_white Installing pishrink...
-                wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
-                chmod +x pishrink.sh
-                sudo mv pishrink.sh /usr/local/bin
-                echo pishrink installed.
-            fi
-
-             #get zip if needed
-            if [ ! -f /usr/bin/zip ]; then
-                echo_white Installing zip...
-                sudo apt install zip -y
-            fi
-            
-            # get xz if needed
-            if [ ! -f /usr/bin/xz ]; then
-                echo_white Installing xz-utils...
-                sudo apt install xz-utils -y
-            fi
-            
-            # get gzip if needed
-            if [ ! -f /usr/bin/pigz ]; then
-                echo_white Installing pigz...
-                sudo apt install pigz -y
-            fi
-            
-            # get pv if needed
-            if [ ! -f /usr/bin/pv ]; then
-                echo_white Installing pv...
-                sudo apt install pv -y
-            fi
-            
-            echo_white DONE installing tools. 
-            
-        else
+        if [ $RESULT != "y" ]; then
             echo
             echo_red   WARNING.  Not all the needed tools are installed.
+            return 1
+        fi
+
+        for TOOL in $REQUIRED_TOOLS ; do
+            if [ ! $(which $TOOL) ]; then
+                echo_white Installilng $TOOL ...
+                sudo apt install -y $TOOL
+            fi
+        done
+        
+        # special installs ...
+        
+        # Install PiShrink if needed
+        if [ -z $(which pishrink.sh) ]; then
+            echo_white Installing pishrink...
+            wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
+            chmod +x pishrink.sh
+            sudo mv pishrink.sh /usr/local/bin
+            echo pishrink installed.
+        fi
+
+        # Install xz if needed
+        if [ -z $(which xz) ]; then
+            echo_white Installing xz-utils...
+            sudo apt install xz-utils -y
         fi
     fi
 }    
@@ -800,9 +799,9 @@ do_update() {
 
 do_backup(){
     local INDEV=$1
-    local OUTFILE=$2
-  #  local OUTFILE_BASE=$(get_file_base $OUTFILE)
-   # local OUTFILE_EXT=$(get_file_ext $OUTFILE)
+    OUTFILE=$2
+    local SAFETY=${3:-on}   # this lets us bypass some of the safety prompts
+    local INTERFACE${4:-CLI}  #CLI or GUI
     
     #echo 1 - sudo dd bs=4M if=/dev/$INDEV of=$OUTFILE.img status=progress conv=fsync 
     #echo 2 - sudo pishrink.sh $OUTFILE.img
@@ -847,7 +846,7 @@ do_backup(){
     if [ $(get_sd_size $INDEV) -gt 16000000000 ]; then
         MESG=" '$INDEV' is larger than 16GB.  \
          \nUse a smaller SD card if you can, it will copy faster.\
-         \nA good 8gb card in a Raspberry Pi 4 takes about 10 minutes \n"
+         \nA good 8gb card with RaspiOS in a Raspberry Pi 4 takes about 10 minutes \n"
          echo
         echo_red "WARNING... $MESG"   
     fi
@@ -1003,14 +1002,14 @@ do_backup(){
         ;;
         
         gz)
-            echo Sorry, no progress bar.  Please wait...
+            echo Sorry, gz has no progress bar.  Please wait...
             sudo pigz -v -$COMPRESSION "$OUTFILE_BASE".img
             EXIT_CODE=$?        
             sudo mv "$OUTFILE_BASE".img.gz "$OUTFILE"
             
-            ##sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE"
-            ##EXIT_CODE=$? 
-            ##sudo rm -f "$OUTFILE_BASE".img 
+            #sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE_BASE".img.gz
+            #EXIT_CODE=$? 
+            #OUTFILE="$OUTFILE_BASE".img.gz
         ;;
         
         *)
@@ -1084,8 +1083,8 @@ do_restore(){
     check_for_img_file "$INFILE"
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
-      #  return $EXIT_CODE
-      x=1
+      return $EXIT_CODE
+      #x=1
     fi
     
     
@@ -1149,7 +1148,7 @@ do_restore(){
   #  $(get_config_var safety $CONFIG)
   VENDOR=$(lsblk -n -d --output vendor /dev/sda)
   SERIAL=$(lsblk -n -d --output serial /dev/sda)
-  echo Device Vendor and Serial_number=$VENDOR $SERIAL
+  #echo Device Vendor and Serial_number=$VENDOR $SERIAL
   #if [ $(get_config_var device_$VENDOR$SERIAL $CONFIG) = "locked" ]; then
   #  do_beep_if_sound
   #  echo Drive $OUTDEV serial number $VENDOR$SERIAL is $PRODUCTNAME locked.  exiting.
@@ -1212,9 +1211,9 @@ do_restore(){
     
     case $INFILEEXT in
         img)
-            sudo dd if="$INFILE" of=$OUTDEV bs=4M conv=fsync status=progress
+            #sudo dd if="$INFILE" of=$OUTDEV bs=4M conv=fsync status=progress
             (sudo pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
-            --gauge "Writing '$INFILE' \nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
+            --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
             EXIT_CODE=$?
         ;;
         
@@ -1224,7 +1223,7 @@ do_restore(){
             #unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
             #sudo unzip -p "$INFILE" | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync 
             (unzip -p "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
-            --gauge "Writing '$INFILE' \nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
+            --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
             
             #if [ $INTERFACE = "GUI" ] && [ $DEBUG_MODE != "on" ]; then
             #    (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "Writing..." --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
@@ -1238,7 +1237,7 @@ do_restore(){
         xz)
             #xz -v -d -c "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
             (sudo pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
-            --gauge "Writing '$INFILE' to '$(get_sd_name $OUTDEV)' ..." 10 70 0
+            --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
             EXIT_CODE=$?
         ;;
 
@@ -1248,7 +1247,7 @@ do_restore(){
             #sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE"
             #sudo pv "$INFILE" | pigz -k -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync 
             (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
-            --gauge "Writing '$INFILE' to '$(get_sd_name $OUTDEV)' ..." 10 70 0
+            --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
             EXIT_CODE=$?
         ;;
 
@@ -1307,11 +1306,13 @@ case $1 in
     ;;
     
     gui)
+        gui_splash_screen
         gui_menu
     ;;
     
     *)
         if [ ${SCRIPTNAME:0:6} = "pisafe" ]; then
+            gui_splash_screen
             gui_menu
         else    
             do_help
@@ -1466,19 +1467,18 @@ function whiptail_fselect()
 whiptail_countdown(){  
     local MAX=${1:-10}
     local TITLE=${2:-"COUNTDOWN... press any key to abort"}
-    MSG=$3
+    MSG=${3:-"Countdown for $MAX seconds.\n\n"}
+    #MSG="Countdown for $MAX seconds.\n\n"
     # return code 2 if aborted. 
 
-    #sleep 1
-    for ((i=$MAX; i>=1; i--)) ; do
-		TERM=vt220 whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --infobox  \
-        "$MSG 
-        \nin $i seconds" 10 100
+    for ((i=$MAX; i>=0; i--)) ; do
+		TERM=vt220 whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --infobox "$MSG" 10 100
 		#sleep .75
         read -t 1 -N 1 INPUT
         if [ ! -z $INPUT ]; then
             return 2
         fi 
+        MSG=$(echo "$MSG.$i")
     done 
 }
 
@@ -1725,7 +1725,7 @@ gui_get_indev(){
         MESG=" '$(get_sd_name $INDEV)' is larger than 16GB.  \
          \n\nUse a smaller SD card if you can.  \
          \nIt will be faster because the entire SD card must be read before it can be compressed.\
-         \n\nA good 8gb card in a Raspberry Pi 4 takes about 10 minutes"
+         \n\nA good 8gb card with RaspiOS in a Raspberry Pi 4 takes about 10 minutes"
         whiptail --backtitle "$BACKTITLE" --title "WARNING" --msgbox "$MESG" $WT_MB_HEIGHT $WT_MB_WIDTH   
     fi
     
@@ -1790,8 +1790,7 @@ gui_get_outfile(){
         MSG="Enter the filename (eg 2020-12-15-buster32) 
         \nSupported extensions are: .img .zip .xz .gz 
         \nIf you don't include an extension '.$DEFAULT_EXTENSION' will be added 
-        \n.img files are shrunk but NOT compressed
-        \n.xz is ~25% smaller but takes 3x-4x longer
+        \n.img files are shrunk but NOT compressed \n.xz is ~25% smaller but takes 3x-4x longer \n.gz is ~25% faster but has no progress bar
         \nRecomended to have NO SPACES in the name "
         NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP : Enter Filename" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
         EXIT_CODE=$?
@@ -1838,7 +1837,7 @@ gui_get_outdev(){
     fi    
     
     #stop if outdev is piSave-locked
-    if [ $(get_config_var device_$(get_device_serial $OUTDEV) $CONFIG) = "locked" ]; then
+    if [ $(get_config_var device_lock_$(get_device_serial $OUTDEV) $CONFIG) = "on" ]; then
         whiptail --backtitle "$BACKTITLE" --title " RESTORE ABORTED " \
         --msgbox "Device '$(get_device_serial $OUTDEV)' 
         \nis locked by PiSafe in the config file" $WT_HEIGHT $WT_WIDTH
@@ -1898,7 +1897,7 @@ gui_do_backup(){
     whiptail  --backtitle "$BACKTITLE" --title "BACKUP : Create Image-file" --defaultno \
         --yesno "Backup '$(get_sd_name $INDEV)' on '$INDEV' 
         \nto '$OUTFILE'.
-        \n\nA good 8GB card of RaspiOS on a Pi4 takes about 10 minutes.
+        \n\nA good 8GB card with RaspiOS on a Pi4 takes about 10 minutes.
         \nThis will switch to the terminal screen to watch the progress ...
         \nLast chance before creating image-file.
         \n\nAre you sure you want to continue?"   $WT_HEIGHT $WT_WIDTH
@@ -1910,7 +1909,7 @@ gui_do_backup(){
 
     ###########################################################
     # this next line actually does the work!!
-    do_backup $INDEV "$OUTFILE" "gui"
+    do_backup $INDEV "$OUTFILE" "on" "gui"
     EXIT_CODE=$?
     
     if [ $EXIT_CODE != 0 ] || [ $DEBUG_MODE = "on" ]; then
@@ -1965,7 +1964,7 @@ gui_do_restore() {
 
     #Countdown before continuing
     do_beep_if_sound
-    whiptail_countdown 10 "" "Overwriting '$(get_sd_name $OUTDEV)' in "
+    whiptail_countdown 10 "" "Overwriting '$(get_sd_name $OUTDEV)' in 10 seconds...\n\n"
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         whiptail --backtitle "$BACKTITLE" --title "RESTORE" --msgbox "Restore Aborted... \n\n a key was pressed. " $WT_MB_HEIGHT $WT_MB_WIDTH
@@ -2132,6 +2131,26 @@ gui_menu(){
 }
 
 
+gui_splash_screen(){
+    
+   # echo $SETTINGS_SCRIPT_VER
+   # echo $SCRIPTVER
+   # echo $(get_ver_to_int $SETTINGS_SCRIPT_VER)
+   # exit
+    
+    if [ $(get_ver_to_int $SETTINGS_SCRIPT_VER) -lt $(get_ver_to_int $SCRIPTVER) ]; then
+    
+        whiptail --backtitle "$BACKTITLE" --title "WELCOME" \
+        --msgbox "Welcome to $PRODUCTNAME
+        \nIf you have previously installed $PRODUCTNAME it is recomended that you load the factory defaults.
+        \nWhile best attempts have been made to make this reliable... use at your own risk. " \
+        $WT_MB_HEIGHT $WT_MB_WIDTH
+    
+    fi
+}
+
+
+
 # if arg = -v, then show version and exit the script
 if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
     echo $SCRIPTVER
@@ -2151,11 +2170,13 @@ fi
 #exit
 
 
+get_tools
 do_init_conf
 get_settings
 fix_settings
-get_tools
+
 whiptail_calc_wt_size
+
 
 
 cli_menu $1 $2 $3
