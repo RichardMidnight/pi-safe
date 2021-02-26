@@ -10,15 +10,16 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.6"
+SCRIPTVER="0.9.7"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG=/home/$USER/.config/pisafe/pisafe.conf
 LOG_FILE=/home/$USER/PiSafe.log
-REQUIRED_TOOLS="lua pv whiptail zip pigz "
+REQUIRED_TOOLS="lua pv bc whiptail zip pigz "
 REQUIRED_TOOLS_SPECIAL_INSTALL="pishrink.sh xz"
+INTERFACE="CLI"
 
 WHITE='\033[1;37m'
 RED='\033[1;31m'
@@ -155,42 +156,6 @@ set_conf_defaults(){
 }
 
 
-fix_settings(){
-    get_settings
-    
-    if [ $DEFAULT_PATH = 0 ]; then 
-        set_config_var default_path $HOME/Downloads $CONFIG
-    fi
-    if [ $DEFAULT_EXTENSION = 0 ]; then 
-        set_config_var default_extension zip $CONFIG
-    fi
-    if [ $COMPRESSION = 0 ]; then 
-        set_config_var compression_level 5 $CONFIG
-    fi
-    if [ $HIDE_ROOT_DISK != "off" ] ; then 
-        set_config_var hide_root_disk on $CONFIG
-    fi
-    if [ $DEBUG_MODE = 0 ]; then 
-        set_config_var debug_mode on $CONFIG
-    fi
-    if [ $SOUND = 0 ]; then 
-        set_config_var sound on $CONFIG
-    fi
-    if [ $SHRINK_FS = 0 ]; then 
-        set_config_var shrink_fs on $CONFIG
-    fi
-    if [ $AUTO_EXPAND_FS = 0 ]; then 
-        set_config_var auto_expand_fs on $CONFIG
-    fi
-    if [ $TEXT_EDITOR = 0 ]; then 
-        set_config_var text_editor nano $CONFIG
-    fi    
-    if [ $SAFETY = 0 ]; then 
-        set_config_var safety on $CONFIG
-    fi    
-    get_settings
-}
-
 
 get_settings(){
     SETTINGS_SCRIPT_VER=$(get_config_var settings_script_ver $CONFIG)
@@ -277,8 +242,21 @@ EOF
 # -------------------------------------------------------------
 
 
+echo_if_cli (){
+    local MSG=$1
+    local COLOR=$2
+    if [ $INTERFACE = "CLI" ]; then
+        case $COLOR in
+            white) echo_white $MSG ;;
+            red)    echo_red $MSG ;;
+            *) echo $MSG ;;
+        esac
+    fi
+}
+
+
 do_write_log(){
-    INFO=$1
+    INFO=$*
     if [ $LOG = "on" ]; then
         touch $LOG_FILE
         echo "$(date "+%Y-%m-%d %H:%M"), $INFO" >> $LOG_FILE
@@ -349,6 +327,12 @@ get_bytes_h(){
     BYTES=$1
     # currently shows 3 significant digits.
     
+    NUM='^[0-9]+$'
+    if ! [[ "$BYTES" =~ $NUM ]] ; then   # not a number
+        #echo $BYTES    
+        return 1
+    fi
+    
     [ -z "$BYTES" ] && return
     #need some error checking that it is a number
     
@@ -376,7 +360,7 @@ get_bytes_h(){
         13) echo $(echo "scale=2; $BYTES/($t_era)" | bc)tb ;;
         14) echo $(echo "scale=1; $BYTES/($t_era)" | bc)tb ;;
         15) echo $(echo "scale=0; $BYTES/($t_era)" | bc)tb ;;
-        *)  echo $BYTES bytes;;
+        *)  echo $BYTES ;;
     esac
 }
 
@@ -444,9 +428,17 @@ get_sd_name(){
 
 get_sd_size() {
     # $1 is devicename
+    local DEV=$1
    local HUMAN=${2:-"no"}
    
-    SIZE_BYTES=$(lsblk $1 -d -n -b -o size  2> /dev/null)
+     # add '/dev/' if missing
+    if [ "${DEV:0:5}" != "/dev/" ]; then
+        #echo "Device prefix not specified.  Adding '/dev/'"
+        DEV="/dev/"$DEV
+        #echo "IN-DEV='$INDEV'"
+    fi
+   
+    SIZE_BYTES=$(lsblk $DEV -d -n -b -o size  2> /dev/null)
     EXIT_CODE=$?
         
     if [ $EXIT_CODE != 0 ]; then
@@ -478,6 +470,7 @@ get_device_serial(){
 get_image_size() {
     local INFILE=$1
     local HUMAN=${2:-"no"}
+    #SIZE_BYTES=0
     
     case $(get_file_ext "$INFILE") in
         img)
@@ -485,15 +478,15 @@ get_image_size() {
         ;;
         
         zip)
-            SIZE_BYTES=$(zipinfo -t "$INFILE" | cut -d, -f2 | cut -d" " -f2)
+            SIZE_BYTES=$(zipinfo -t "$INFILE" 2> /dev/null | grep "%" | cut -d, -f2 | cut -d" " -f2  )
         ;;
         
         xz)
-            SIZE_BYTES=$(xz -l -v "$INFILE" | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g')
+            SIZE_BYTES=$(xz -l -v "$INFILE" 2> /dev/null | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g')
         ;;  
           
         gz)
-            SIZE_BYTES=$(pigz -l "$INFILE" | grep -v compressed | sed 's/\s\s*/ /g' | cut -d' ' -f2 | sed 's/?/0/g')
+            SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | cut -d' ' -f 3 | sed 's/?/0/g')
         ;;
         
         *)
@@ -502,7 +495,14 @@ get_image_size() {
         ;;
     esac
     
+    if [ -z $SIZE_BYTES ] ; then
+        echo 0
+        return 0
+    fi
+    
+    
     if [ $HUMAN = "-h" ]; then
+        #echo $SIZE_BYTES
         echo $(get_bytes_h $SIZE_BYTES)
     else
         echo $SIZE_BYTES
@@ -634,6 +634,23 @@ check_for_img_file(){
 
 # -----------------------------------------------
 
+
+do_list_image_files(){
+    FILES="FILE_NAME FILE_SIZE IMAGE_SIZE \n"
+    CONFIG=/home/$USER/.config/pisafe/pisafe.conf
+    IFS=$'\t\n'
+    
+    for FILE in $(ls *.img *.zip *.xz *.gz 2>/dev/null) ; do
+        FILE_NS=$(echo $FILE | sed 's/ /_/g')
+        FILES="$FILES $FILE_NS  $(get_file_size "$FILE" -h)  $(get_image_size "$FILE" -h) \n "
+    done
+
+    printf $FILES | column  -t
+    unset IFS
+}
+
+
+
 do_list_info() {
         DIR=${1:-$PWD}
         echo "~~~ CURRENT SYSTEM ~~~"
@@ -643,20 +660,23 @@ do_list_info() {
         echo "TrashSize = $(get_folder_size /home/pi/.local/share/Trash)"
         echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
         echo
-        echo "~~~ PiSafe LOCKED DEVICES ~~~"
-        echo "$(cat $CONFIG | grep "device_lock")"
-        echo
+        #echo "~~~ PiSafe LOCKED DEVICES ~~~"
+        #echo "$(cat $CONFIG | grep "device_lock")"
+        #echo
         echo
         echo "~~~ SD-CARD DEVICES ~~~  (Hide root disk = $HIDE_ROOT_DISK)"
         echo "$(get_sd_devices)"
         echo   
+        echo
         echo "~~~ IMAGE FILES in '$DIR' ~~~"
         SAVED_PWD=$PWD
         #echo $OLD_DIR
         #echo $DEFAULT_PATH
         cd $DIR
-        ls -1 -s -h -w1 *.img *.zip *.xz *.gz 2> /dev/null | sed 's/ /     /'
+        #ls -1 -s -h -w1 *.img *.zip *.xz *.gz 2> /dev/null | sed 's/ /     /'
         #ls -1 -s -h -w1 $DEFAULT_PATH/*.img $DEFAULT_PATH/*.zip $DEFAULT_PATH/*.xz $DEFAULT_PATH/*.gz 2> /dev/null | sed 's/ /     /'
+  
+        do_list_image_files
         cd $SAVED_PWD
 }    
 
@@ -712,7 +732,7 @@ get_tools() {
 
         for TOOL in $REQUIRED_TOOLS ; do
             if [ ! $(which $TOOL) ]; then
-                echo_white Installilng $TOOL ...
+                echo_white Installing $TOOL ...
                 sudo apt install -y $TOOL
             fi
         done
@@ -760,7 +780,7 @@ do_update() {
     
     # this should not be needed.  the parameter should be passed.
     if [ -z $INTERFACE ]; then
-        INTERFACE="gui"
+        INTERFACE="GUI"
     fi
       
     local SERVER_VER=
@@ -790,7 +810,7 @@ do_update() {
         fi
     else    
         echo "Server version is '$SERVER_VER' You are up to date.  "
-        if [ $INTERFACE = "gui" ]; then
+        if [ $INTERFACE = "GUI" ]; then
             read -p "Press any key to continue..." -n 1 -r RESULT
         fi
     fi
@@ -983,7 +1003,9 @@ do_backup(){
             echo Each dot represents=$DOTSIZE MB
             echo -n "                      $(get_file_path $OUTFILE)/$(get_file_base $OUTFILE).img"
             echo ".........20........40........60........80........100%"
-            sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
+            #sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
+            sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE_BASE".img.zip "$OUTFILE_BASE".img
+            OUTFILE="$OUTFILE_BASE".img.zip
             EXIT_CODE=$?
 
             ##sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION -K > "$OUTFILE"
@@ -998,14 +1020,16 @@ do_backup(){
         xz)
             sudo xz -z -v -T0 -$COMPRESSION "$OUTFILE_BASE".img
             EXIT_CODE=$?     
-            sudo mv "$OUTFILE_BASE".img.xz "$OUTFILE"  
+            OUTFILE="$OUTFILE_BASE".img.xz
+            #sudo mv "$OUTFILE_BASE".img.xz "$OUTFILE"  
         ;;
         
         gz)
             echo Sorry, gz has no progress bar.  Please wait...
             sudo pigz -v -$COMPRESSION "$OUTFILE_BASE".img
             EXIT_CODE=$?        
-            sudo mv "$OUTFILE_BASE".img.gz "$OUTFILE"
+            OUTFILE="$OUTFILE_BASE".img.gz
+            #sudo mv "$OUTFILE_BASE".img.gz "$OUTFILE"
             
             #sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE_BASE".img.gz
             #EXIT_CODE=$? 
@@ -1098,9 +1122,9 @@ do_restore(){
     
     # Add '/dev/' if missing
     if [ ${OUTDEV:0:5} != "/dev/" ]; then
-        echo "Device prefix not specified.  Adding '/dev/'"
+        echo_if_cli "Device prefix not specified.  Adding '/dev/'"
         OUTDEV="/dev/"$OUTDEV
-        echo "OUT-DEV='$OUTDEV'"
+        echo_if_cli "OUT-DEV='$OUTDEV'"
     fi
     
     # Stop if OUTDEV is not found
@@ -1158,12 +1182,14 @@ do_restore(){
 
 
     # Final check before writing data
+    # quit if INFILE is not a file
     if [ -z "$INFILE" ] || [ ! -e "$INFILE" ]; then
         echo
         echo_red "ERROR: IN-FILE '$INFILE' cannot be blank. must exist."
         return 1
     fi 
     
+    #quit if OUTDEV is not a device
     if [ -z $OUTDEV ] || [ ! -e $OUTDEV ]; then
         echo
         echo_red "ERROR: OUT-DEV '$OUTDEV' cannot be blank.  must exist."
@@ -1195,35 +1221,43 @@ do_restore(){
     # this section writes the data
     #################################################
     
-    echo Unmounting SD-card $OUTDEV ...
+    echo_if_cli Unmounting SD-card $OUTDEV ...
     umount $OUTDEV?  2> /dev/null
     
     local INFILEEXT=$(get_file_ext "$INFILE")
     
-    echo_white "Erasing MBR, signature, and partition table from '$OUTDEV'..."
+    echo_if_cli "Erasing MBR, signature, and partition table from '$OUTDEV'..." "white"
 	sudo dd if=/dev/zero of=$OUTDEV bs=512 count=1
     
     echo        
     echo_white "Writing '$INFILE' to '$OUTDEV' ... "    
     date
     TIME1=$(date +%s)
-    echo $(get_image_size "$INFILE" -h) to write
+    echo_if_cli "$(get_image_size "$INFILE" -h) to write"
     
     case $INFILEEXT in
         img)
-            #sudo dd if="$INFILE" of=$OUTDEV bs=4M conv=fsync status=progress
-            (sudo pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
-            --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
-            EXIT_CODE=$?
+            if [ $INTERFACE = "CLI" ]; then
+                sudo dd if="$INFILE" of=$OUTDEV bs=4M conv=fsync status=progress
+                EXIT_CODE=$?
+            else
+                (sudo pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
+                --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
+                EXIT_CODE=$?
+            fi
         ;;
         
         zip)
             RESTORE_BYTES=$(get_image_size "$INFILE")
-            echo $RESTORE_BYTES
-            #unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
-            #sudo unzip -p "$INFILE" | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync 
-            (unzip -p "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
-            --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
+            #echo $RESTORE_BYTES
+             if [ $INTERFACE = "CLI" ]; then
+                 unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+                 EXIT_CODE=$?
+            else
+                (unzip -p "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
+                --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
+                 EXIT_CODE=$?
+            fi
             
             #if [ $INTERFACE = "GUI" ] && [ $DEBUG_MODE != "on" ]; then
             #    (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "Writing..." --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
@@ -1235,20 +1269,28 @@ do_restore(){
         ;;
         
         xz)
-            #xz -v -d -c "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
-            (sudo pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
-            --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
-            EXIT_CODE=$?
+            if [ $INTERFACE = "CLI" ]; then
+                 xz -v -d -c "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+                 EXIT_CODE=$?
+            else
+                (sudo pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
+                --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
+                EXIT_CODE=$?
+            fi
         ;;
 
         gz)
-            #pigz -v -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+            if [ $INTERFACE = "CLI" ]; then
+                pigz -v -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+                EXIT_CODE=$?
             ##pigz -v -k -c -d "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
             #sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE"
             #sudo pv "$INFILE" | pigz -k -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync 
-            (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
-            --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
-            EXIT_CODE=$?
+            else
+                (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
+                --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
+                EXIT_CODE=$?
+            fi    
         ;;
 
         *)
@@ -1278,10 +1320,12 @@ cli_menu(){
 case $1 in
     
     backup|read)
+        do_write_log $1 $2 $3
         do_backup $2 $3
     ;;
     
     restore|write)
+        do_write_log $1 $2 $3
         do_restore $2 $3
     ;;
     
@@ -1398,13 +1442,22 @@ function whiptail_fselect()
 
 
     # Then add the files
+ #   for FILE in $(find $LOCAL_PATH -maxdepth 1 \
+ #                                   \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" \) \
+ #                                   -name "[!.]*" \
+ #                                   -type f \
+ #                                   -printf "%f\t     %s\n" | sort  2> /dev/null)                  
+                                    
     for FILE in $(find $LOCAL_PATH -maxdepth 1 \
-                                    \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" \) \
-                                    -name "[!.]*" \
+                                     \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" \) \
                                     -type f \
-                                    -printf "%f\t     %k\n" | sort  2> /dev/null)                                
+                                    -printf "%f\t     %s\n" | sort  2> /dev/null)                                                            
     do
-           FILES+=($FILE)
+        FILES+=($FILE)
+        
+        #FI=$(echo $LOCAL_PATH/$FILE | cut -d ' ' -f1)
+        #IMAGE_SIZE=$(get_image_size "$FI")
+        #FILES+=($FILE $IMAGE_SIZE)
     done
 	unset IFS
 
@@ -1419,8 +1472,8 @@ function whiptail_fselect()
     
     for (( i=0; i<${arraylength}; i++ )); do
 		arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
-		if [[ "$arrayelement" =~ $num ]] ; then  
-            FILES[$i]=$(echo "    " $(( $arrayelement / 1024 ))mb)			  
+		if [[ "$arrayelement" =~ $num ]] ; then  	
+            FILES[$i]=$(echo "    " $(get_bytes_h $arrayelement -h) ) 
 		fi
     done
  
@@ -1756,7 +1809,7 @@ gui_get_indev(){
 gui_get_outfile(){
     # for backup
     
-    OUTFILEDEFAULT="$DEFAULT_PATH/$(date +%Y-%m-%d-newimage)"
+    OUTFILEDEFAULT="$DEFAULT_PATH/$(date +%Y-%m-%d-newimage.$DEFAULT_EXTENSION)"
            
     while [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] || [ -f "$(get_file_base $OUTFILE).img" ] || [ -z "$(get_file_ext_ok $OUTFILE)" ] || [ ! -d  "$(get_file_path $OUTFILE)" ]  ; do  
         
@@ -1787,10 +1840,10 @@ gui_get_outfile(){
         
         
         #get filename
-        MSG="Enter the filename (eg 2020-12-15-buster32) 
+        MSG="Enter the filename (eg: 2020-12-15-buster32) 
         \nSupported extensions are: .img .zip .xz .gz 
-        \nIf you don't include an extension '.$DEFAULT_EXTENSION' will be added 
-        \n.img files are shrunk but NOT compressed \n.xz is ~25% smaller but takes 3x-4x longer \n.gz is ~25% faster but has no progress bar
+        \nIf you don't include an extension '.img.$DEFAULT_EXTENSION' will be added 
+        \n.zip is the baseline \n.img is ~2x faster but twice the size (NOT compressed) \n.xz is ~25% smaller but takes 3x-4x longer \n.gz is ~25% faster but has no progress bar
         \nRecomended to have NO SPACES in the name "
         NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP : Enter Filename" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
         EXIT_CODE=$?
@@ -2158,25 +2211,10 @@ if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
 fi
 
 
-#get_bytes_h 200
-#get_bytes_h 20000
-##get_bytes_h 120000003
-#get_bytes_h 7400000000
-#get_bytes_h 24000003000000
-
-#get_file_size_new test1.gz
-#get_file_size_new test1.gz -h
-
-#exit
-
-
 get_tools
 do_init_conf
 get_settings
-fix_settings
-
 whiptail_calc_wt_size
-
 
 
 cli_menu $1 $2 $3
