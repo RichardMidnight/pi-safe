@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.8"
+SCRIPTVER="0.9.9"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -368,6 +368,15 @@ get_bytes_h(){
 }
 
 
+get_file_device(){
+    #echo $1
+    MOUNT_POINT=$(df -a $1 | sed 's/  */ /g' | grep -v Mounted | cut -d ' ' -f 6  )
+    #echo $MOUNT_POINT
+    BLK_DEV=$(lsblk -n -l -p -o PKNAME,MOUNTPOINT,NAME | sed 's/  */ /g' | grep " $MOUNT_POINT " | cut -d " " -f 1)
+    echo $BLK_DEV
+}
+
+
 get_file_path(){
     dirname "$*"
 }
@@ -473,7 +482,6 @@ get_device_serial(){
 get_image_size() {
     local INFILE=$1
     local HUMAN=${2:-"no"}
-    #SIZE_BYTES=0
     
     case $(get_file_ext "$INFILE") in
         img)
@@ -505,7 +513,6 @@ get_image_size() {
     
     
     if [ $HUMAN = "-h" ]; then
-        #echo $SIZE_BYTES
         echo $(get_bytes_h $SIZE_BYTES)
     else
         echo $SIZE_BYTES
@@ -666,7 +673,7 @@ do_list_info() {
         #echo "$(cat $CONFIG | grep "device_lock")"
         #echo
         echo
-        echo "~~~ SD-CARD DEVICES ~~~  (Hide root device = $HIDE_ROOT_DEVICE)"
+        echo "~~~ SD-CARD DEVICES ~~~  (Hide root device = $HIDE_ROOT_DEVICE) (hide mmc = $HIDE_MMC_DEVICE)"
         echo "$(get_sd_devices)"
         echo   
         echo
@@ -935,7 +942,7 @@ do_backup(){
     fi
 
   #  check_for_supported_file_extention
-  if [ -z $(get_file_ext_ok "$OUTFILE") ]; then
+    if [ -z $(get_file_ext_ok "$OUTFILE") ]; then
         echo
         echo_red "ERROR: Unsupported file extension '$(get_file_ext $OUTFILE)'"
         return $EXIT_CODE 
@@ -949,7 +956,9 @@ do_backup(){
 
     if  [ -f "$(get_file_base $OUTFILE)".img ]  ; then
         echo
-        echo_red "ERROR: OUT-FILE '$(get_file_base $OUTFILE).img' exists"
+        echo "$OUTFILE"
+        echo "$(get_file_base $OUTFILE)"
+        echo_red "ERROR x: OUT-FILE '$(get_file_base $OUTFILE).img' exists"
         return 2
     fi 
 
@@ -1042,7 +1051,6 @@ do_backup(){
             ##if [ -f "$OUTFILE" ] ; then
              ##   sudo rm -f "$OUTFILE_BASE".img 
             ##fi
-            
         ;;
         
         xz)
@@ -1093,7 +1101,6 @@ do_backup(){
         echo
         echo_red  "ERROR. $EXIT_CODE"
         do_write_log "FAILED $PRODUCTNAME $SCRIPTVER Backup, IN-DEV='$INDEV',  OUT-FILE='$OUTFILE', Compression set to level $COMPRESSION"
-   
         return $EXIT_CODE
     else
         do_beep_if_sound
@@ -1167,6 +1174,9 @@ do_restore(){
         echo_red "ERROR: Restore to root device '/dev/$(get_root_device)' not allowed"
         return 1
     fi
+    
+    # Stop of INFILE is on OUTDEV
+    
     
     
     # Warning if device is big
@@ -1670,8 +1680,8 @@ gui_settings_switches(){
     ON=$(whiptail --title "SETTINGS SWITCHES" --checklist "Enable settings" 20 78 8 \
 "shrink_fs" "Shrink filesystem" "$SHRINK_FS" \
 "auto_expand_fs" "Auto unshrink filesystem" "$AUTO_EXPAND_FS" \
-"hide_root_device" "Hide root device - active device" "$HIDE_ROOT_DEVICE" \
-"hide_mmc_device" "Hide internal sd card" "$HIDE_MMC_DEVICE" \
+"hide_root_device" "Hide root device (CAUTION)" "$HIDE_ROOT_DEVICE" \
+"hide_mmc_device" "Hide internal sd card (CAUTION)" "$HIDE_MMC_DEVICE" \
 "sound" " " "$SOUND" \
 "log"   "log activity" "$LOG" \
 "debug_mode" " " "$DEBUG_MODE" \
@@ -1896,6 +1906,14 @@ gui_get_outdev(){
         --msgbox "Restore to root device not allowed" $WT_HEIGHT $WT_WIDTH
         return 1
     fi
+    
+    #stop if INFILE is on OUTDEV
+    if [ $(get_file_device $INFILE) = $OUTDEV ]; then
+        whiptail --backtitle "$BACKTITLE" --title " RESTORE ABORTED " \
+        --msgbox "Restore to same device as '$INFILE' not allowed" $WT_HEIGHT $WT_WIDTH
+        return 1
+    fi
+    
     
     # Warning if device is large
     if [ $(get_sd_size $OUTDEV) -gt $LARGE_DEVICE_WRITE_WARNING ]; then
@@ -2201,6 +2219,11 @@ if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
     echo $SCRIPTVER
     exit
 fi
+
+
+
+#get_file_device junk.img
+#exit
 
 
 get_tools
