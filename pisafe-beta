@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.7"
+SCRIPTVER="0.9.8"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -129,7 +129,8 @@ do_init_conf(){
 set_conf_defaults(){
     set_config_var settings_script_ver $SCRIPTVER $CONFIG
     set_config_var default_path $HOME/Downloads $CONFIG
-    set_config_var hide_root_disk on $CONFIG
+    set_config_var hide_root_device on $CONFIG
+    set_config_var hide_mmc_device on $CONFIG
 
 #backup settings
     set_config_var shrink_fs on $CONFIG
@@ -156,13 +157,15 @@ set_conf_defaults(){
 }
 
 
-
 get_settings(){
     SETTINGS_SCRIPT_VER=$(get_config_var settings_script_ver $CONFIG)
     DEFAULT_PATH=$(get_config_var default_path $CONFIG)
     DEFAULT_EXTENSION=$(get_config_var default_extension $CONFIG)
     COMPRESSION=$(get_config_var compression_level $CONFIG)
-    HIDE_ROOT_DISK=$(get_config_var hide_root_disk $CONFIG)
+    HIDE_ROOT_DEVICE=$(get_config_var hide_root_device $CONFIG)
+    
+    HIDE_MMC_DEVICE=$(get_config_var hide_mmc_device $CONFIG)
+    
     DEBUG_MODE=$(get_config_var debug_mode $CONFIG)
     SOUND=$(get_config_var sound $CONFIG)
     SHRINK_FS=$(get_config_var shrink_fs $CONFIG)
@@ -486,7 +489,7 @@ get_image_size() {
         ;;  
           
         gz)
-            SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | cut -d' ' -f 3 | sed 's/?/0/g')
+            SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | cut -d' ' -f 2 | sed 's/?/0/g')
         ;;
         
         *)
@@ -510,14 +513,14 @@ get_image_size() {
 }    
 
 
-get_root_disk() {
+get_root_device() {
     local ROOT_PARTITION
     local ROOT_DRIVE
     
     ROOT_PARTITION=$(lsblk -l | grep "/$" | cut -d' ' -f1 2> /dev/null) 
     
     if [ -z $ROOT_PARTITION ]; then
-        return 1  # can't find root partition or root disk
+        return 1  # can't find root partition or root device
     fi
     
     if [[ $ROOT_PARTITION =~ "p" ]]; then
@@ -525,7 +528,7 @@ get_root_disk() {
     elif [[ $ROOT_PARTITION =~ "sd" ]]; then
         ROOT_DRIVE=${ROOT_PARTITION:0:3}
     else
-        return 2  # can't find root disk
+        return 2  # can't find root device
     fi    
     echo $ROOT_DRIVE
 }
@@ -650,12 +653,11 @@ do_list_image_files(){
 }
 
 
-
 do_list_info() {
         DIR=${1:-$PWD}
         echo "~~~ CURRENT SYSTEM ~~~"
-        echo "Root disk = /dev/$(get_root_disk)"
-        echo "Size      = $(get_sd_size /dev/$(get_root_disk) -h )"
+        echo "Root device = /dev/$(get_root_device)"
+        echo "Size      = $(get_sd_size /dev/$(get_root_device) -h )"
         echo "FreeSpace = $(get_freespace . -h)"
         echo "TrashSize = $(get_folder_size /home/pi/.local/share/Trash)"
         echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
@@ -664,7 +666,7 @@ do_list_info() {
         #echo "$(cat $CONFIG | grep "device_lock")"
         #echo
         echo
-        echo "~~~ SD-CARD DEVICES ~~~  (Hide root disk = $HIDE_ROOT_DISK)"
+        echo "~~~ SD-CARD DEVICES ~~~  (Hide root device = $HIDE_ROOT_DEVICE)"
         echo "$(get_sd_devices)"
         echo   
         echo
@@ -681,24 +683,50 @@ do_list_info() {
 }    
 
 
+get_sd_devices_old() {
+    local DEVICES= 
+    MMC_FILTER=
+    BOOT_FILTER=
+    if [ $(get_config_var hide_root_device $CONFIG) = "off" ]; then
+        ROOT_DEVICE=$(get_root_device)      
+        if [ ${ROOT_DEVICE:0:2} != "sd" ]; then
+            ROOT_DEVICE="/dev/$(get_root_device)"
+        else
+            ROOT_DEVICE=
+        fi
+        #lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? /dev/$(get_root_device)
+        # DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? /dev/$(get_root_device) 2> /dev/null  )   
+        DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd?  $ROOT_DEVICE 2> /dev/null  )  
+        EXIT_CODE=$?
+    else
+        #DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? 2> /dev/null | grep -v $(get_root_device))   
+        DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? /dev/mmcblk? 2> /dev/null )  
+        EXIT_CODE=$?
+    fi
+
+    if [ $EXIT_CODE != 0 ]; then
+        return $EXIT_CODE
+    fi
+    
+    echo "${DEVICES[@]}"
+  }
+
 
 get_sd_devices() {
     local DEVICES= 
-    if [ $(get_config_var hide_root_disk $CONFIG) = "off" ]; then
-        ROOT_DISK=$(get_root_disk)      
-        if [ ${ROOT_DISK:0:2} != "sd" ]; then
-            ROOT_DISK="/dev/$(get_root_disk)"
-        else
-            ROOT_DISK=
-        fi
-        #lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? /dev/$(get_root_disk)
-        # DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? /dev/$(get_root_disk) 2> /dev/null  )   
-        DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? $ROOT_DISK 2> /dev/null  )  
-        EXIT_CODE=$?
-    else
-        DEVICES=$(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd?  2> /dev/null | grep -v $(get_root_disk))   
-        EXIT_CODE=$?
-    fi
+    MMC_FILTER="aspodiausdfpoiasdf"
+    BOOT_FILTER="aspodiausdfpoiasdf"
+    if [ $(get_config_var hide_root_device $CONFIG) = "on" ]; then
+        ROOT_DEVICE=$(get_root_device)   
+        BOOT_FILTER=$ROOT_DEVICE
+    fi       
+    if [ $(get_config_var hide_mmc_device $CONFIG) = "on" ]; then
+        MMC_FILTER="mmcblk"
+    fi        
+     
+    DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER | grep -v $MMC_FILTER)  
+    EXIT_CODE=$?
+
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
     fi
@@ -855,10 +883,10 @@ do_backup(){
         return 1
     fi 
     
-    # warning if INDEV is root disk
-    if [ $INDEV = /dev/$(get_root_disk) ]; then
+    # warning if INDEV is root device
+    if [ $INDEV = /dev/$(get_root_device) ]; then
         echo
-        echo_red "WARNING: SD-card is root disk '/dev/$(get_root_disk)'."
+        echo_red "WARNING: SD-card is root device '/dev/$(get_root_device)'."
         #return 1
     fi
     
@@ -1134,9 +1162,9 @@ do_restore(){
         return 2
     fi 
     
-    # Stop if restore to root disk.
-    if [ $OUTDEV = /dev/$(get_root_disk) ]; then
-        echo_red "ERROR: Restore to root disk '/dev/$(get_root_disk)' not allowed"
+    # Stop if restore to root device.
+    if [ $OUTDEV = /dev/$(get_root_device) ]; then
+        echo_red "ERROR: Restore to root device '/dev/$(get_root_device)' not allowed"
         return 1
     fi
     
@@ -1576,11 +1604,11 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 gui_set_compression(){
     CHOICE=$(whiptail --title "SETTINGS" --radiolist \
             "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "1" "Fastest time (slightly faster)" off \
+            "1" "Fastest time (default)" on \
             "2" "" off \
             "3" "" off \
             "4" "" off \
-            "5" "(default)" on \
+            "5" "" off \
             "6" "" off \
             "7" "" off \
             "8" "" off \
@@ -1626,7 +1654,7 @@ gui_set_default_extention(){
             "Choose default extension (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
             "zip" "Default" on \
             "xz" "~25% smaller, 3x-4x more time" off \
-            "gz" "Same as zip" off  \
+            "gz" "~25% faster, but no progress bar" off  \
             "img" "Twice the size, half the time (No compression)" off 3>&1 1>&2 2>&3 )
     
     echo $CHOICE
@@ -1637,92 +1665,56 @@ gui_set_default_extention(){
 }
 
 
-gui_set_hide_root_disk(){
-    CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
-            "Hide Root Disk" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "on" "Hide the root disk (default)" on \
-            "off" "Don't hide the root disk " off   3>&1 1>&2 2>&3 )
+gui_settings_switches(){
+    while true; do
+    ON=$(whiptail --title "SETTINGS SWITCHES" --checklist "Enable settings" 20 78 8 \
+"shrink_fs" "Shrink filesystem" "$SHRINK_FS" \
+"auto_expand_fs" "Auto unshrink filesystem" "$AUTO_EXPAND_FS" \
+"hide_root_device" "Hide root device - active device" "$HIDE_ROOT_DEVICE" \
+"hide_mmc_device" "Hide internal sd card" "$HIDE_MMC_DEVICE" \
+"sound" " " "$SOUND" \
+"log"   "log activity" "$LOG" \
+"debug_mode" " " "$DEBUG_MODE" \
+ 3>&1 1>&2 2>&3) 
     
-    echo $CHOICE
-    if [ ! -z $CHOICE ]; then
-        HIDE_ROOT_DISK=$CHOICE
-        set_config_var hide_root_disk $CHOICE $CONFIG
+    if [ $? != 0 ] ; then
+        return
     fi
-}
-
-
-gui_set_shrink_fs(){
-    CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
-            "Shrink File System" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "on" "Shrink the file system on backup (default)" on \
-            "off" "Don's shrink the filesystem on backup" off   3>&1 1>&2 2>&3 )
     
-    echo $CHOICE
-    if [ ! -z $CHOICE ]; then
-        SHRINK_FS=$CHOICE
-        set_config_var shrink_fs $CHOICE $CONFIG
-    fi
-}
-
-
-gui_set_debug_mode(){
-    CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
-            "Debug Mode" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "on" "Show critical terminal screens" off \
-            "off" "Hide most terminal screens (default)" on   3>&1 1>&2 2>&3 )
+    # dump the quotes in the string.
+    ON=$(echo $ON | sed 's/"//g')
     
-    echo $CHOICE
-    if [ ! -z $CHOICE ]; then
-        DEBUG_MODE=$CHOICE
-        set_config_var debug_mode $CHOICE $CONFIG
-    fi
-}
-
-
-gui_set_sound(){
-    CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
-            "Sound" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "on" "Sound on (default)" on \
-            "off" "Sound off" off   3>&1 1>&2 2>&3 )
+    # set all to off
+    set_config_var shrink_fs off $CONFIG
+    set_config_var auto_expand_fs off $CONFIG
+    set_config_var hide_root_device off $CONFIG
+    set_config_var hide_mmc_device off $CONFIG
+    set_config_var sound off $CONFIG
+    set_config_var log off $CONFIG
+    set_config_var debug_mode off $CONFIG
     
-    echo $CHOICE
-    if [ ! -z $CHOICE ]; then
-        SOUND=$CHOICE
-        set_config_var sound $CHOICE $CONFIG
-    fi
-}
-
-
-gui_set_auto_expand_fs(){
-    CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
-            "Auto-unshrink filesystem" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "on" "Create a BACKUP that auto-unshrinks on first boot (default)" on \
-            "off" "Create a Backup that will NOT auto-unshrink"  off   3>&1 1>&2 2>&3 )
+    for SELECTED in $ON; do
+        #echo "set_config_var $SELECTED on $CONFIG"
+        set_config_var $SELECTED on $CONFIG
+    done
+    get_settings
     
-    echo $CHOICE
-    if [ ! -z $CHOICE ]; then
-        AUTO_EXPAND_FS=$CHOICE
-        set_config_var auto_expand_fs $CHOICE $CONFIG
-    fi
-}
+    done
+    }
 
 
 gui_settings(){
     while true; do
-        
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --menu " " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT  \
         "Default directory   " "$DEFAULT_PATH" \
-        "Shrink filesystem  " "$SHRINK_FS" \
-        "Auto unshrink filesystem" "$AUTO_EXPAND_FS" \
         "Default extension   " "$DEFAULT_EXTENSION" \
         "Compression         " "$COMPRESSION of 9" \
-        "Hide root disk   "    "$HIDE_ROOT_DISK" \
-        "Sound               " "$SOUND" \
-        "Debug mode          " "$DEBUG_MODE" \
         "Text editor"        "$TEXT_EDITOR" \
+        "Switches"          "All the on / off settings " \
         "                    " "      " \
         "Edit config         " "Edit the settings file manually (pisafe.conf)" \
         "Factory defaults    " "Reset settings to factory defaults" \
+         "View terminal"    "View the terminal (for debugging)" \
         3>&1 1>&2 2>&3)
         
         EXIT_CODE=$?
@@ -1731,13 +1723,14 @@ gui_settings(){
         else
             case "$SELECTION" in
             "Default d"*)   gui_set_default_path ;;
-            "Shrink"*)      gui_set_shrink_fs ;;
-            "Auto "*)       gui_set_auto_expand_fs ;;
+          #  "Shrink"*)      gui_set_shrink_fs ;;
+          #  "Auto "*)       gui_set_auto_expand_fs ;;
             "Default e"*)   gui_set_default_extention ;;
             "Compression"*) gui_set_compression ;;
-            Hide*)          gui_set_hide_root_disk ;;
-            Sound*)         gui_set_sound ;;
-            Debug*)         gui_set_debug_mode ;;
+          #  Hide*)          gui_set_hide_root_device ;;
+          #  Sound*)         gui_set_sound ;;
+          #  Debug*)         gui_set_debug_mode ;;
+            Switches*)      gui_settings_switches ;;
             View*)          read -n 1 -p "Press any key to return"   ;;
             Update*)        gui_update  ;;
             Text*)          ;;
@@ -1768,9 +1761,9 @@ gui_get_indev(){
         return $EXIT_CODE
     fi    
     
-    # Warning if INDEV is root disk
-    if [ $INDEV = /dev/$(get_root_disk) ]; then
-        whiptail --backtitle "$BACKTITLE" --title "WARNING" --msgbox "SD-card is your root disk." $WT_MB_HEIGHT $WT_MB_WIDTH  
+    # Warning if INDEV is root device
+    if [ $INDEV = /dev/$(get_root_device) ]; then
+        whiptail --backtitle "$BACKTITLE" --title "WARNING" --msgbox "SD-card is your root device." $WT_MB_HEIGHT $WT_MB_WIDTH  
     fi
     
     # Warning if SD-card is bigger than 16GB
@@ -1802,7 +1795,7 @@ gui_get_indev(){
             \nThere is $(get_folder_size /home/pi/.local/share/Trash) in the Trash" $WT_MB_HEIGHT $WT_MB_WIDTH   
     fi
     
-    # maybe check and see if it looks like a raspbian disk?
+    # maybe check and see if it looks like a raspbian device?
 }
 
 
@@ -1897,10 +1890,10 @@ gui_get_outdev(){
         return 1
     fi
     
-    # Stop if outdev is the root disk
-    if [ $OUTDEV = /dev/$(get_root_disk) ]; then
+    # Stop if outdev is the root device
+    if [ $OUTDEV = /dev/$(get_root_device) ]; then
         whiptail --backtitle "$BACKTITLE" --title " RESTORE ABORTED " \
-        --msgbox "Restore to root disk not allowed" $WT_HEIGHT $WT_WIDTH
+        --msgbox "Restore to root device not allowed" $WT_HEIGHT $WT_WIDTH
         return 1
     fi
     
@@ -2067,7 +2060,7 @@ gui_select_sddevice(){
 
     IFS=$FIELD_SEPERATOR
     DEVICE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE"\
-     --menu "Choose an SD card (Hide root disk = $HIDE_ROOT_DISK)" 30 80 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
+     --menu "Choose an SD card (Hide root device = $HIDE_ROOT_DEVICE)" 30 80 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
     EXIT_CODE=$?
     unset IFS   
      
@@ -2075,8 +2068,8 @@ gui_select_sddevice(){
         return $EXIT_CODE
     fi
     
-    OUTDEV=/dev/$DEVICE_SELECTED
-    INDEV=/dev/$DEVICE_SELECTED
+    OUTDEV=$DEVICE_SELECTED
+    INDEV=$DEVICE_SELECTED
     return 0
 }
 
@@ -2137,7 +2130,6 @@ gui_menu(){
                 "SETTINGS"  "   Change settings" \
                 "INSTALL"   "   Install $PRODUCTNAME into the menu" \
                 "UPDATE"    "   Check for updates" \
-                "VIEW TERMINAL" "   View the terminal (for debugging)" \
                 "HELP"      "   Help" \
                 "ABOUT"     "   About $PRODUCTNAME" \
                 3>&1 1>&2 2>&3)
