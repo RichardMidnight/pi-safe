@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.9"
+SCRIPTVER="0.9.10"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -95,6 +95,8 @@ do_about(){
         "and renamed it 'PiSafe'.  PiSafe is a reference to the 'ventilated cupboards for storing"\
         "pies while protecting them from insects and vermin'. "
     echo
+    echo It may work on many debian distros, but that is not been tested.
+    echo
     echo "Use at your own risk."
     echo
     echo "I hope this is helpful to others."
@@ -131,6 +133,7 @@ set_conf_defaults(){
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var hide_root_device on $CONFIG
     set_config_var hide_mmc_device on $CONFIG
+    set_config_var check_for_updates_on_startup on $CONFIG
 
 #backup settings
     set_config_var shrink_fs on $CONFIG
@@ -163,6 +166,7 @@ get_settings(){
     DEFAULT_EXTENSION=$(get_config_var default_extension $CONFIG)
     COMPRESSION=$(get_config_var compression_level $CONFIG)
     HIDE_ROOT_DEVICE=$(get_config_var hide_root_device $CONFIG)
+    CHECK_FOR_UPDATES_ON_STARTUP=$(get_config_var check_for_updates_on_startup $CONFIG)
     
     HIDE_MMC_DEVICE=$(get_config_var hide_mmc_device $CONFIG)
     
@@ -497,7 +501,9 @@ get_image_size() {
         ;;  
           
         gz)
-            SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | cut -d' ' -f 2 | sed 's/?/0/g')
+            #SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | cut -d' ' -f 2 | sed 's/?/0/g')
+            SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g')
+            # | sed -e 's/^[ \t]*//'
         ;;
         
         *)
@@ -612,10 +618,10 @@ check_for_img_file(){
             IMG=$INFILE
         ;;
         
-        zip|gz)
-            #IMG=$(zipinfo -1 "$INFILE")  
+        zip)
+            IMG=$(zipinfo -1 "$INFILE" | grep .img | cut -d " " -f 11)  
             #IMG=$(pigz -l "$INFILE" | grep .img | sed 's/\s\s*/ /g'  | cut -d' ' -f4-)
-            IMG=$(pigz -l "$INFILE" | grep .img | sed 's/\s\s*/ /g'  | cut -d' ' -f4-)
+            #IMG=$(pigz -l "$INFILE" | grep .img | sed 's/\s\s*/ /g'  | cut -d' ' -f4-)
         ;;
         
         xz)
@@ -623,9 +629,9 @@ check_for_img_file(){
             IMG=$(echo "$IMG" | sed 's/.xz/.img/g')
          ;;   
          
-         #gz)
-         #   IMG=$(pigz -l "$INFILE" | grep .img | sed 's/\s\s*/ /g'  | cut -d' ' -f4-)
-         #;;
+         gz)
+            IMG=$(pigz -l "$INFILE" | grep % | sed 's/\s\s*/ /g' | cut -d " " -f4-)
+         ;;
          
          *)
             IMG=
@@ -633,7 +639,8 @@ check_for_img_file(){
     esac
     
     
-    if [ ! -z $(get_file_ext "$IMG") ] && [ $(get_file_ext "$IMG") = "img" ]; then
+    # if [ ! -z $(get_file_ext "$IMG") ] && [ $(get_file_ext "$IMG") = "img" ]; then
+    if [ ! -z "$IMG" ] ; then
         echo "$IMG" [OK]
         return 0
     else
@@ -673,7 +680,7 @@ do_list_info() {
         #echo "$(cat $CONFIG | grep "device_lock")"
         #echo
         echo
-        echo "~~~ SD-CARD DEVICES ~~~  (Hide root device = $HIDE_ROOT_DEVICE) (hide mmc = $HIDE_MMC_DEVICE)"
+        echo "~~~ SD-CARD DEVICES ~~~  (hide root device = $HIDE_ROOT_DEVICE) (hide mmc = $HIDE_MMC_DEVICE)"
         echo "$(get_sd_devices)"
         echo   
         echo
@@ -809,21 +816,17 @@ do_install() {
 
 
 do_update() {
-    INTERFACE=$1
+    INTERFACE=${1:-"CLI"}
+    SUMMARY=${2:-"yes"}
     
-    echo "This ver '$SCRIPTVER'"
-    
-    # this should not be needed.  the parameter should be passed.
-    if [ -z $INTERFACE ]; then
-        INTERFACE="GUI"
-    fi
+    echo_if_cli "This ver '$SCRIPTVER'"
       
     local SERVER_VER=
     rm $SCRIPTNAME.tmp
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/$SCRIPTNAME -O $SCRIPTNAME.tmp 2> /dev/null 
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ];  then
-        echo "ERROR: Can't connect to server..."
+        echo_if_cli "ERROR: Can't connect to server..."
         return $EXIT_CODE
     fi    
 
@@ -834,8 +837,16 @@ do_update() {
     fi
 
     if [ $(get_ver_to_int $SERVER_VER) -gt $(get_ver_to_int $SCRIPTVER) ]; then
-        read -p "Ver $SCRIPTVER.  Newer Version '$SERVER_VER' available.  Update [y,N]?"  -n 1 -r RESULT
-        echo
+        
+        if [ $INTERFACE = "CLI" ]; then
+            read -p "Ver $SCRIPTVER.  Newer Version '$SERVER_VER' available.  Update [y,N]?"  -n 1 -r RESULT
+            echo
+        else
+            whiptail --backtitle "$BACKTITLE" --title "UPDATE" --yesno "Update from '$SCRIPTVER'  to '$SERVER_VER'  ?" $WT_MB_HEIGHT $WT_MB_WIDTH
+            if [$? = 0 ]; then RESULT=y; fi
+            echo $?
+        fi    
+        
         if [ $RESULT = "y" ]; then 
             sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
             sudo chmod +x /usr/local/bin/$SCRIPTNAME
@@ -843,11 +854,21 @@ do_update() {
             read -n 1
             exit 0
         fi
-    else    
-        echo "Server version is '$SERVER_VER' You are up to date.  "
-        if [ $INTERFACE = "GUI" ]; then
-            read -p "Press any key to continue..." -n 1 -r RESULT
+        
+        
+    else  
+     
+        if [ $INTERFACE = "CLI" ]; then
+            echo_if_cli "Server version is '$SERVER_VER' You are up to date.  "
+            if [ $INTERFACE = "GUI" ]; then
+                read -p "Press any key to continue..." -n 1 -r RESULT
+            fi
+        else
+            if [ $SUMMARY = "yes" ]; then
+                whiptail --backtitle "$BACKTITLE" --title "UPDATE" --msgbox "$PRODUCTNAME is up to date.  Server ver '$SERVER_VER' " $WT_MB_HEIGHT $WT_MB_WIDTH
+            fi
         fi
+        
     fi
 }
 
@@ -855,7 +876,7 @@ do_update() {
 do_backup(){
     local INDEV=$1
     OUTFILE=$2
-    local SAFETY=${3:-on}   # this lets us bypass some of the safety prompts
+    local SAFETY=${3:-on}   # off lets us bypass some of the safety prompts
     local INTERFACE${4:-CLI}  #CLI or GUI
     
     #echo 1 - sudo dd bs=4M if=/dev/$INDEV of=$OUTFILE.img status=progress conv=fsync 
@@ -1025,13 +1046,14 @@ do_backup(){
     
     echo
     echo_white "Step 3 of 3 - Compressing '$OUTFILE_BASE.img' to '$OUTFILE' ... "
-    echo Compression set to level $COMPRESSION of 9
     date
+    echo Compression set to level $COMPRESSION of 9
+
     
    
     case $(get_file_ext "$OUTFILE") in
         img)
-            echo not compressing .img file ...
+            echo Not compressing .img file ...
         ;;
         
         zip)
@@ -1041,10 +1063,10 @@ do_backup(){
             echo -n "                      $(get_file_path $OUTFILE)/$(get_file_base $OUTFILE).img"
             echo ".........20........40........60........80........100%"
             #sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
-            sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE_BASE".img.zip "$OUTFILE_BASE".img
-            OUTFILE="$OUTFILE_BASE".img.zip
+            sudo zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE_BASE".zip "$OUTFILE_BASE".img
             EXIT_CODE=$?
-
+            #OUTFILE="$OUTFILE_BASE".img.zip
+            
             ##sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION -K > "$OUTFILE"
             ##EXIT_CODE=$? 
             ##sleep 1
@@ -1056,19 +1078,21 @@ do_backup(){
         xz)
             sudo xz -z -v -T0 -$COMPRESSION "$OUTFILE_BASE".img
             EXIT_CODE=$?     
-            OUTFILE="$OUTFILE_BASE".img.xz
-            #sudo mv "$OUTFILE_BASE".img.xz "$OUTFILE"  
+            #OUTFILE="$OUTFILE_BASE".img.xz
+            sudo mv "$OUTFILE_BASE".img.xz "$OUTFILE"  
         ;;
         
         gz)
-            echo Sorry, gz has no progress bar.  Please wait...
-            sudo pigz -v -$COMPRESSION "$OUTFILE_BASE".img
-            EXIT_CODE=$?        
-            OUTFILE="$OUTFILE_BASE".img.gz
+            #echo $(get_file_size "$OUTFILE_BASE".img -h) to compress.  Sorry, gz has no progress bar.   Please wait...
+            #sudo pigz -v -$COMPRESSION "$OUTFILE_BASE".img
+            #EXIT_CODE=$?        
             #sudo mv "$OUTFILE_BASE".img.gz "$OUTFILE"
+               #OUTFILE="$OUTFILE_BASE".img.gz
             
-            #sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE_BASE".img.gz
-            #EXIT_CODE=$? 
+            echo $(get_file_size "$OUTFILE_BASE".img -h) to compress. 
+            pv "$OUTFILE_BASE".img | pigz -$COMPRESSION > "$OUTFILE_BASE".gz
+            EXIT_CODE=$? 
+            rm -f "$OUTFILE_BASE".img
             #OUTFILE="$OUTFILE_BASE".img.gz
         ;;
         
@@ -1376,7 +1400,7 @@ case $1 in
     ;;
         
     update)
-        do_update
+        do_update CLI
     ;;
     
     help|-h)
@@ -1612,7 +1636,7 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 
 
 gui_set_compression(){
-    CHOICE=$(whiptail --title "SETTINGS" --radiolist \
+    CHOICE=$(whiptail --title "SETTINGS-COMPRESSION" --radiolist \
             "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
             "1" "Fastest time (default)" on \
             "2" "" off \
@@ -1660,11 +1684,11 @@ gui_set_default_path(){
 
 
 gui_set_default_extention(){
-     CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --radiolist \
-            "Choose default extension (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+     CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS-EXTENSION" --radiolist \
+            "Choose default extension (compression format)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
             "zip" "Default" on \
             "xz" "~25% smaller, 3x-4x more time" off \
-            "gz" "~25% faster, but no progress bar" off  \
+            "gz" "~25% faster, same size as zip" off  \
             "img" "Twice the size, half the time (No compression)" off 3>&1 1>&2 2>&3 )
     
     echo $CHOICE
@@ -1676,12 +1700,13 @@ gui_set_default_extention(){
 
 
 gui_settings_switches(){
-    while true; do
-    ON=$(whiptail --title "SETTINGS SWITCHES" --checklist "Enable settings" 20 78 8 \
-"shrink_fs" "Shrink filesystem" "$SHRINK_FS" \
-"auto_expand_fs" "Auto unshrink filesystem" "$AUTO_EXPAND_FS" \
+   # while true; do
+    ON=$(whiptail --title "SETTINGS-SWITCHES" --checklist "Enable settings" 20 78 10 \
+"shrink_fs" "Shrink filesystem on backup" "$SHRINK_FS" \
+"auto_expand_fs" "Create backup that Auto-unshrinks" "$AUTO_EXPAND_FS" \
 "hide_root_device" "Hide root device (CAUTION)" "$HIDE_ROOT_DEVICE" \
 "hide_mmc_device" "Hide internal sd card (CAUTION)" "$HIDE_MMC_DEVICE" \
+"check_for_updates_on_startup" "" "$CHECK_FOR_UPDATES_ON_STARTUP" \
 "sound" " " "$SOUND" \
 "log"   "log activity" "$LOG" \
 "debug_mode" " " "$DEBUG_MODE" \
@@ -1702,6 +1727,7 @@ gui_settings_switches(){
     set_config_var sound off $CONFIG
     set_config_var log off $CONFIG
     set_config_var debug_mode off $CONFIG
+    set_config_var check_for_updates_on_startup off $CONFIG
     
     for SELECTED in $ON; do
         #echo "set_config_var $SELECTED on $CONFIG"
@@ -1709,7 +1735,7 @@ gui_settings_switches(){
     done
     get_settings
     
-    done
+   # done
     }
 
 
@@ -1720,11 +1746,10 @@ gui_settings(){
         "Default extension   " "$DEFAULT_EXTENSION" \
         "Compression         " "$COMPRESSION of 9" \
         "Text editor"        "$TEXT_EDITOR" \
-        "Switches"          "All the on / off settings " \
+        "Switches"          "on / off settings " \
         "                    " "      " \
         "Edit config         " "Edit the settings file manually (pisafe.conf)" \
         "Factory defaults    " "Reset settings to factory defaults" \
-         "View terminal"    "View the terminal (for debugging)" \
         3>&1 1>&2 2>&3)
         
         EXIT_CODE=$?
@@ -1812,13 +1837,14 @@ gui_get_indev(){
 gui_get_outfile(){
     # for backup
     
-    OUTFILEDEFAULT="$DEFAULT_PATH/$(date +%Y-%m-%d-newimage.$DEFAULT_EXTENSION)"
+    OUTFILEDEFAULT="$DEFAULT_PATH/$(date +%Y-%m-%d-newimage)"
            
-    while [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] || [ -f "$(get_file_base $OUTFILE).img" ] || [ -z "$(get_file_ext_ok $OUTFILE)" ] || [ ! -d  "$(get_file_path $OUTFILE)" ]  ; do  
+    while [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] || [ -f "$(get_file_base $OUTFILE).img" ] || [ -f "$(get_file_base $OUTFILE).$DEFAULT_EXTENSION" ]  || [ -z "$(get_file_ext_ok $OUTFILE)" ] || [ ! -d  "$(get_file_path $OUTFILE)" ]  ; do  
         
         # Add Zip if no extension
         if [ ! -z "$OUTFILE" ] && [ -z "$(get_file_ext $OUTFILE)" ] ; then 
              OUTFILE=$OUTFILE.$DEFAULT_EXTENSION
+             echo $(get_file_base $OUTFILE)
         fi
         
         # Message if OUTFILE exists
@@ -1830,6 +1856,12 @@ gui_get_outfile(){
         if [ -f "$(get_file_base $OUTFILE).img" ] ; then
             whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "File '$(get_file_base $OUTFILE).img' exists" $WT_MB_HEIGHT $WT_MB_WIDTH 
         fi
+        
+        # Message if OUTFILE_BASE.img.ext exists
+     #   echo checking for "$(get_file_base $OUTFILE).img.$(get_file_ext $OUTFILE)"
+     #   if [ -f "$(get_file_base $OUTFILE).img.$(get_file_ext $OUTFILE)" ] ; then
+     #       whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "File '$(get_file_base $OUTFILE).img.$(get_file_ext $OUTFILE)' exists" $WT_MB_HEIGHT $WT_MB_WIDTH 
+     #   fi
         
         # Message if unsupported ext
         if [ -z "$(get_file_ext_ok $OUTFILE)" ] ; then
@@ -1845,8 +1877,8 @@ gui_get_outfile(){
         #get filename
         MSG="Enter the filename (eg: 2020-12-15-buster32) 
         \nSupported extensions are: .img .zip .xz .gz 
-        \nIf you don't include an extension '.img.$DEFAULT_EXTENSION' will be added 
-        \n.zip is the baseline \n.img is ~2x faster but twice the size (NOT compressed) \n.xz is ~25% smaller but takes 3x-4x longer \n.gz is ~25% faster but has no progress bar
+        \nIf you don't include an extension '.$DEFAULT_EXTENSION' will be added 
+        \n.zip is the baseline \n.img is ~2x faster but twice the size (NOT compressed) \n.xz is ~25% smaller but takes 3x-4x longer \n.gz is ~25% faster and same size as zip
         \nRecomended to have NO SPACES in the name "
         NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP : Enter Filename" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
         EXIT_CODE=$?
@@ -1879,6 +1911,7 @@ gui_get_infile(){
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "No image file found in '$INFILE'"  $WT_MB_HEIGHT $WT_MB_WIDTH
+        return 1
     fi 
 }
 
@@ -1963,8 +1996,7 @@ gui_do_backup(){
         \nto '$OUTFILE'.
         \n\nA good 8GB card with RaspiOS on a Pi4 takes about 10 minutes.
         \nThis will switch to the terminal screen to watch the progress ...
-        \nLast chance before creating image-file.
-        \n\nAre you sure you want to continue?"   $WT_HEIGHT $WT_WIDTH
+        \n\nCreate backup file now?"   $WT_HEIGHT $WT_WIDTH
     EXIT_CODE=$?       
     if [ $EXIT_CODE != 0 ] ; then
         return $EXIT_CODE
@@ -2092,13 +2124,13 @@ gui_select_sddevice(){
 }
 
 
-gui_tools_retired(){
+gui_tools(){
     local SELECTION
     while true; do
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "TOOLS" --menu " Choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
         "INSTALL"           "Install $PRODUCTNAME into the menu" \
         "UPDATE"            "Check for updates" \
-        "VIEW TERMINAL   "  "View terminal screen for debugging" \
+        "VIEW TERMINAL"     "View the terminal (for debugging)" \
         "HELP"              "Help" \
         "ABOUT"             "ABOUT $PRODUCTNAME" \
         3>&1 1>&2 2>&3)
@@ -2108,7 +2140,7 @@ gui_tools_retired(){
             return $EXIT_CODE
         else
             case "$SELECTION" in
-            INSTALL)    gui_do_install  ;;
+            INSTALL)   gui_do_install  ;;
             UPDATE)    gui_update  ;;
 
             VIEW*)      read -n 1 -p "Press any key to return"  ;;
@@ -2146,10 +2178,8 @@ gui_menu(){
                 "LIST"      "   List info" \
                                 "  "        "   " \
                 "SETTINGS"  "   Change settings" \
+                "TOOLS"     "   "\
                 "INSTALL"   "   Install $PRODUCTNAME into the menu" \
-                "UPDATE"    "   Check for updates" \
-                "HELP"      "   Help" \
-                "ABOUT"     "   About $PRODUCTNAME" \
                 3>&1 1>&2 2>&3)
                 
         #echo $MENU_CHOICE
@@ -2188,7 +2218,7 @@ gui_menu(){
             
             "  "*)                          ;;
             
-            *)              return          ;;
+            * )             return          ;;
         esac
     done
 }
@@ -2203,11 +2233,18 @@ gui_splash_screen(){
     
     if [ $(get_ver_to_int $SETTINGS_SCRIPT_VER) -lt $(get_ver_to_int $SCRIPTVER) ]; then
     
-        whiptail --backtitle "$BACKTITLE" --title "WELCOME" \
-        --msgbox "Welcome to $PRODUCTNAME
-        \nIf you have previously installed $PRODUCTNAME it is recomended that you load the factory defaults.
-        \nWhile best attempts have been made to make this reliable... use at your own risk. " \
+        whiptail --backtitle "$BACKTITLE" --title "WELCOME" --yes-button "Load Factory Defaults"\
+        --yesno "Welcome to $PRODUCTNAME
+        \nMany changes have been made to $PRODUCTNAME and to the settings file.
+        \nIt is recomended that you load the factory defaults now.
+        \nWhile best attempts have been made to make $PRODUCTNAME reliable... use at your own risk. " \
         $WT_MB_HEIGHT $WT_MB_WIDTH
+    
+    
+    if [ $? = 0 ] ; then
+        do_factory_reset 
+    fi 
+    
     
     fi
 }
@@ -2221,7 +2258,6 @@ if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
 fi
 
 
-
 #get_file_device junk.img
 #exit
 
@@ -2230,6 +2266,10 @@ get_tools
 do_init_conf
 get_settings
 whiptail_calc_wt_size
+
+if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
+    do_update GUI no
+fi
 
 
 cli_menu $1 $2 $3
