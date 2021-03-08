@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.12"
+SCRIPTVER="0.9.14"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -259,6 +259,14 @@ echo_if_cli (){
             *) echo $MSG ;;
         esac
     fi
+}
+
+
+echo_or_msgbox(){
+    TITLE=$1
+    MSG=$2
+    
+    echo $1 $2
 }
 
 
@@ -829,6 +837,7 @@ do_install() {
     else
         MSG="$PRODUCTNAME not installed.  '/usr/local/bin/$SCRIPTNAME' not found. "
         echo_or_msgbox "ERROR" "$MSG"
+        return 1
     fi
 }
 
@@ -905,7 +914,7 @@ do_backup(){
     echo "IN-DEV='$INDEV'"
     echo "OUT-FILE='$OUTFILE'"
     echo  "Compression set to level $COMPRESSION of 9"
-    do_write_log "Starting $PRODUCTNAME $SCRIPTVER Backup, '$INDEV' $(get_sd_size $INDEV -h), '$OUTFILE', Compression=$COMPRESSION"
+    do_write_log "Starting $PRODUCTNAME $SCRIPTVER Backup, '$INDEV' '$(get_sd_name $INDEV)', '$OUTFILE', Compression=$COMPRESSION"
         
     
     # check INDEV
@@ -932,7 +941,7 @@ do_backup(){
     # warning if INDEV is root device
     if [ $INDEV = /dev/$(get_root_device) ]; then
         echo
-        echo_red "WARNING: SD-card is root device '/dev/$(get_root_device)'."
+        echo_red "WARNING: SD-card '$(get_sd_name $INDEV)' is root device '/dev/$(get_root_device)'."
         #return 1
     fi
     
@@ -1172,7 +1181,7 @@ do_restore(){
     echo "IN-FILE='$INFILE'"
     echo "OUT-DEV='$OUTDEV'"
     echo "Safety='$SAFETY'"
-    do_write_log "Starting $PRODUCTNAME $SCRIPTVER Restore, '$INFILE', '$OUTDEV'"
+    do_write_log "Starting $PRODUCTNAME $SCRIPTVER Restore, '$INFILE', '$OUTDEV' '$(get_sd_name $OUTDEV)'"
  
     
     
@@ -1495,6 +1504,12 @@ whiptail_calc_wt_size() {
   # use for pasting
   # $WT_HEIGHT  $WT_WIDTH
   # $WT_MB_HEIGHT  $WT_MB_WIDTH
+  
+  
+ # echo $WT_HEIGHT
+ # echo $WT_HEIGHT_TALL
+  
+  
 }
 
 
@@ -1634,6 +1649,7 @@ whiptail_countdown(){
 		#sleep .75
         read -t 1 -N 1 INPUT
         if [ ! -z $INPUT ]; then
+            echo $INPUT
             return 2
         fi 
         MSG=$(echo "$MSG.$i")
@@ -1641,13 +1657,18 @@ whiptail_countdown(){
 }
 
 
-gui_update(){
+gui_do_update(){
     do_update "gui"
 }
 
 
 gui_do_install(){
     do_install
+    EXIT_CODE=$?
+    if [ $EXIT_CODE != 0 ]; then
+        return $EXIT_CODE
+    fi
+    
     
     # create the desktop file    
 
@@ -1743,14 +1764,15 @@ gui_set_default_extention(){
 
 
 gui_settings_options(){
+    #echo "starting gui_settings_options"
    # while true; do
     ON=$(whiptail --title "SETTINGS-OPTIONS" --checklist "Enable options" $WT_HEIGHT  $WT_WIDTH  $WT_MENU_HEIGHT \
 "shrink_fs" "Shrink filesystem on backup" "$SHRINK_FS" \
-"auto_expand_fs" "Create backup that Auto-unshrinks" "$AUTO_EXPAND_FS" \
+"auto_expand_fs" "Create shrunk backup that auto-expands" "$AUTO_EXPAND_FS" \
 "hide_root_device" "Hide root device (CAUTION)" "$HIDE_ROOT_DEVICE" \
 "hide_mmc_device" "Hide internal sd card (CAUTION)" "$HIDE_MMC_DEVICE" \
 "check_for_updates_on_startup" "" "$CHECK_FOR_UPDATES_ON_STARTUP" \
-"sound" " " "$SOUND" \
+"sound" "enable sounds" "$SOUND" \
 "log"   "log activity" "$LOG" \
 "debug_mode" " " "$DEBUG_MODE" \
  3>&1 1>&2 2>&3) 
@@ -1789,7 +1811,7 @@ gui_settings(){
         "Default extension   " "$DEFAULT_EXTENSION" \
         "Compression         " "$COMPRESSION of 9" \
         "Text editor"        "$TEXT_EDITOR" \
-        "Options"          "Several options to turn on/off " \
+        "Options             " "Several options to turn on/off " \
         "                    " "      " \
         "Edit config         " "Edit the settings file manually (pisafe.conf)" \
         "Factory defaults    " "Reset settings to factory defaults" \
@@ -1801,17 +1823,11 @@ gui_settings(){
         else
             case "$SELECTION" in
             "Default d"*)   gui_set_default_path ;;
-          #  "Shrink"*)      gui_set_shrink_fs ;;
-          #  "Auto "*)       gui_set_auto_expand_fs ;;
             "Default e"*)   gui_set_default_extention ;;
             "Compression"*) gui_set_compression ;;
-          #  Hide*)          gui_set_hide_root_device ;;
-          #  Sound*)         gui_set_sound ;;
-          #  Debug*)         gui_set_debug_mode ;;
-            Options*)      gui_settings_options ;;
-            View*)          read -n 1 -p "Press any key to return"   ;;
-            Update*)        gui_update  ;;
             Text*)          ;;
+            Options*)      gui_settings_options ;;
+
             "    "*)        ;;
             Edit*)          $TEXT_EDITOR $CONFIG; get_settings ;;
             Factory*) 
@@ -1840,7 +1856,7 @@ gui_get_indev(){
     
     # Warning if INDEV is root device
     if [ $INDEV = /dev/$(get_root_device) ]; then
-        whiptail --backtitle "$BACKTITLE" --title "WARNING" --msgbox "SD-card is your root device." $WT_MB_HEIGHT $WT_MB_WIDTH  
+        whiptail --backtitle "$BACKTITLE" --title "WARNING" --msgbox "'$(get_sd_name $INDEV)' is your root device." $WT_MB_HEIGHT $WT_MB_WIDTH  
     fi
     
     # Warning if SD-card is bigger than 16GB
@@ -1952,7 +1968,11 @@ gui_get_outfile(){
         fi
         
         # check and fix outfile name.....
-        OUTFILE=$(get_file_path_base "$OUTFILE").img.$(get_file_ext "$OUTFILE")
+        if [ $(get_file_ext "$OUTFILE") = "img" ] ; then
+            OUTFILE=$(get_file_path_base "$OUTFILE").$(get_file_ext "$OUTFILE")
+        else
+            OUTFILE=$(get_file_path_base "$OUTFILE").img.$(get_file_ext "$OUTFILE")
+        fi    
         #echo "OUTFILE='$OUTFILE'"
 }
 
@@ -2104,7 +2124,7 @@ gui_do_restore() {
 
     # Confirm to continue
     #do_beep_if_sound
-    if (whiptail  --backtitle "$BACKTITLE" --title "RESTORE" --defaultno \
+    if (whiptail  --backtitle "$BACKTITLE" --title "RESTORE WARNING" --defaultno \
         --yesno "Restore '$INFILE' 
         \nto '$(get_sd_name $OUTDEV)' on '$OUTDEV' 
         \n\nALL existing data on '$(get_sd_name $OUTDEV)' - WILL BE ERASED!  
@@ -2169,7 +2189,7 @@ gui_select_sddevice(){
 
     IFS=$FIELD_SEPERATOR
     DEVICE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE"\
-     --menu "Choose an SD card (Hide root device = $HIDE_ROOT_DEVICE)" $WT_MB_HEIGHT $WT_MB_WIDTH 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
+     --menu "Choose an SD card (Hide root = $HIDE_ROOT_DEVICE) (Hide mmc = $HIDE_MMC_DEVICE)" $WT_MB_HEIGHT $WT_MB_WIDTH 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
     EXIT_CODE=$?
     unset IFS   
      
@@ -2189,7 +2209,10 @@ gui_tools(){
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "TOOLS" --menu " Choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
         "INSTALL"           "Install $PRODUCTNAME into the menu" \
         "UPDATE"            "Check for updates" \
-        "VIEW TERMINAL"     "View the terminal (for debugging)" \
+        "  "               "  " \
+        "TERMINAL"          "View the terminal (for debugging)" \
+        "LOG"               "View the log file" \
+        "  "               "  " \
         "HELP"              "Help" \
         "ABOUT"             "ABOUT $PRODUCTNAME" \
         3>&1 1>&2 2>&3)
@@ -2200,20 +2223,22 @@ gui_tools(){
         else
             case "$SELECTION" in
             INSTALL)   gui_do_install  ;;
-            UPDATE)    gui_update  ;;
+            UPDATE)    gui_do_update  ;;
 
-            VIEW*)      read -n 1 -p "Press any key to return"  ;;
+            TERMINAL)      read -n 1 -p "Press any key to return"  ;;
+            LOG)           $TEXT_EDITOR $LOG_FILE ;;
             HELP)
                 INFO=$(do_help)
                 result="$INFO"
-                whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$result" $WT_HEIGHT  $WT_WIDTH
+                whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
                 ;;
             ABOUT)
                 INFO=$(do_about)
                 result="$INFO"
-                whiptail --backtitle "$BACKTITLE"  --title "ABOUT" --scrolltext --msgbox "$result" $WT_HEIGHT  $WT_WIDTH
-                ;;   
-            *)           whiptail --msgbox "Programmer error: unrecognized option" $WT_HEIGHT  $WT_WIDTH  $WT_MENU_HEIGHT ;;
+                whiptail --backtitle "$BACKTITLE"  --title "ABOUT" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
+                ;;  
+            "  ")  ;;     
+            *)     whiptail --msgbox "Programmer error: unrecognized option" $WT_HEIGHT  $WT_WIDTH  $WT_MENU_HEIGHT ;;
             esac 
         fi
     done
@@ -2235,9 +2260,10 @@ gui_menu(){
                 "BACKUP"    "   Backup an SD-card to an image-file" \
                 "RESTORE"   "   Restore an SD-card from an image-file" \
                 "LIST"      "   List info" \
-                                "  "        "   " \
+                "  "        "   " \
                 "SETTINGS"  "   Change settings" \
                 "TOOLS"     "   Various tools"\
+                 "  "        "   " \
                 "INSTALL"   "   Install $PRODUCTNAME into the menu" \
                 3>&1 1>&2 2>&3)
                 
@@ -2255,26 +2281,10 @@ gui_menu(){
             
             SETTINGS)       gui_settings    ;;
             
-            INSTALL)        gui_do_install     ;;
-            
-            UPDATE)         do_update       ;;
-            
-            VIEW*)          read -n 1 -p "Press any key to return to $PRODUCTNAME"   ;;
-            
-            HELP)
-                INFO=$(do_help)
-                result="$INFO"
-                whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
-                ;;
-            
-            ABOUT)
-                INFO=$(do_about)
-                result="$INFO"
-                whiptail --backtitle "$BACKTITLE"  --title "ABOUT" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
-                ;;   
-            
             TOOLS)          gui_tools       ;;
             
+            INSTALL)        gui_do_install     ;;
+                
             "  "*)                          ;;
             
             * )             return          ;;
