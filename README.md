@@ -11,6 +11,8 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
  - Creates a compressed image-file that will resize to fill the new card it is restored to (thanks to PiShrink!).
  
  - Supports .img .zip .xz and .gz file formats.
+
+ - Files are compatible with RPI Imager that comes with the pi.
  
  - Supports all USB storage (I think).
  
@@ -18,8 +20,6 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
  
  - Seems to support backing up the live boot SD-card.  You have to enable "allow root backup".  
     CAUTION: Reboot first, close everything and don't use the system while it is backing up!  Send your backup image to a different drive!
-    
- - Files are compatible with RPI Imager that comes with the pi.
 
  - Create a library of your own pi images, then restore them to whatever device you want, whenever you want.  
  
