@@ -19,11 +19,11 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
  - Seems to support backing up the live boot SD-card.  You have to enable "allow root backup".  
     CAUTION: Reboot first, close everything and don't use the system while it is backing up!  Send your backup image to a different drive!
     
- - Compatible with RPI Imager that comes with the pi.
+ - Files are compatible with RPI Imager that comes with the pi.
 
  - Create a library of your own pi images, then restore them to whatever device you want, whenever you want.  
  
- - This adds a graphical front-end to my 'sd' project which is a command-line version.
+ - This adds a menu front-end to my 'sd' project which is a command-line version.
  
  - See Leepspvideo review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0
  
@@ -50,12 +50,10 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
    
    3) Startup Pi-Safe from the menu.  Or in a terminal, type in 'pisafe'
         
-   5) Use the menu to select BACKUP, select your SD-card and the image-file a name.
+   4) Use the menu to select BACKUP, select your SD-card and the image-file a name.
    
-   6) Watch your image-file get created, shrunk and compressed automatically.
-   
-   7) Note: At this point, I have left several safeties in place.  I may add an option to remove them in the future.  For example you have to type in "YES"
- before it will RESTORE an image file to an SD card.   
+   5) Watch your image-file get created, shrunk and compressed automatically.
+    
  .
    
 
