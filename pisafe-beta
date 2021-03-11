@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.17"
+SCRIPTVER="0.9.18"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -78,7 +78,7 @@ do_help() {
     echo $SCRIPTNAME list
     echo $SCRIPTNAME backup sda newimage
     echo $SCRIPTNAME backup /dev/sdb newimage.xz
-    echo $SCRIPTNAME restore newimage.zip sda
+    echo $SCRIPTNAME restore newimage.img.zip sda
     echo
 }
 
@@ -130,6 +130,7 @@ set_conf_defaults(){
     set_config_var settings_script_ver $SCRIPTVER $CONFIG
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var hide_root_device on $CONFIG
+    set_config_var hide_loop_device on $CONFIG
     set_config_var check_for_updates_on_startup on $CONFIG
 
 #backup settings
@@ -163,6 +164,7 @@ get_settings(){
     DEFAULT_EXTENSION=$(get_config_var default_extension $CONFIG)
     COMPRESSION=$(get_config_var compression_level $CONFIG)
     HIDE_ROOT_DEVICE=$(get_config_var hide_root_device $CONFIG)
+    HIDE_LOOP_DEVICE=$(get_config_var hide_loop_device $CONFIG)
     CHECK_FOR_UPDATES_ON_STARTUP=$(get_config_var check_for_updates_on_startup $CONFIG)
     
     DEBUG_MODE=$(get_config_var debug_mode $CONFIG)
@@ -359,7 +361,7 @@ is_number() {
 do_countdown(){  
     local MAX=${1:-10}
  
-    echo "Pausing for $MAX seconds... Ctrl-C to abort"
+    echo "Pausing for $MAX seconds... Ctrl-C to stop"
 	echo -n $MAX
     sleep 1
     for number in $(seq 1 $MAX) ; do
@@ -381,6 +383,10 @@ do_beep_if_sound(){
     if [ $SOUND = on ] ; then
         do_beep
     fi
+}
+
+get_os_id(){
+    cat /etc/os-release | grep -v VERSION| grep ID= | cut -d= -f2
 }
 
 
@@ -939,7 +945,7 @@ check_outdev(){
     
     #stop if outdev is piSave-locked
     if [ $(get_config_var device_lock_$(get_device_serial $OUTDEV) $CONFIG) = "on" ]; then
-        dialog_msg "RESTORE ABORTED " "Device '$(get_device_serial $OUTDEV)' is locked by PiSafe in the config file" "red"
+        dialog_msg "RESTORE ERROR " "Device '$(get_device_serial $OUTDEV)' is locked by PiSafe in the config file" "red"
         return 1
     fi
     
@@ -947,13 +953,13 @@ check_outdev(){
     
     # Stop if outdev is the root device
     if [ $OUTDEV = /dev/$(get_root_device) ]; then
-        dialog_msg "RESTORE ABORTED" "Restore to root device not allowed" "red"
+        dialog_msg "RESTORE ERROR" "Restore to root device not allowed" "red"
         return 1
     fi
     
     #stop if INFILE is on OUTDEV
     if [ "$(get_file_device "$INFILE")" = $OUTDEV ]; then
-        dialog_msg "RESTORE ABORTED" "Restore to same device as '$INFILE' not allowed" "red"
+        dialog_msg "RESTORE ERROR" "Restore to same device as '$INFILE' not allowed" "red"
         return 1
     fi
     
@@ -966,7 +972,7 @@ check_outdev(){
      
     # Stop if imagefile is larger than device
     if [ $(get_image_size "$INFILE") -gt $(get_sd_size $OUTDEV) ]; then
-        dialog_msg "RESTORE ABORTED" "Not enough room
+        dialog_msg "RESTORE ERROR" "Not enough room
         \nThe image in '$INFILE' is ' $(get_image_size "$INFILE" -h)' 
         \nand '$OUTDEV' is only '$(get_sd_size $OUTDEV -h)'" "red"
         return 1
@@ -996,6 +1002,7 @@ do_list_image_files(){
 do_list_info() {
         DIR=${1:-$PWD}
         echo "~~~ CURRENT SYSTEM ~~~"
+        echo $PRODUCTNAME ver $SCRIPTVER
         echo "Root device = /dev/$(get_root_device)"
         echo "Size      = $(get_sd_size /dev/$(get_root_device) -h )"
         echo "FreeSpace = $(get_freespace . -h)"
@@ -1028,17 +1035,22 @@ get_sd_devices() {
     local DEVICES= 
     #MMC_FILTER="aspodiausdfpoiasdf"
     BOOT_FILTER="aspodiausdfpoiasdf"
+    LOOP_FILTER="aspodiausdfpoiasdf"
     if [ $(get_config_var hide_root_device $CONFIG) = "on" ]; then
         #ROOT_DEVICE=$(get_root_device)   
         #BOOT_FILTER=$ROOT_DEVICE
         BOOT_FILTER=$(get_root_device)
     fi       
+    if [ $(get_config_var hide_loop_device $CONFIG) = "on" ]; then
+        MMC_FILTER="loop"
+    fi  
+    
  #  if [ $(get_config_var hide_mmc_device $CONFIG) = "on" ]; then
   #      MMC_FILTER="mmcblk"
  #   fi        
      
   #  DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER | grep -v $MMC_FILTER)  
-    DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER) 
+    DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER | grep -v $LOOP_FILTER) 
     EXIT_CODE=$?
 
     if [ $EXIT_CODE != 0 ]; then
@@ -1052,7 +1064,6 @@ get_sd_devices() {
 
 
 get_tools() {   
-    
     TOOL_MISSING=false
     TOOLS=$(echo $REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)
     
@@ -1076,6 +1087,10 @@ get_tools() {
             if [ ! $(which $TOOL) ]; then
                 echo_white Installing $TOOL ...
                 sudo apt install -y $TOOL
+                EXIT_CODE=$?
+                if [ $EXIT_CODE != 0 ]; then
+                    dialog_msg "Error" "$TOOL not installed." "red"
+                fi
             fi
         done
         
@@ -1088,13 +1103,28 @@ get_tools() {
             chmod +x pishrink.sh
             sudo mv pishrink.sh /usr/local/bin
             echo pishrink installed.
+            if [ -z $(which pishrink.sh) ] ; then
+               dialog_msg "Error" "pishrink not installed." "red" 
+            fi
         fi
 
         # Install xz if needed
         if [ -z $(which xz) ]; then
             echo_white Installing xz-utils...
             sudo apt install xz-utils -y
+            if [ -z $(which xz) ] ; then
+               dialog_msg "Error" "xz not installed." "red" 
+            fi
         fi
+        
+        
+        if [ "$(get_os_id)" = "ubuntu" ] && [ -z $(which lua) ] ; then
+            sudo apt install lua50 -y
+            if [ -z $(which lua) ] ; then
+               dialog_msg "Error" "pishrink not installed." "red" 
+            fi
+        fi
+        
     fi
 }    
 
@@ -1419,7 +1449,7 @@ do_restore(){
         
         do_beep_if_sound
         echo_red "WARNING '$OUTDEV' '$(get_sd_name $OUTDEV)' "
-        echo_red "Will be overwritten starting in 10 seconds ... Ctrl-C to abort"
+        echo_red "Will be overwritten starting in 10 seconds ... Ctrl-C to stop"
         do_countdown 10
     fi
     
@@ -1445,7 +1475,7 @@ do_restore(){
         img)
             if [ $INTERFACE = "cli" ]; then
                 #sudo dd if="$INFILE" of=$OUTDEV bs=4M conv=fsync status=progress
-                pv "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
+                pv "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync
                 EXIT_CODE=$?
             else
                 (sudo pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
@@ -1739,7 +1769,7 @@ function whiptail_fselect()
 
 whiptail_countdown(){  
     local MAX=${1:-10}
-    local TITLE=${2:-"COUNTDOWN... press any key to abort"}
+    local TITLE=${2:-"COUNTDOWN... press any key to stop"}
     MSG=${3:-"Countdown for $MAX seconds.\n\n"}
 
     for ((i=$MAX; i>=0; i--)) ; do
@@ -1864,6 +1894,7 @@ gui_settings_options(){
 "shrink_fs" "Shrink filesystem on backup" "$SHRINK_FS" \
 "auto_expand_fs" "Create shrunk backup that auto-expands" "$AUTO_EXPAND_FS" \
 "hide_root_device" "Hide root device (CAUTION)" "$HIDE_ROOT_DEVICE" \
+"hide_loop_device" "Hide loop device " "$HIDE_LOOP_DEVICE" \
 "check_for_updates_on_startup" "" "$CHECK_FOR_UPDATES_ON_STARTUP" \
 "sound" "enable sounds" "$SOUND" \
 "log"   "log activity" "$LOG" \
@@ -1881,6 +1912,7 @@ gui_settings_options(){
     set_config_var shrink_fs off $CONFIG
     set_config_var auto_expand_fs off $CONFIG
     set_config_var hide_root_device off $CONFIG
+    set_config_var hide_loop_device off $CONFIG
     set_config_var sound off $CONFIG
     set_config_var log off $CONFIG
     set_config_var debug_mode off $CONFIG
@@ -2024,7 +2056,7 @@ gui_do_backup(){
         \n\nA good 8GB card with RaspiOS on a Pi4 takes about 10 minutes with zip
         \nand about 7 minutes with gz.
         \nThis will switch to the terminal screen to watch the progress ...
-        \n\nCreate backup file now?"   $WT_HEIGHT $WT_WIDTH
+        \n\nSwitch to terminal and create backup file now?"   $WT_HEIGHT $WT_WIDTH
     EXIT_CODE=$?       
     if [ $EXIT_CODE != 0 ] ; then
         return $EXIT_CODE
@@ -2107,7 +2139,7 @@ gui_do_restore() {
     whiptail_countdown 10 "" "Overwriting '$(get_sd_name $OUTDEV)' in 10 seconds...\n\n"
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
-        whiptail --backtitle "$BACKTITLE" --title "RESTORE" --msgbox "Restore Aborted... \n\n a key was pressed. " $WT_MB_HEIGHT $WT_MB_WIDTH
+        whiptail --backtitle "$BACKTITLE" --title "RESTORE" --msgbox "Restore stopped... \n\n a key was pressed. " $WT_MB_HEIGHT $WT_MB_WIDTH
         return $EXIT_CODE
     fi    
               
