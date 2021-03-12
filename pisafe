@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.20"
+SCRIPTVER="0.9.21"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -150,10 +150,12 @@ set_conf_defaults(){
     
     if [ ! -z $(which mousepad) ]; then
         set_config_var text_editor mousepad $CONFIG
-    elif [ ! -z $(which xed) ]; then
-        set_config_var text_editor xed $CONFIG
     elif [ ! -z $(which leafpad) ]; then
         set_config_var text_editor leafpad $CONFIG
+    elif [ ! -z $(which xed) ]; then
+        set_config_var text_editor xed $CONFIG
+    elif [ ! -z $(which gedit) ]; then
+        set_config_var text_editor gedit $CONFIG
     else
         set_config_var text_editor nano $CONFIG
     fi
