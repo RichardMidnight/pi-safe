@@ -78,7 +78,8 @@ In a terminal window, type in
    
    
 # COMPATIBILITY   
-Tested extensively with Raspberry pi 4 running Raspberry Pi OS Buster.
+Tested extensively on Raspberry pi 4 running Raspberry Pi OS Buster.
+
 Also light testing on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.20 for Rpi, Linux Mint, LMDE.
  
    
