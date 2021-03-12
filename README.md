@@ -24,27 +24,35 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
  - Create a library of your own pi images, then restore them to whatever device you want, whenever you want.  
  
  - This adds a menu front-end to my 'sd' project which is a command-line version.
- 
+
+ - Note: PiSafe seems to work with many debian installations.   
+
  - See Leepspvideo review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0
  
  .
  
-# SETUP
+# EXAMPLE
  
    1) Install Raspberry PI OS on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This is your Master SD-card.
    
    2) Install Pi-Safe as described below.
    
-   3) You will need a USB-SD reader for your source SD-card.
+   3) You will need a USB-SD reader for your source SD-card (8GB).
    
    4) You will need some SD cards.  Use as small of an SD-card as you can because the entire card has to be read in before it is shrunk and compressed.  I have been using Sandisk Industrial 8GB cards.
+
+   5) Install Raspberry PI OS on a second (8GB) card.
+
+   6) Boot from the 8GB card, make changes, install other softwaare, change the desktop, whatever.
+
+   7) To make an image of that 8GB card that you can restore anytime in the future do the following...
    
 .   
 
    
 # TO MAKE AN IMAGE FILE  
    
-   1) Remove your source SD card (8GB) and Boot your Pi with your Master SD-card as above.
+   1) Boot your Pi with your Master SD-card as above.
    
    2) Put your source SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
    
@@ -67,6 +75,11 @@ In a terminal window, type in
     
     Then you can select 'install' from the menu to install it in your Raspberry Pi menu
     
+   
+# COMPATIBILITY   
+Tested extensively with Raspberry pi 4 running Raspberry Pi OS Buster.
+Also light testing on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.20 for Rpi, Linux Mint, LMDE.
+ 
    
    
  # REFERENCES
