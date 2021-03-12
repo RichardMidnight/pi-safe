@@ -18,14 +18,14 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
  
  - Supports USB boot 
  
- - Seems to support backing up the live boot SD-card.  You have to enable "allow root backup".  
-    CAUTION: Reboot first, close everything and don't use the system while it is backing up!  Send your backup image to a different drive!
+ - Seems to support backing up the live boot SD-card.  You have to turn off "hide root backup".  
+    CAUTION: Reboot first, close everything and don't use the system while it is backing up!  You must send your backup image to a different drive!
 
  - Create a library of your own pi images, then restore them to whatever device you want, whenever you want.  
  
  - This adds a menu front-end to my 'sd' project which is a command-line version.
 
- - Note: PiSafe seems to work with many debian installations.   
+ - Note: PiSafe seems to work with many debian installations, see below.   
 
  - See Leepspvideo review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0
  
@@ -75,6 +75,7 @@ In a terminal window, type in
     
     Then you can select 'install' from the menu to install it in your Raspberry Pi menu
     
+   
    
 # COMPATIBILITY   
 Tested extensively with Raspberry pi 4 running Raspberry Pi OS Buster.
