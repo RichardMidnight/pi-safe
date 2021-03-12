@@ -1119,7 +1119,7 @@ get_tools() {
         
         
         if [ "$(get_os_id)" = "ubuntu" ] && [ -z $(which lua) ] ; then
-            sudo apt install lua50 -y
+            sudo apt install lua5.4 -y
             if [ -z $(which lua) ] ; then
                dialog_msg "Error" "pishrink not installed." "red" 
             fi
