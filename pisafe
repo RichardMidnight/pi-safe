@@ -10,7 +10,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 #echo empty the /root/.local/share/Trash folders to free up room
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.18"
+SCRIPTVER="0.9.20"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 CURRENT_DIR=$(pwd)
@@ -103,8 +103,6 @@ do_about(){
     echo
 }
 
-#  Settings #########################################
-
 
 do_factory_reset(){
     set_conf_defaults
@@ -150,10 +148,14 @@ set_conf_defaults(){
     set_config_var sound on $CONFIG
     set_config_var log on $CONFIG
     
-    if [ -z $(which mousepad) ]; then
-        set_config_var text_editor nano $CONFIG
-    else
+    if [ ! -z $(which mousepad) ]; then
         set_config_var text_editor mousepad $CONFIG
+    elif [ ! -z $(which xed) ]; then
+        set_config_var text_editor xed $CONFIG
+    elif [ ! -z $(which leafpad) ]; then
+        set_config_var text_editor leafpad $CONFIG
+    else
+        set_config_var text_editor nano $CONFIG
     fi
 }
 
@@ -385,8 +387,14 @@ do_beep_if_sound(){
     fi
 }
 
+
 get_os_id(){
     cat /etc/os-release | grep -v VERSION| grep ID= | cut -d= -f2
+}
+
+
+get_os_pretty_name(){
+    cat /etc/os-release | grep PRETTY
 }
 
 
@@ -563,8 +571,6 @@ get_device_serial(){
     SN=$(lsblk -n -d --output vendor,model,serial "$DEVICE" | sed 's/ /_/g' )
     echo $SN
 }
-
-
 
 
 get_root_device() {
@@ -819,7 +825,7 @@ check_outfile(){
     
     #Quit if outfile is blank
     if [ -z "$OUTFILE" ] ; then
-        dialog_msg "ERROR 1" "OUT-FILE '$OUTFILE' can't be blank" "red"
+        dialog_msg "ERROR 1" "File '$OUTFILE' can't be blank" "red"
         return 1
     fi  
     
@@ -854,19 +860,19 @@ check_outfile(){
 
     # Quit if outfile exists
     if  [ -f "$OUTFILE" ]  ; then
-        dialog_msg "ERROR 4" "OUT-FILE '$OUTFILE' already exists" "red"
+        dialog_msg "ERROR 4" "File '$OUTFILE' already exists" "red"
         return 4
     fi 
 
     # Quit if OUTFILE_BASE.img exists
     if  [ -f "$(get_file_path_base $OUTFILE)".img ]  ; then
-        dialog_msg "ERROR 5" "OUT-FILE '$(get_file_path_base $OUTFILE).img' already exists" "red"
+        dialog_msg "ERROR 5" "File '$(get_file_path_base $OUTFILE).img' already exists" "red"
         return 5
     fi 
     
     # Quit if OUTFILE_BASE.img.ext exists
     if  [ -f "$(get_file_path_base $OUTFILE)".img.$(get_file_ext "$OUTFILE") ]  ; then
-        dialog_msg "ERROR 6" "OUT-FILE '$(get_file_path_base $OUTFILE).img.$(get_file_ext "$OUTFILE")' already exists" "red"
+        dialog_msg "ERROR 6" "File '$(get_file_path_base $OUTFILE).img.$(get_file_ext "$OUTFILE")' already exists" "red"
         return 6
     fi 
     
@@ -885,13 +891,13 @@ check_outfile(){
 check_infile(){
     # quit if infile is blank
     if [ -z "$INFILE" ] ; then
-        dialog_msg "ERROR 1" "IN-FILE '$INFILE' cannot be blank" "red"
+        dialog_msg "ERROR 1" "File '$INFILE' cannot be blank" "red"
         return 1
     fi 
     
     # quit if infile not found
     if  [ ! -f "$INFILE" ]  ; then
-        dialog_msg "ERROR 2" "IN-FILE '$INFILE' not found" "red"
+        dialog_msg "ERROR 2" "File '$INFILE' not found" "red"
         return 2
     fi 
     
@@ -911,7 +917,7 @@ check_outdev(){
     if [ -z $OUTDEV ]; then
         #echo
         #echo_red "ERROR: OUT-DEV '$OUTDEV' cannot be blank"
-        dialog_msg "ERROR 1" "OUT-DEV '$OUTDEV' cannot be blank" "red"
+        dialog_msg "ERROR 1" "Device '$OUTDEV' cannot be blank" "red"
         return 1
     fi
     
@@ -926,7 +932,7 @@ check_outdev(){
     if  [ ! -e $OUTDEV ]  ; then
         #echo
         #echo_red "ERROR: OUT-DEV '$OUTDEV' not found"
-        dialog_msg "ERROR 2" "OUT-DEV '$OUTDEV' not found" "red"
+        dialog_msg "ERROR 2" "Device '$OUTDEV' not found" "red"
         return 2
     fi 
            
@@ -1033,23 +1039,15 @@ do_list_info() {
 
 get_sd_devices() {
     local DEVICES= 
-    #MMC_FILTER="aspodiausdfpoiasdf"
     BOOT_FILTER="aspodiausdfpoiasdf"
     LOOP_FILTER="aspodiausdfpoiasdf"
     if [ $(get_config_var hide_root_device $CONFIG) = "on" ]; then
-        #ROOT_DEVICE=$(get_root_device)   
-        #BOOT_FILTER=$ROOT_DEVICE
         BOOT_FILTER=$(get_root_device)
     fi       
     if [ $(get_config_var hide_loop_device $CONFIG) = "on" ]; then
         LOOP_FILTER="loop"
     fi  
-    
- #  if [ $(get_config_var hide_mmc_device $CONFIG) = "on" ]; then
-  #      MMC_FILTER="mmcblk"
- #   fi        
-     
-  #  DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER | grep -v $MMC_FILTER)  
+       
     DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER | grep -v $LOOP_FILTER) 
     EXIT_CODE=$?
 
@@ -1074,7 +1072,7 @@ get_tools() {
     done
     
     if [ $TOOL_MISSING = "true" ]; then
-        echo "Install required tools y/n ... $REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL"
+        echo "Install required tools ($REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL) [y/n]?"
         read -n 1 -r RESULT
         echo
         if [ $RESULT != "y" ]; then
@@ -1117,9 +1115,10 @@ get_tools() {
             fi
         fi
         
-        
-        if [ "$(get_os_id)" = "ubuntu" ] && [ -z $(which lua) ] ; then
-            sudo apt install lua5.4 -y
+        # fix lua on ubuntu and mint
+        #  if [ "$(get_os_id)" = "ubuntu" ] && [ -z $(which lua) ] ; then
+        if [ -z $(which lua) ] ; then
+            sudo apt install lua5.1 -y
             if [ -z $(which lua) ] ; then
                dialog_msg "Error" "pishrink not installed." "red" 
             fi
@@ -1497,14 +1496,6 @@ do_restore(){
                 --gauge "\nWriting '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                  EXIT_CODE=$?
             fi
-            
-            #if [ $INTERFACE = "gui" ] && [ $DEBUG_MODE != "on" ]; then
-            #    (sudo pv -n "$INFILE" | sudo pigz -d -k -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "Writing..." --gauge "Writing '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." 10 70 0
-            #    EXIT_CODE=$?
-            #else
-            #    sudo pv "$INFILE" | pigz -k -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync 
-            #    EXIT_CODE=$?
-            #fi
         ;;
         
         xz)
@@ -1524,9 +1515,6 @@ do_restore(){
                 #pigz -v -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                 pv "$INFILE" | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync
                 EXIT_CODE=$?
-            ##pigz -v -k -c -d "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
-            #sudo pv "$OUTFILE_BASE".img | sudo pigz -$COMPRESSION > "$OUTFILE"
-            #sudo pv "$INFILE" | pigz -k -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync 
             else
                 (pv -n "$INFILE" | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync) 2>&1 | whiptail --backtitle "$BACKTITLE" --title "RESTORE" \
                 --gauge "\nWriting '$INFILE' \n\nto '$(get_sd_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
@@ -1608,7 +1596,6 @@ esac
 
 
 
-
 ########################################
 ###  WHIPTAIL GUI SECTION ##############
 ########################################
@@ -1679,7 +1666,6 @@ function whiptail_fselect()
 #fi
 # ----------------------------------------------------------------------
 {
-    # note: does not handle spaces in file names!!!
     local TITLE=${1:-$MSG_INFO_TITLE}
     local LOCAL_PATH=${2:-$(pwd)}
     local FILE_MASK=${3:-"*"}
@@ -1698,7 +1684,8 @@ function whiptail_fselect()
     do
         FILES+=($DIR  "     folder")
     done              
-                                    
+                
+    # Then add files                                
     for FILE in $(find $LOCAL_PATH -maxdepth 1 \
                                      \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" \) \
                                     -type f \
@@ -1728,7 +1715,6 @@ function whiptail_fselect()
     done
  
  
-
     # let user select file
     while true
     do
@@ -1885,7 +1871,6 @@ gui_set_default_extention(){
 }
 
 
-
 gui_settings_options(){
     #"hide_mmc_device" "Hide internal sd card (CAUTION)" "$HIDE_MMC_DEVICE" \
     #echo "starting gui_settings_options"
@@ -1966,8 +1951,6 @@ gui_settings(){
 }
 
 
-
-
 gui_get_outfile(){
     # for backup
     
@@ -2019,7 +2002,6 @@ gui_get_outfile(){
         OUTFILE=$(get_file_path_base "$OUTFILE").img.$(get_file_ext "$OUTFILE")
     fi    
 }
-
 
 
 gui_do_backup(){
@@ -2134,7 +2116,7 @@ gui_do_restore() {
         return 1
     fi
 
-    #Countdown before continuing
+    #Countdown 
     do_beep_if_sound
     whiptail_countdown 10 "" "Overwriting '$(get_sd_name $OUTDEV)' in 10 seconds...\n\n"
     EXIT_CODE=$?
@@ -2285,7 +2267,6 @@ gui_menu(){
 
 
 gui_splash_screen(){
-    
     if [ $(get_ver_to_int $SETTINGS_SCRIPT_VER) -lt $(get_ver_to_int $SCRIPTVER) ]; then
     
         whiptail --backtitle "$BACKTITLE" --title "WELCOME" --yes-button "Load Factory Defaults"\
@@ -2300,7 +2281,6 @@ gui_splash_screen(){
         fi 
     fi
 }
-
 
 
 # if arg = -v, then show version and exit the script
