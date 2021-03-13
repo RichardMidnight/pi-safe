@@ -8,7 +8,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.22"
+SCRIPTVER="0.9.23"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -1913,7 +1913,7 @@ gui_get_outfile(){
         \nIf you don't include an extension '.img.$DEFAULT_EXTENSION' will be added 
         \nSupported extensions are: .img .zip .xz .gz 
         \n.zip is the baseline \n.img is ~2x faster but twice the size (NOT compressed) \n.xz is ~25% smaller but takes 3x-4x longer \n.gz is ~25% faster
-        \nRecomended to have NO SPACES in the name "
+        \nRecommended to have NO SPACES in the name "
         NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP : Enter Filename" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then 
@@ -2231,7 +2231,7 @@ gui_splash_screen(){
         whiptail --backtitle "$BACKTITLE" --title "WELCOME" --yes-button "Load Factory Defaults"\
         --yesno "Welcome to $PRODUCTNAME
         \nMany changes have been made to $PRODUCTNAME and to the settings file.
-        \nIt is recomended that you load the factory defaults now.
+        \nIt is recommended that you load the factory defaults now.
         \nWhile best attempts have been made to make $PRODUCTNAME reliable... use at your own risk. " \
         $WT_MB_HEIGHT $WT_MB_WIDTH
     
