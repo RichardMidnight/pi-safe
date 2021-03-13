@@ -7,12 +7,11 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://www.instructables.com/id/How-to-BackUp-and-Shrink-Your-Raspberry-Pi-Image/
 # https://github.com/Drewsif/PiShrink
 
-#echo empty the /root/.local/share/Trash folders to free up room
-
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.21"
+SCRIPTVER="0.9.22"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
+PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
 CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG=/home/$USER/.config/pisafe/pisafe.conf
@@ -57,13 +56,13 @@ do_help() {
     echo "Usage: "
     echo "  $SCRIPTNAME [function] [device/file] [file/device]"
     echo
-    echo "Function is:"
-    echo "                            - startup the gui menu (this is recomended)"
+    echo "CLI Function is:"
+    echo "                            - startup the menu (this is recommended)"
     echo "  list                      - list SD-devices and image-files "
     echo "  backup [device] [file]    - backup SD-card to image-file"
     echo "  restore [file] [device]   - restore image-file to SD-card"
     echo "  install                   - install this script"
-    echo "  update                    - update script from webiste"
+    echo "  update                    - update script from website"
     echo "  -v                        - display version"
     echo "  help | -h                 - help"
     echo
@@ -95,7 +94,9 @@ do_about(){
         "and renamed it 'PiSafe'.  PiSafe is a reference to the 'ventilated cupboards for storing"\
         "pies while protecting them from insects and vermin'. "
     echo
-    echo "It may work on many debian distros, but that is not been tested."
+    echo "It may work on many debian distros."
+    echo 
+    echo "It's home is $PRODUCTHOME"
     echo
     echo "Use at your own risk."
     echo
@@ -272,52 +273,23 @@ dialog_yesno(){
     # this does not work yet!!
     TITLE="$1"
     MSG="$2"
-    COLOR=${3-:"white"}
+    DEFAULT=${3-:"yes"}
+    COLOR=${4-:"white"}
     
     if [ $INTERFACE = "cli" ]; then
-    MSG="$PRODUCTNAME: $TITLE $MSG  [y/n]"
+        MSG="$PRODUCTNAME: $TITLE $MSG  [y/n]?"
         while true; do
-           if [ $COLOR = "red" ]; then
-                echo_red $MSG
-            else    
-                echo $MSG
-            fi
-        
-        
-        read -n 1 -p "$MSG" yn
-        echo
-        case $yn in
-            [Yy]* ) echo y; break;;
-            [Nn]* ) echo n; break;;
-            * ) echo "Please answer yes or no.";;
-        esac
-        done
-    
-    return
-    
-    
-        while true; do
-            MSG="$PRODUCTNAME: $TITLE $MSG  y/n"
-            if [ $COLOR = "red" ]; then
-                echo_red $MSG
-            else    
-                echo $MSG
-            fi
-            
-            read -n 1 RESULT
+            read -n1 -p "$MSG" yn
             echo
-            if [ $RESULT = "y" ] || [ $RESULT = "n" ]; then
-                echo $RESULT
-                return 0        
-            fi
+            case $yn in
+                [Yy]* ) echo y; return 0;;
+                [Nn]* ) echo n; return 0;;
+                * )     ;;
+            esac
         done
-        
         
     else
-       #whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --infobox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
-       echo doing whiptail yn
-        #TERM=vt220 whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --infobox "HELLO WORLD" 20 80
-        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
+        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --defaultno --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH 3>&1 1>&2 2>&3
         
         if [ $? = 0 ]; then 
             RESULT=y
@@ -328,7 +300,6 @@ dialog_yesno(){
         echo $RESULT
         return 0
     fi
-    
 }
 
 
@@ -390,14 +361,14 @@ do_beep_if_sound(){
 }
 
 
-get_os_id(){
-    cat /etc/os-release | grep -v VERSION| grep ID= | cut -d= -f2
-}
+#get_os_id(){
+#    cat /etc/os-release | grep -v VERSION| grep ID= | cut -d= -f2
+#}
 
 
-get_os_pretty_name(){
-    cat /etc/os-release | grep PRETTY
-}
+#get_os_pretty_name(){
+#    cat /etc/os-release | grep PRETTY
+#}
 
 
 get_elapsed_time() {
@@ -725,9 +696,8 @@ get_image_size() {
         ;;  
           
         gz)
-            #SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | cut -d' ' -f 2 | sed 's/?/0/g')
             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g')
-            # | sed -e 's/^[ \t]*//'
+
         ;;
         
         *)
@@ -810,12 +780,6 @@ check_indev(){
     fi
     
     
-    #final extra check   probably not needed...
-   # if [ -z $INDEV ] || [ ! -e $INDEV ] ; then
-   #     dialog_msg "ERROR" "INDEV can't be blank, must exist" "red"
-   #     return 1
-   # fi
-    
      # if we got this far, all is good
      return 0
 }
@@ -878,13 +842,6 @@ check_outfile(){
         return 6
     fi 
     
-    
-    # final check... should not be needed.
-  #  if [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] ; then
-  #      dialog_msg "ERROR 4" "OUT-FILE '$OUTFILE'. Cant be blank. Can't exist. "
-  #      return 4
-  #  fi  
-    
     #otherwise good, return 0
     return 0
 }
@@ -917,8 +874,6 @@ check_outdev(){
 
     # quit if outdev is blank
     if [ -z $OUTDEV ]; then
-        #echo
-        #echo_red "ERROR: OUT-DEV '$OUTDEV' cannot be blank"
         dialog_msg "ERROR 1" "Device '$OUTDEV' cannot be blank" "red"
         return 1
     fi
@@ -932,8 +887,6 @@ check_outdev(){
     
     # Quit if OUTDEV is not found
     if  [ ! -e $OUTDEV ]  ; then
-        #echo
-        #echo_red "ERROR: OUT-DEV '$OUTDEV' not found"
         dialog_msg "ERROR 2" "Device '$OUTDEV' not found" "red"
         return 2
     fi 
@@ -1118,11 +1071,10 @@ get_tools() {
         fi
         
         # fix lua on ubuntu and mint
-        #  if [ "$(get_os_id)" = "ubuntu" ] && [ -z $(which lua) ] ; then
         if [ -z $(which lua) ] ; then
             sudo apt install lua5.1 -y
             if [ -z $(which lua) ] ; then
-               dialog_msg "Error" "pishrink not installed." "red" 
+               dialog_msg "Error" "lua not installed." "red" 
             fi
         fi
         
@@ -1130,18 +1082,17 @@ get_tools() {
 }    
 
 
-do_install() {   
-    echo Installed ver=$(/usr/local/bin/$SCRIPTNAME -v)
-    read  -p "Install $SCRIPTVER to /usr/local/bin [y,N]?" -n 1 -r RESULT
-    echo
+do_install() { 
+    #INTERFACE  
+    RESULT=$(dialog_yesno "INSTALL" "Install $PRODUCTNAME $SCRIPTVER ?  ('No' to run without installing)")
     
     if [ $RESULT = "y" ]; then
+        do_write_log "Installing $PRODUCTNAME $SCRIPTVER"
         sudo cp --backup=numbered $SCRIPTNAME /usr/local/bin/$SCRIPTNAME
         sudo chmod +x /usr/local/bin/$SCRIPTNAME
         echo Installed ver=$(/usr/local/bin/$SCRIPTNAME -v)
     else
-        MSG="$PRODUCTNAME not installed.  '/usr/local/bin/$SCRIPTNAME' not found. "
-        dialog_msg "ERROR" "$MSG"
+        dialog_msg "INSTALL CANDELED" "$PRODUCTNAME not installed."
         return 1
     fi
 }
@@ -1151,7 +1102,7 @@ do_update() {
     INTERFACE=${1:-"cli"}
     SUMMARY=${2:-"yes"}
     
-    echo_if_cli "This ver '$SCRIPTVER'"
+    #echo_if_cli "This ver '$SCRIPTVER'"
       
     local SERVER_VER=
     rm $SCRIPTNAME.tmp
@@ -1162,23 +1113,16 @@ do_update() {
         return $EXIT_CODE
     fi    
 
+    # did we get the new version from the server?
     if [ -f $SCRIPTNAME.tmp ]; then
         SERVER_VER=$(bash $SCRIPTNAME.tmp -v)
     else
         return 1
     fi
 
+
     if [ $(get_ver_to_int $SERVER_VER) -gt $(get_ver_to_int $SCRIPTVER) ]; then
-        
-        if [ $INTERFACE = "cli" ]; then
-            read -p "Ver $SCRIPTVER.  Newer Version '$SERVER_VER' available.  Update [y,N]?"  -n 1 -r RESULT
-            echo
-        else
-            whiptail --backtitle "$BACKTITLE" --title "UPDATE" --yesno "Update from '$SCRIPTVER'  to '$SERVER_VER'  ?" $WT_MB_HEIGHT $WT_MB_WIDTH
-            if [ $? = 0 ]; then RESULT=y; fi
-            echo $?
-        fi    
-        
+        RESULT=$(dialog_yesno "UPDATE AVAILABLE" "Update $PRODUCTNAME from '$SCRIPTVER'  to '$SERVER_VER' ")
         if [ $RESULT = "y" ]; then 
             sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
             sudo chmod +x /usr/local/bin/$SCRIPTNAME
@@ -1187,18 +1131,12 @@ do_update() {
             exit 0
         fi
     else  
-        if [ $INTERFACE = "cli" ]; then
-            echo_if_cli "Server version is '$SERVER_VER' You are up to date.  "
-            if [ $INTERFACE = "gui" ]; then
-                read -p "Press any key to continue..." -n 1 -r RESULT
-            fi
-        else
-            if [ $SUMMARY = "yes" ]; then
-                whiptail --backtitle "$BACKTITLE" --title "UPDATE" --msgbox "$PRODUCTNAME is up to date.  Server ver '$SERVER_VER' " $WT_MB_HEIGHT $WT_MB_WIDTH
-            fi
-        fi
+       if [ $SUMMARY = yes ]; then
+            dialog_msg "UPDATE" "$PRODUCTNAME is up to date.  Server ver is '$SERVER_VER' "
+       fi
     fi
 }
+
 
 
 do_backup(){
@@ -1340,7 +1278,7 @@ do_backup(){
             rm -f "$OUTFILE_BASE".img
             
             #Imprecise progress bar on backside
-               #echo $(echo "scale=2; $BYTES/($k_ilo)" | bc)kb ;;
+            #echo $(echo "scale=2; $BYTES/($k_ilo)" | bc)kb ;;
             #SIZE=$(get_file_size "$OUTFILE_BASE".img)
             #echo $(get_bytes_h $SIZE) to compress. This gz progress bar is imprecise.
             #HALF_SIZE=$(echo "$SIZE/2" | bc )
@@ -1383,7 +1321,6 @@ do_backup(){
         do_beep_if_sound
         echo_white "Backup done. '$INDEV' backed up to '$OUTFILE' in $(get_elapsed_time $TIME1 $TIME4)." 
         do_write_log "Finished $PRODUCTNAME $SCRIPTVER Backup,  $(get_sd_size $INDEV -h) to  $(get_file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4) " 
-   
     fi
 }
 
@@ -1393,9 +1330,6 @@ do_restore(){
     local OUTDEV=$2
     local SAFETY=${3:-on}   # this lets us bypass some of the safety prompts
     INTERFACE=${4:-cli}  #CLI or gui
-    #   local LOCAL_PATH=${2:-$(pwd)}
-    
-    #echo $INTERFACE
     
     echo_white Starting $PRODUCTNAME $SCRIPTVER Restore...
     echo "IN-FILE='$INFILE'"
@@ -1432,7 +1366,6 @@ do_restore(){
         echo_red "ERROR: OUT-DEV '$OUTDEV' cannot be blank.  must exist."
         return 1
     fi
-    
     
     
     if [ $SAFETY != "off" ]; then
@@ -1581,7 +1514,10 @@ case $1 in
     ;;
     
     gui)
-        gui_splash_screen
+            
+        if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then 
+            gui_splash_screen
+        fi    
         gui_menu
     ;;
     
@@ -1604,46 +1540,40 @@ esac
 
 
 whiptail_calc_wt_size() {
-  # NOTE: it's tempting to redirect stderr to /dev/null, so supress error 
-  # output from tput. However in this case, tput detects neither stdout or 
-  # stderr is a tty and so only gives default 80, 24 values
+    # NOTE: it's tempting to redirect stderr to /dev/null, so supress error 
+    # output from tput. However in this case, tput detects neither stdout or 
+    # stderr is a tty and so only gives default 80, 24 values
 
-  WT_HEIGHT=20
-  WT_WIDTH=80
-  WT_HEIGHT_TALL=$(($(tput lines)-10))
-  WT_WIDTH_WIDE=$(($(tput cols)-7))
-  
-  #WT_HEIGHT=$(($(tput lines)-10))
-  #WT_WIDTH=$(tput cols)
-  #WT_WIDTH=$(($(tput cols)-10))
-
-
-  if [ -z "$WT_WIDTH" ] || [ "$WT_WIDTH" -lt 60 ]; then
+    WT_HEIGHT=20
     WT_WIDTH=80
-  fi
-  if [ "$WT_WIDTH" -gt 178 ]; then
-    WT_WIDTH=80
-  fi
-  
-  #WT_WIDTH=$(($WT_WIDTH-7))
-  WT_MENU_HEIGHT=$(($WT_HEIGHT-7))
-  WT_MENU_HEIGHT_TALL=$(($WT_HEIGHT_TALL-7))
-  
-  #WT_MB_HEIGHT=18
-  #WT_MB_WIDTH=70
-  
+    WT_HEIGHT_TALL=$(($(tput lines)-10))
+    WT_WIDTH_WIDE=$(($(tput cols)-7))
+
+    #WT_HEIGHT=$(($(tput lines)-10))
+    #WT_WIDTH=$(tput cols)
+    #WT_WIDTH=$(($(tput cols)-10))
+
+
+    if [ -z "$WT_WIDTH" ] || [ "$WT_WIDTH" -lt 60 ]; then
+        WT_WIDTH=80
+    fi
+    if [ "$WT_WIDTH" -gt 178 ]; then
+        WT_WIDTH=80
+    fi
+
+    #WT_WIDTH=$(($WT_WIDTH-7))
+    WT_MENU_HEIGHT=$(($WT_HEIGHT-7))
+    WT_MENU_HEIGHT_TALL=$(($WT_HEIGHT_TALL-7))
+
+    #WT_MB_HEIGHT=18
+    #WT_MB_WIDTH=70
+
     WT_MB_HEIGHT=$WT_HEIGHT
     WT_MB_WIDTH=$WT_WIDTH
-  
-  # use for pasting
-  # $WT_HEIGHT  $WT_WIDTH
-  # $WT_MB_HEIGHT  $WT_MB_WIDTH
-  
-  
- # echo $WT_HEIGHT
- # echo $WT_HEIGHT_TALL
-  
-  
+
+    # use for pasting
+    # $WT_HEIGHT  $WT_WIDTH
+
 }
 
 
@@ -1782,8 +1712,7 @@ gui_do_install(){
     
     
     # create the desktop file    
-
-        echo "\
+    echo "\
 [Desktop Entry]
 Type=Application
 Terminal=true
@@ -1796,37 +1725,59 @@ Exec=lxterminal --geometry=110x40 -e $SCRIPTNAME
 Categories=Utility
 StartupNotify=false" > "$PRODUCTNAME.desktop"   
 
-        sudo mv "$PRODUCTNAME.desktop" "/usr/share/applications"
+    sudo mv "$PRODUCTNAME.desktop" "/usr/share/applications"
 
-        if [ -f "/usr/local/bin/$SCRIPTNAME" ]; then 
-            MSG="$PRODUCTNAME $SCRIPTVER installed.            
-            \nSelect it from the 'accessories' menu.
-            \n\nOr you can execute it from any directory by typing '$SCRIPTNAME'."
-            whiptail --backtitle "$BACKTITLE" --title "INSTALLED" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
-        else
-            MSG="$PRODUCTNAME not installed.  '/usr/local/bin/$SCRIPTNAME' not found. "
-            whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
-        fi
+    if [ -f "/usr/local/bin/$SCRIPTNAME" ]; then 
+        MSG="$PRODUCTNAME $SCRIPTVER installed.            
+        \nSelect it from the 'Accessories' menu.
+        \n\nOr you can execute it from any directory by typing '$SCRIPTNAME'."
+        whiptail --backtitle "$BACKTITLE" --title "INSTALLED" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
+    else
+        MSG="$PRODUCTNAME not installed.  '/usr/local/bin/$SCRIPTNAME' not found. "
+        whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
+    fi
+}
+
+
+gui_do_uninstall(){
+    INSTALLED_VER=$(/usr/local/bin/$SCRIPTNAME -v)
+    MSG="Uninstall $PRODUCTNAME $INSTALLED_VER \
+    \nfrom '/usr/local/bin/' and the menu ?\
+    \n\nThis may not uninstall versions of $PRODUCTNAME prior to 0.8.x or so."
+    RESULT=$(dialog_yesno "UNINSTALL" "$MSG")
+    if [ $RESULT = "y" ]; then 
+        do_write_log "Uninstalling $PRODUCTNAME $INSTALLED_VER"
+        sudo rm "/usr/share/applications/$PRODUCTNAME.desktop"
+        sudo rm "~/.local/share/applications/$PRODUCTNAME.desktop"
+        #lxpanelctl restart
+        sudo rm "/usr/local/bin/$SCRIPTNAME"
+        sudo rm $CONFIG
+        #sudo rm $LOG_FILE
+    fi
+    
+    if [ -z $(which $SCRIPTNAME) ]; then
+        dialog_msg "UNINSTALL" "$PRODUCTNAME $INSTALLED_VER has been uninstalled \n\nLOG file '$LOG_FILE' has not been removed"
+    fi
 }
 
 
 gui_set_compression(){
     CHOICE=$(whiptail --title "SETTINGS-COMPRESSION" --radiolist \
-            "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-            "1" "Fastest time (default)" on \
-            "2" "" off \
-            "3" "" off \
-            "4" "" off \
-            "5" "" off \
-            "6" "" off \
-            "7" "" off \
-            "8" "" off \
-            "9" "Smallest file (MUCH slower)" off   3>&1 1>&2 2>&3 )
-           
-            if [ ! -z $CHOICE ]; then
-                COMPRESSION=$CHOICE
-                set_config_var compression_level $CHOICE $CONFIG
-            fi
+    "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+    "1" "Fastest time (default)" on \
+    "2" "" off \
+    "3" "" off \
+    "4" "" off \
+    "5" "" off \
+    "6" "" off \
+    "7" "" off \
+    "8" "" off \
+    "9" "Smallest file (MUCH slower)" off   3>&1 1>&2 2>&3 )
+   
+    if [ ! -z $CHOICE ]; then
+        COMPRESSION=$CHOICE
+        set_config_var compression_level $CHOICE $CONFIG
+    fi
 }
 
     
@@ -1843,7 +1794,6 @@ gui_set_default_path(){
         if [ ! -z $NEWPATH ]; then
         
             if [ -d $NEWPATH ]; then
-                #DEFAULT_PATH=$NEWPATH
                 DEFAULT_PATH=$(echo "$NEWPATH" | sed 's/[/\t]*$//')
                 set_config_var default_path $DEFAULT_PATH $CONFIG
                 return 0
@@ -1906,7 +1856,6 @@ gui_settings_options(){
     set_config_var check_for_updates_on_startup off $CONFIG
     
     for SELECTED in $ON; do
-        #echo "set_config_var $SELECTED on $CONFIG"
         set_config_var $SELECTED on $CONFIG
     done
     get_settings
@@ -1946,7 +1895,6 @@ gui_settings(){
                 fi ;;
             
              *)             whiptail --msgbox "Programmer error: unrecognized option" $WT_HEIGHT  $WT_WIDTH  $WT_MENU_HEIGHT ;;
-#         esac || whiptail --msgbox "There was an error running option $SELECTION" 20 60 1
             esac
         fi
     done
@@ -1954,8 +1902,6 @@ gui_settings(){
 
 
 gui_get_outfile(){
-    # for backup
-    
     OUTFILEDEFAULT="$DEFAULT_PATH/$(date +%Y-%m-%d-newimage)"
     EXT=$DEFAULT_EXTENSION
     OUTFILE=
@@ -2025,7 +1971,7 @@ gui_do_backup(){
     fi
     
     
-    # get global variable OUTFILE
+    # get OUTFILE
     gui_get_outfile
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
@@ -2073,6 +2019,7 @@ gui_do_backup(){
 
 
 gui_do_restore() {   
+    echo "Getting list of images ready..."
     
     #GET INFILE
     if whiptail_fselect "WRITE : Select an Image-file" "$DEFAULT_PATH" "zip" "no" ; then
@@ -2172,7 +2119,6 @@ gui_select_sddevice(){
     IFS=$FIELD_SEPERATOR
     DEVICE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE"\
    --menu "Choose an SD card (Hide root = $HIDE_ROOT_DEVICE)" $WT_MB_HEIGHT $WT_MB_WIDTH 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
-    #    --menu "Choose an SD card (Hide root = $HIDE_ROOT_DEVICE) (Hide mmc = $HIDE_MMC_DEVICE)" $WT_MB_HEIGHT $WT_MB_WIDTH 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
  
     EXIT_CODE=$?
     unset IFS   
@@ -2193,6 +2139,7 @@ gui_tools(){
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "TOOLS" --menu " Choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
         "INSTALL"           "Install $PRODUCTNAME into the menu" \
         "UPDATE"            "Check for updates" \
+        "UNINSTALL"          "Uninstall $PRODUCTNAME" \
         "  "               "  " \
         "TERMINAL"          "View the terminal (for debugging)" \
         "LOG"               "View the log file" \
@@ -2206,21 +2153,22 @@ gui_tools(){
             return $EXIT_CODE
         else
             case "$SELECTION" in
-            INSTALL)   gui_do_install  ;;
-            UPDATE)    do_update gui ;;
+            INSTALL)    gui_do_install  ;;
+            UPDATE)     do_update gui ;;
+            UNINSTALL)  gui_do_uninstall ;;
 
-            TERMINAL)      read -n 1 -p "Press any key to return"  ;;
-            LOG)           $TEXT_EDITOR $LOG_FILE ;;
+            TERMINAL)   read -n 1 -p "Press any key to return"  ;;
+            LOG)        $TEXT_EDITOR $LOG_FILE ;;
             
             HELP)
-                INFO=$(do_help)
-                result="$INFO"
-                whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
+                HELP_INFO="$(do_help)"
+               # result="$INFO"
+                whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$HELP_INFO" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
                 ;;
             ABOUT)
-                INFO=$(do_about)
-                result="$INFO"
-                whiptail --backtitle "$BACKTITLE"  --title "ABOUT" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
+                ABOUT_INFO="$(do_about)"
+                #result="$INFO"
+                whiptail --backtitle "$BACKTITLE"  --title "ABOUT" --scrolltext --msgbox "$ABOUT_INFO" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
                 ;;  
             "  ")  ;;     
             *)     whiptail --msgbox "Programmer error: unrecognized option" $WT_HEIGHT  $WT_WIDTH  $WT_MENU_HEIGHT ;;
@@ -2231,10 +2179,10 @@ gui_tools(){
 
 
 gui_menu(){
-    whiptail_calc_wt_size
     INTERFACE="gui"
     while true
     do
+        whiptail_calc_wt_size
         MENU_CHOICE=$(whiptail --clear --backtitle "$BACKTITLE" --title "MAIN MENU" --ok-button "Select" --cancel-button "Exit" --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
                 "BACKUP"    "   Backup an SD-card to an image-file" \
                 "RESTORE"   "   Restore an SD-card from an image-file" \
@@ -2242,17 +2190,19 @@ gui_menu(){
                 "  "        "   " \
                 "SETTINGS"  "   Change settings" \
                 "TOOLS"     "   Various tools"\
-                 "  "        "   " \
-                "INSTALL"   "   Install $PRODUCTNAME into the menu" \
                 3>&1 1>&2 2>&3)
+                
+       #                  "  "        "   " \                  
+        #  "INSTALL"   "   Install $PRODUCTNAME into the menu" \      
+ 
                 
         case $MENU_CHOICE in
             BACKUP)         gui_do_backup   ;;
             RESTORE)        gui_do_restore  ;;
             LIST)
-                INFO=$(do_list_info $DEFAULT_PATH)
-                result="$INFO"
-                whiptail --backtitle "$BACKTITLE"  --title "LIST" --scrolltext --msgbox "$result" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
+                echo "Getting list of images ready..."
+                LIST_INFO="$(do_list_info $DEFAULT_PATH)"
+                whiptail --backtitle "$BACKTITLE"  --title "LIST" --scrolltext --msgbox "$LIST_INFO" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
                 ;;
             
             SETTINGS)       gui_settings    ;;
@@ -2269,6 +2219,13 @@ gui_menu(){
 
 
 gui_splash_screen(){
+    
+    #install
+    if [ -z $(which $SCRIPTNAME) ]; then
+        gui_do_install  
+    fi    
+    
+    # UPDATE
     if [ $(get_ver_to_int $SETTINGS_SCRIPT_VER) -lt $(get_ver_to_int $SCRIPTVER) ]; then
     
         whiptail --backtitle "$BACKTITLE" --title "WELCOME" --yes-button "Load Factory Defaults"\
@@ -2297,9 +2254,22 @@ do_init_conf
 get_settings
 whiptail_calc_wt_size
 
+
+#install or update
 if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
-    do_update gui no
+   # if [ -z $(which $PRODUCTNAME) ]; then
+   #     gui_do_install
+   # else
+        do_update gui no
+   # fi    
 fi
+
+
+#testing
+#INTERFACE=cli
+#x=$(dialog_yesno "Install" "Do you want to install" )
+#echo $x
+#exit
 
 
 cli_menu $1 $2 $3
