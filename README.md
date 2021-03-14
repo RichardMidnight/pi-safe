@@ -70,7 +70,7 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
 In a terminal window, type in
 
       
-    curl -O https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe
+    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
     bash pisafe
     
     Then you can select 'install' from the menu to install it in your Raspberry Pi menu
