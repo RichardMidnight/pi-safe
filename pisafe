@@ -8,7 +8,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="0.9.23"
+SCRIPTVER="1.0.0"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -78,6 +78,7 @@ do_help() {
     echo $SCRIPTNAME backup sda newimage
     echo $SCRIPTNAME backup /dev/sdb newimage.xz
     echo $SCRIPTNAME restore newimage.img.zip sda
+    echo "$SCRIPTNAME backup /dev/sda /media/pi/SandiskUSB/backup_\$(date +%m-%d-%Y_%I%M%p).img.gz"
     echo
 }
 
@@ -1864,7 +1865,7 @@ gui_settings_options(){
 
 gui_settings(){
     while true; do
-        SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --menu " " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT  \
+        SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --cancel-button "Back" --menu " " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT  \
         "Default directory   " "$DEFAULT_PATH" \
         "Default extension   " "$DEFAULT_EXTENSION" \
         "Compression         " "$COMPRESSION of 9" \
@@ -2136,7 +2137,7 @@ gui_select_sddevice(){
 gui_tools(){
     local SELECTION
     while true; do
-        SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "TOOLS" --menu " Choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+        SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "TOOLS" --cancel-button "Back" --menu " Choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
         "INSTALL"           "Install $PRODUCTNAME into the menu" \
         "UPDATE"            "Check for updates" \
         "UNINSTALL"          "Uninstall $PRODUCTNAME" \
@@ -2145,7 +2146,7 @@ gui_tools(){
         "LOG"               "View the log file" \
         "  "               "  " \
         "HELP"              "Help" \
-        "ABOUT"             "ABOUT $PRODUCTNAME" \
+        "ABOUT"             "About $PRODUCTNAME" \
         3>&1 1>&2 2>&3)
         
         EXIT_CODE=$?
@@ -2190,6 +2191,8 @@ gui_menu(){
                 "  "        "   " \
                 "SETTINGS"  "   Change settings" \
                 "TOOLS"     "   Various tools"\
+                 "  "        "   " \
+                 "HELP"     "   Help"\
                 3>&1 1>&2 2>&3)
                 
        #                  "  "        "   " \                  
@@ -2209,6 +2212,10 @@ gui_menu(){
             TOOLS)          gui_tools       ;;
             
             INSTALL)        gui_do_install     ;;
+            
+            HELP)           HELP_INFO="$(do_help)"
+                            whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$HELP_INFO" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
+                            ;;
                 
             "  "*)                          ;;
             
@@ -2263,13 +2270,6 @@ if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
         do_update gui no
    # fi    
 fi
-
-
-#testing
-#INTERFACE=cli
-#x=$(dialog_yesno "Install" "Do you want to install" )
-#echo $x
-#exit
 
 
 cli_menu $1 $2 $3
