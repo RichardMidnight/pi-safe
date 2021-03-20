@@ -8,14 +8,14 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.0.0"
+SCRIPTVER="1.0.1"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
 CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG=/home/$USER/.config/pisafe/pisafe.conf
-LOG_FILE=/home/$USER/PiSafe.log
+#LOG_FILE=/home/$USER/PiSafe.log
 REQUIRED_TOOLS="lua pv bc whiptail zip pigz "
 REQUIRED_TOOLS_SPECIAL_INSTALL="pishrink.sh xz"
 INTERFACE="cli"
@@ -57,7 +57,7 @@ do_help() {
     echo "  $SCRIPTNAME [function] [device/file] [file/device]"
     echo
     echo "CLI Function is:"
-    echo "                            - startup the menu (this is recommended)"
+    echo "                            - with no arguments it launches the PiSafe menu (recommended)"
     echo "  list                      - list SD-devices and image-files "
     echo "  backup [device] [file]    - backup SD-card to image-file"
     echo "  restore [file] [device]   - restore image-file to SD-card"
@@ -78,7 +78,7 @@ do_help() {
     echo $SCRIPTNAME backup sda newimage
     echo $SCRIPTNAME backup /dev/sdb newimage.xz
     echo $SCRIPTNAME restore newimage.img.zip sda
-    echo "$SCRIPTNAME backup /dev/sda /media/pi/SandiskUSB/backup_\$(date +%m-%d-%Y_%I%M%p).img.gz"
+    echo "$SCRIPTNAME backup /dev/sda /media/pi/SandiskUSB/backup_\$(date +%Y-%d-%m_%I%M%p).img.gz"
     echo
 }
 
@@ -149,6 +149,7 @@ set_conf_defaults(){
     set_config_var debug_mode off $CONFIG
     set_config_var sound on $CONFIG
     set_config_var log on $CONFIG
+    set_config_var log_file /home/$USER/PiSafe.log $CONFIG
     
     if [ ! -z $(which mousepad) ]; then
         set_config_var text_editor mousepad $CONFIG
@@ -180,6 +181,7 @@ get_settings(){
     TEXT_EDITOR=$(get_config_var text_editor $CONFIG)
     SAFETY=$(get_config_var safety $CONFIG)
     LOG=$(get_config_var log $CONFIG)
+    LOG_FILE=$(get_config_var log_file $CONFIG)
     
     VERIFY=off
     LARGE_DEVICE_READ_WARNING=$(get_config_var large_device_read_warning $CONFIG) 
@@ -872,7 +874,6 @@ check_infile(){
 
 
 check_outdev(){
-
     # quit if outdev is blank
     if [ -z $OUTDEV ]; then
         dialog_msg "ERROR 1" "Device '$OUTDEV' cannot be blank" "red"
@@ -1574,7 +1575,6 @@ whiptail_calc_wt_size() {
 
     # use for pasting
     # $WT_HEIGHT  $WT_WIDTH
-
 }
 
 
@@ -2226,7 +2226,6 @@ gui_menu(){
 
 
 gui_splash_screen(){
-    
     #install
     if [ -z $(which $SCRIPTNAME) ]; then
         gui_do_install  
