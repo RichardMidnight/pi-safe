@@ -12,7 +12,7 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
  
  - Supports .img .zip .xz and .gz file formats.
 
- - Files are compatible with RPI Imager that comes with the pi.
+ - Files are compatible with Raspberry PI Imager that comes with the Pi.
  
  - Supports all USB storage (I think).
  
