@@ -8,7 +8,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.0.1"
+SCRIPTVER="1.0.2"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -67,8 +67,8 @@ do_help() {
     echo "  help | -h                 - help"
     echo
     echo "Notes: "
-    echo " - Supports .img .zip .xz and .gz files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
-    echo " - Specifying an '.img' extension is faster, but twice the size because it is not compressed with $DEFAULT_EXTENSION."
+    echo " - Supports .img .zip .xz .gz and .iso files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
+    echo " - Specifying an '.img' or '.iso' extension is faster, but twice the size because it is not compressed with $DEFAULT_EXTENSION."
     echo
     #echo It will run dd, then pishrink, then compress to create a smallimage file of the SD card
     echo
@@ -130,7 +130,7 @@ set_conf_defaults(){
     set_config_var settings_script_ver $SCRIPTVER $CONFIG
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var hide_root_device on $CONFIG
-    set_config_var hide_loop_device on $CONFIG
+ #   set_config_var hide_loop_device on $CONFIG
     set_config_var check_for_updates_on_startup on $CONFIG
 
 #backup settings
@@ -171,7 +171,7 @@ get_settings(){
     DEFAULT_EXTENSION=$(get_config_var default_extension $CONFIG)
     COMPRESSION=$(get_config_var compression_level $CONFIG)
     HIDE_ROOT_DEVICE=$(get_config_var hide_root_device $CONFIG)
-    HIDE_LOOP_DEVICE=$(get_config_var hide_loop_device $CONFIG)
+ #   HIDE_LOOP_DEVICE=$(get_config_var hide_loop_device $CONFIG)
     CHECK_FOR_UPDATES_ON_STARTUP=$(get_config_var check_for_updates_on_startup $CONFIG)
     
     DEBUG_MODE=$(get_config_var debug_mode $CONFIG)
@@ -615,7 +615,7 @@ get_file_ext_ok(){
     OUTFILE_EXT=$(get_file_ext "$1")
 
     case $OUTFILE_EXT in
-        img | zip | xz | gz |"" )
+        img | zip | xz | gz | iso | "" )
             echo true
             return 0
         ;;
@@ -643,7 +643,7 @@ check_for_img_file(){
     echo -n "Inspecting '$INFILE' for an image file ... "
  
     case $(get_file_ext "$INFILE") in
-        img)
+        img | iso)
             IMG=$INFILE
         ;;
         
@@ -686,7 +686,7 @@ get_image_size() {
     fi
     
     case $(get_file_ext "$INFILE") in
-        img)
+        img | iso)
             SIZE_BYTES=$(echo $((  $(ls -s "$INFILE" | cut -d' ' -f1 ) * 1024 )) )
         ;;
         
@@ -815,7 +815,7 @@ check_outfile(){
     fi
 
     # insert .img if missing
-    if [ "$(echo "$OUTFILE" | grep img)" = "" ]; then
+    if [ "$(echo "$OUTFILE" | grep img)" = "" ] && [ "$(echo "$OUTFILE" | grep iso)" = "" ]; then
         echo "inserting .img"
         OUTFILE=$(get_file_path_base "$OUTFILE").img.$(get_file_ext "$OUTFILE")
         echo "OUT-FILE='$OUTFILE'" 
@@ -951,7 +951,7 @@ do_list_image_files(){
     CONFIG=/home/$USER/.config/pisafe/pisafe.conf
     IFS=$'\t\n'
     
-    for FILE in $(ls *.img *.zip *.xz *.gz 2>/dev/null) ; do
+    for FILE in $(ls *.img *.zip *.xz *.gz *.iso 2>/dev/null) ; do
         FILE_NS=$(echo "$FILE" | sed 's/ /_/g')
         FILES="$FILES $FILE_NS  $(get_file_size "$FILE" -h)  ($(get_image_size "$FILE" -h)) \n "
         #FILES="$FILES $FILE_NS  $(get_file_size "$FILE" -h)   \n "
@@ -994,7 +994,7 @@ do_list_info() {
 }    
 
 
-get_sd_devices() {
+get_sd_devices_old() {
     local DEVICES= 
     BOOT_FILTER="aspodiausdfpoiasdf"
     LOOP_FILTER="aspodiausdfpoiasdf"
@@ -1015,6 +1015,28 @@ get_sd_devices() {
     echo "${DEVICES[@]}"
   }
 
+
+get_sd_devices() {
+    local DEVICES= 
+    BOOT_FILTER="aspodiausdfpoiasdf"
+    #LOOP_FILTER="aspodiausdfpoiasdf"
+    if [ $(get_config_var hide_root_device $CONFIG) = "on" ]; then
+        BOOT_FILTER=$(get_root_device)
+    fi       
+   # if [ $(get_config_var hide_loop_device $CONFIG) = "on" ]; then
+   #     LOOP_FILTER="loop"
+   # fi  
+       
+   # DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER | grep -v $LOOP_FILTER) 
+   DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER)
+    EXIT_CODE=$?
+
+    if [ $EXIT_CODE != 0 ]; then
+        return $EXIT_CODE
+    fi
+    
+    echo "${DEVICES[@]}"
+  }
 # --------------------------------------
 
 
@@ -1107,7 +1129,7 @@ do_update() {
     #echo_if_cli "This ver '$SCRIPTVER'"
       
     local SERVER_VER=
-    rm $SCRIPTNAME.tmp
+    #rm $SCRIPTNAME.tmp
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/$SCRIPTNAME -O $SCRIPTNAME.tmp 2> /dev/null 
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ];  then
@@ -1133,6 +1155,7 @@ do_update() {
             exit 0
         fi
     else  
+        rm $SCRIPTNAME.tmp
        if [ $SUMMARY = yes ]; then
             dialog_msg "UPDATE" "$PRODUCTNAME is up to date.  Server ver is '$SERVER_VER' "
        fi
@@ -1208,25 +1231,29 @@ do_backup(){
     echo_white Step 1 took $(get_elapsed_time $TIME1 $TIME2)
     echo
    
-    echo_white Step 2 of 3 - Shrinking filesystem with PiShrink ...
-    PI_SHRINK_OPTS=
-    if [ $AUTO_EXPAND_FS = "off" ] ; then 
-        PI_SHRINK_OPTS="-s"
-    fi
-    if [ $SHRINK_FS != "off" ]; then
-        sudo pishrink.sh $PI_SHRINK_OPTS "$OUTFILE_BASE".img
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then
-            echo Continuing without shrinking file system
-            #return $EXIT_CODE
+   if [ ! $(get_file_ext "$OUTFILE") = "iso" ]; then 
+        echo_white Step 2 of 3 - Shrinking filesystem with PiShrink ...
+        PI_SHRINK_OPTS=
+
+        if [ $AUTO_EXPAND_FS = "off" ] ; then 
+            PI_SHRINK_OPTS="-s"
         fi
-    else
-        echo "Filesystem not shrunk.  Setting is 'off'."
+        if [ $SHRINK_FS != "off" ]; then
+            sudo pishrink.sh $PI_SHRINK_OPTS "$OUTFILE_BASE".img
+            EXIT_CODE=$?
+            if [ $EXIT_CODE != 0 ]; then
+                echo Continuing without shrinking file system
+                #return $EXIT_CODE
+            fi
+        else
+            echo "Filesystem not shrunk.  Setting is 'off'."
+        fi
+        echo Done shrinking filesystem
+        echo_white \'$(ls -s -h "$OUTFILE_BASE".img)\'
+        TIME3=$(date +%s)
+        echo_white Step 2 took $(get_elapsed_time $TIME2 $TIME3)
     fi
-    echo Done shrinking filesystem
-    echo_white \'$(ls -s -h "$OUTFILE_BASE".img)\'
-    TIME3=$(date +%s)
-    echo_white Step 2 took $(get_elapsed_time $TIME2 $TIME3)
+    
     
     echo
     echo_white "Step 3 of 3 - Compressing '$OUTFILE_BASE.img' to '$OUTFILE' ... "
@@ -1238,6 +1265,11 @@ do_backup(){
     case $(get_file_ext "$OUTFILE") in
         img)
             echo Not compressing .img file ...
+        ;;
+        
+        iso)
+            echo Not compressing .iso file ...
+            mv $OUTFILE_BASE.img $OUTFILE_BASE.iso
         ;;
         
         zip)
@@ -1408,7 +1440,7 @@ do_restore(){
     echo_if_cli "$(get_image_size "$INFILE" -h) to write"
     
     case $INFILEEXT in
-        img)
+        img | iso)
             if [ $INTERFACE = "cli" ]; then
                 #sudo dd if="$INFILE" of=$OUTDEV bs=4M conv=fsync status=progress
                 pv "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync
@@ -1620,7 +1652,7 @@ function whiptail_fselect()
                 
     # Then add files                                
     for FILE in $(find $LOCAL_PATH -maxdepth 1 \
-                                     \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" \) \
+                                     \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" \) \
                                     -type f \
                                     -printf "%f\t     %s\n" | sort  2> /dev/null)                                                                  
     do
@@ -1832,7 +1864,6 @@ gui_settings_options(){
 "shrink_fs" "Shrink filesystem on backup" "$SHRINK_FS" \
 "auto_expand_fs" "Create shrunk backup that auto-expands" "$AUTO_EXPAND_FS" \
 "hide_root_device" "Hide root device (CAUTION)" "$HIDE_ROOT_DEVICE" \
-"hide_loop_device" "Hide loop device " "$HIDE_LOOP_DEVICE" \
 "check_for_updates_on_startup" "" "$CHECK_FOR_UPDATES_ON_STARTUP" \
 "sound" "enable sounds" "$SOUND" \
 "log"   "log activity" "$LOG" \
@@ -1850,7 +1881,6 @@ gui_settings_options(){
     set_config_var shrink_fs off $CONFIG
     set_config_var auto_expand_fs off $CONFIG
     set_config_var hide_root_device off $CONFIG
-    set_config_var hide_loop_device off $CONFIG
     set_config_var sound off $CONFIG
     set_config_var log off $CONFIG
     set_config_var debug_mode off $CONFIG
