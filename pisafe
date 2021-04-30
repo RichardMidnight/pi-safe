@@ -8,7 +8,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.0.2"
+SCRIPTVER="1.0.3"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -61,8 +61,9 @@ do_help() {
     echo "  list                      - list SD-devices and image-files "
     echo "  backup [device] [file]    - backup SD-card to image-file"
     echo "  restore [file] [device]   - restore image-file to SD-card"
-    echo "  install                   - install this script"
+    echo "  install [-y]              - install this script"
     echo "  update                    - update script from website"
+    echo "  uninstall [-y]            - uninstall this script"
     echo "  -v                        - display version"
     echo "  help | -h                 - help"
     echo
@@ -1106,18 +1107,63 @@ get_tools() {
 }    
 
 
-do_install() { 
-    #INTERFACE  
-    RESULT=$(dialog_yesno "INSTALL" "Install $PRODUCTNAME $SCRIPTVER ?  ('No' to run without installing)")
+do_install(){
+    SILENT=${1:-"-n"}
     
-    if [ $RESULT = "y" ]; then
-        do_write_log "Installing $PRODUCTNAME $SCRIPTVER"
-        sudo cp --backup=numbered $SCRIPTNAME /usr/local/bin/$SCRIPTNAME
-        sudo chmod +x /usr/local/bin/$SCRIPTNAME
-        echo Installed ver=$(/usr/local/bin/$SCRIPTNAME -v)
+    if [ $SILENT != "-y" ]; then
+        RESULT=$(dialog_yesno "INSTALL" "Install $PRODUCTNAME ?")
+        if [ $RESULT != "y" ]; then
+            #echo
+            dialog_msg "NOTICE" "$PRODUCTNAME not installed"
+            return
+        fi
+    fi
+    
+    do_write_log "Installing $PRODUCTNAME $SCRIPTVER"
+    #dialog_msg "installing"  "Installing $PRODUCTNAME ..."
+    
+    # Install the CLI script
+    sudo cp --backup=numbered $SCRIPTNAME /usr/local/bin/$SCRIPTNAME
+    sudo chmod +x /usr/local/bin/$SCRIPTNAME
+    echo Installed ver=$(/usr/local/bin/$SCRIPTNAME -v)
+
+    
+    # note: to find terminal emulator
+    # update-alternatives --list x-terminal-emulator
+
+    
+    # create the desktop file    
+    echo "\
+[Desktop Entry]
+Type=Application
+Terminal=false
+Version=1.0
+Name=$PRODUCTNAME
+Comment=$PRODUCTCOMMENT
+#Icon=rpi-imager
+Icon=media-removable
+Exec=lxterminal --geometry=110x40 -e $SCRIPTNAME
+Categories=Utility
+StartupNotify=false" > "$PRODUCTNAME.desktop"   
+
+    #sudo mv "$PRODUCTNAME.desktop" "/usr/share/applications"
+    mv "$PRODUCTNAME.desktop" "$HOME/.local/share/applications/"
+
+    if [ -f "/usr/local/bin/$SCRIPTNAME" ]; then 
+        MSG="$PRODUCTNAME $SCRIPTVER installed.            
+        \nSelect it from the 'Accessories' menu.
+        \n\nOr you can execute it from any directory by typing '$SCRIPTNAME'."
+        
+        if [ $INTERFACE = "cli" ]; then
+            MSG="$PRODUCTNAME $SCRIPTVER installed.  Select it from the 'Accessories' menu or you can execute it a terminal window by typing '$SCRIPTNAME'."
+        fi
+        
+        #whiptail --backtitle "$BACKTITLE" --title "INSTALLED" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
+        dialog_msg  "INSTALL:" "$MSG"
     else
-        dialog_msg "INSTALL CANDELED" "$PRODUCTNAME not installed."
-        return 1
+        MSG="$PRODUCTNAME not installed.  '/usr/local/bin/$SCRIPTNAME' not found. "
+        #whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
+        dialog_msg  "INSTALL:" "$MSG"
     fi
 }
 
@@ -1144,7 +1190,6 @@ do_update() {
         return 1
     fi
 
-
     if [ $(get_ver_to_int $SERVER_VER) -gt $(get_ver_to_int $SCRIPTVER) ]; then
         RESULT=$(dialog_yesno "UPDATE AVAILABLE" "Update $PRODUCTNAME from '$SCRIPTVER'  to '$SERVER_VER' ")
         if [ $RESULT = "y" ]; then 
@@ -1161,6 +1206,83 @@ do_update() {
        fi
     fi
 }
+
+
+do_uninstall(){
+    SILENT=${1:-"-n"}
+    
+    if [ $SILENT != "-y" ]; then
+        RESULT=$(dialog_yesno "UNINSTALL" "Uninstall $PRODUCTNAME")
+        if [ $RESULT != "y" ]; then
+            dialog_msg "UNINSTALL" "$PRODUCTNAME not uninstalled"
+            return
+        fi
+    fi
+    
+    do_write_log "Uninstalling $PRODUCTNAME $INSTALLED_VER"
+    
+    # remove from the menu
+    #  sudo rm "/usr/share/applications/$PRODUCTNAME.desktop"
+    rm -f "$HOME/.local/share/applications/$PRODUCTNAME.desktop"
+    
+    # remove the script and config
+    sudo rm -f "/usr/local/bin/$SCRIPTNAME"
+    rm -f $CONFIG
+    
+    if [ ! -z "/usr/local/bin/$SCRIPTNAME" ]; then
+        echo $PRODUCTNAME uninstalled
+    fi
+    
+    #echo $LOG_FILE not removed
+    dialog_msg "UNINSTALL" "$LOG_FILE not removed"
+    #rm -f $LOG_FILE
+}
+
+
+
+
+retired_do_install() { 
+    INTERFACE=${1:-"cli"}
+    
+    if [ $INTERFACE = "gui" ]; then
+        RESULT=$(dialog_yesno "INSTALL" "Install $PRODUCTNAME $SCRIPTVER ?  ('No' to run without installing)")
+    else
+        RESULT=y
+    fi
+    
+    if [ $RESULT = "y" ]; then
+        do_write_log "Installing $PRODUCTNAME $SCRIPTVER"
+        sudo cp --backup=numbered $SCRIPTNAME /usr/local/bin/$SCRIPTNAME
+        sudo chmod +x /usr/local/bin/$SCRIPTNAME
+        echo Installed ver=$(/usr/local/bin/$SCRIPTNAME -v)
+    else
+        dialog_msg "INSTALL CANDELED" "$PRODUCTNAME not installed."
+        return 1
+    fi
+}
+
+
+retired_gui_do_uninstall(){
+    INSTALLED_VER=$(/usr/local/bin/$SCRIPTNAME -v)
+    MSG="Uninstall $PRODUCTNAME $INSTALLED_VER \
+    \nfrom '/usr/local/bin/' and the menu ?\
+    \n\nThis may not uninstall versions of $PRODUCTNAME prior to 0.8.x or so."
+    RESULT=$(dialog_yesno "UNINSTALL" "$MSG")
+    if [ $RESULT = "y" ]; then 
+        do_write_log "Uninstalling $PRODUCTNAME $INSTALLED_VER"
+      #  sudo rm "/usr/share/applications/$PRODUCTNAME.desktop"
+        rm "$HOME/.local/share/applications/$PRODUCTNAME.desktop"
+        #lxpanelctl restart
+        sudo rm "/usr/local/bin/$SCRIPTNAME"
+        sudo rm $CONFIG
+        #sudo rm $LOG_FILE
+    fi
+    
+    if [ -z $(which $SCRIPTNAME) ]; then
+        dialog_msg "UNINSTALL" "$PRODUCTNAME $INSTALLED_VER has been uninstalled \n\nLOG file '$LOG_FILE' has not been removed"
+    fi
+}
+
 
 
 
@@ -1515,6 +1637,7 @@ do_restore(){
 
 
 cli_menu(){
+INTERFACE="cli"
 case $1 in
     
     backup|read)
@@ -1532,11 +1655,15 @@ case $1 in
     ;;
     
     install)
-        do_install
+        do_install $2
     ;;
         
     update)
         do_update cli
+    ;;
+    
+    uninstall)
+        do_uninstall $2
     ;;
     
     help|-h)
@@ -1557,6 +1684,7 @@ case $1 in
     
     *)
         if [ ${SCRIPTNAME:0:6} = "pisafe" ]; then
+            INTERFACE="gui"
             gui_splash_screen
             gui_menu
         else    
@@ -1736,62 +1864,6 @@ whiptail_countdown(){
 }
 
 
-gui_do_install(){
-    do_install
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
-    fi
-    
-    
-    # create the desktop file    
-    echo "\
-[Desktop Entry]
-Type=Application
-Terminal=true
-Version=1.0
-Name=$PRODUCTNAME
-Comment=$PRODUCTCOMMENT
-#Icon=rpi-imager
-Icon=media-removable
-Exec=lxterminal --geometry=110x40 -e $SCRIPTNAME
-Categories=Utility
-StartupNotify=false" > "$PRODUCTNAME.desktop"   
-
-    sudo mv "$PRODUCTNAME.desktop" "/usr/share/applications"
-
-    if [ -f "/usr/local/bin/$SCRIPTNAME" ]; then 
-        MSG="$PRODUCTNAME $SCRIPTVER installed.            
-        \nSelect it from the 'Accessories' menu.
-        \n\nOr you can execute it from any directory by typing '$SCRIPTNAME'."
-        whiptail --backtitle "$BACKTITLE" --title "INSTALLED" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
-    else
-        MSG="$PRODUCTNAME not installed.  '/usr/local/bin/$SCRIPTNAME' not found. "
-        whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
-    fi
-}
-
-
-gui_do_uninstall(){
-    INSTALLED_VER=$(/usr/local/bin/$SCRIPTNAME -v)
-    MSG="Uninstall $PRODUCTNAME $INSTALLED_VER \
-    \nfrom '/usr/local/bin/' and the menu ?\
-    \n\nThis may not uninstall versions of $PRODUCTNAME prior to 0.8.x or so."
-    RESULT=$(dialog_yesno "UNINSTALL" "$MSG")
-    if [ $RESULT = "y" ]; then 
-        do_write_log "Uninstalling $PRODUCTNAME $INSTALLED_VER"
-        sudo rm "/usr/share/applications/$PRODUCTNAME.desktop"
-        sudo rm "~/.local/share/applications/$PRODUCTNAME.desktop"
-        #lxpanelctl restart
-        sudo rm "/usr/local/bin/$SCRIPTNAME"
-        sudo rm $CONFIG
-        #sudo rm $LOG_FILE
-    fi
-    
-    if [ -z $(which $SCRIPTNAME) ]; then
-        dialog_msg "UNINSTALL" "$PRODUCTNAME $INSTALLED_VER has been uninstalled \n\nLOG file '$LOG_FILE' has not been removed"
-    fi
-}
 
 
 gui_set_compression(){
@@ -2184,9 +2256,9 @@ gui_tools(){
             return $EXIT_CODE
         else
             case "$SELECTION" in
-            INSTALL)    gui_do_install  ;;
+            INSTALL)    do_install  ;;
             UPDATE)     do_update gui ;;
-            UNINSTALL)  gui_do_uninstall ;;
+            UNINSTALL)  do_uninstall ;;
 
             TERMINAL)   read -n 1 -p "Press any key to return"  ;;
             LOG)        $TEXT_EDITOR $LOG_FILE ;;
@@ -2241,7 +2313,7 @@ gui_menu(){
             SETTINGS)       gui_settings    ;;
             TOOLS)          gui_tools       ;;
             
-            INSTALL)        gui_do_install     ;;
+            INSTALL)        gui_do_install gui   ;;
             
             HELP)           HELP_INFO="$(do_help)"
                             whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$HELP_INFO" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
@@ -2258,7 +2330,8 @@ gui_menu(){
 gui_splash_screen(){
     #install
     if [ -z $(which $SCRIPTNAME) ]; then
-        gui_do_install  
+        #gui_do_install  
+        do_install
     fi    
     
     # UPDATE
