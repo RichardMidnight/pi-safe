@@ -8,7 +8,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.0.3"
+SCRIPTVER="1.0.4"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -1107,11 +1107,38 @@ get_tools() {
 }    
 
 
+get_terminal(){
+    local TERMINAL1=
+    if [ -f /usr/bin/lxterminal ];then
+      TERMINAL1="lxterminal --geometry=110x40 -e"
+    elif [ -f /usr/bin/xfce4-terminal ];then
+      TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c"
+    elif [ -f /usr/bin/mate-terminal ];then
+      TERMINAL1="mate-terminal --geometry=110x40 -x bash -c"
+    elif [ -f /usr/bin/xterm ];then
+      TERMINAL1="xterm --geometry=110x40 -e bash -c" 
+    #elif [ -f /usr/bin/konsole ];then
+    #  konsole -p tabtitle="$2" -e bash <(echo "$1")
+    elif [ -f /usr/bin/terminator ];then
+      TERMINAL1="terminator --geometry=110x40 -x bash -c"
+    elif [ -f /usr/bin/gnome-terminal ];then
+      TERMINAL1="gnome-terminal --geometry=110x40 -x bash -c"
+    elif [ -f /usr/bin/x-terminal-emulator ];then
+      TERMINAL1="$(readlink -f /usr/bin/x-terminal-emulator) -e bash -c"
+    else
+      echo "Failed to locate any terminal emulators!!!"
+      exit 1
+    fi
+
+    echo "$TERMINAL1"
+}
+
+
 do_install(){
     SILENT=${1:-"-n"}
     
     if [ $SILENT != "-y" ]; then
-        RESULT=$(dialog_yesno "INSTALL" "Install $PRODUCTNAME ?")
+        RESULT=$(dialog_yesno "INSTALL" "Install $PRODUCTNAME $SCRIPTVER?")
         if [ $RESULT != "y" ]; then
             #echo
             dialog_msg "NOTICE" "$PRODUCTNAME not installed"
@@ -1119,7 +1146,7 @@ do_install(){
         fi
     fi
     
-    do_write_log "Installing $PRODUCTNAME $SCRIPTVER"
+    do_write_log "Installing $PRODUCTNAME v $SCRIPTVER"
     #dialog_msg "installing"  "Installing $PRODUCTNAME ..."
     
     # Install the CLI script
@@ -1133,6 +1160,7 @@ do_install(){
 
     
     # create the desktop file    
+    TERMINAL1=$(get_terminal)
     echo "\
 [Desktop Entry]
 Type=Application
@@ -1142,12 +1170,15 @@ Name=$PRODUCTNAME
 Comment=$PRODUCTCOMMENT
 #Icon=rpi-imager
 Icon=media-removable
-Exec=lxterminal --geometry=110x40 -e $SCRIPTNAME
+xExec=lxterminal --geometry=110x40 -e $SCRIPTNAME
+Exec=$TERMINAL1 $SCRIPTNAME
 Categories=Utility
 StartupNotify=false" > "$PRODUCTNAME.desktop"   
 
-    #sudo mv "$PRODUCTNAME.desktop" "/usr/share/applications"
-    mv "$PRODUCTNAME.desktop" "$HOME/.local/share/applications/"
+    # for lxde, MATE and xfce put it in /usr/share/applications
+    sudo mv "$PRODUCTNAME.desktop" "/usr/share/applications"
+    # for just this user, put it in $HOME/.local/share/applications/
+    #mv "$PRODUCTNAME.desktop" "$HOME/.local/share/applications/"
 
     if [ -f "/usr/local/bin/$SCRIPTNAME" ]; then 
         MSG="$PRODUCTNAME $SCRIPTVER installed.            
@@ -1222,7 +1253,8 @@ do_uninstall(){
     do_write_log "Uninstalling $PRODUCTNAME $INSTALLED_VER"
     
     # remove from the menu
-    #  sudo rm "/usr/share/applications/$PRODUCTNAME.desktop"
+    sudo rm -f "/usr/share/applications/$PRODUCTNAME.desktop"
+    # next line cleans up an old configuration
     rm -f "$HOME/.local/share/applications/$PRODUCTNAME.desktop"
     
     # remove the script and config
