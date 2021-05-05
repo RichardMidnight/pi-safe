@@ -8,7 +8,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.0.4"
+SCRIPTVER="1.0.5"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -31,6 +31,26 @@ OUTDEV=
 INFILE=
 OUTFILE=
 BACKTITLE="$PRODUCTNAME ver $SCRIPTVER   === $PRODUCTCOMMENT === "
+
+
+DE_COMPONENTS(){
+    # this is just for a reference
+    
+    RaspberryPiOS-stretch       lxterminal          leafpad?
+    RaspberrypiOS-buster        lxterminal          mousepad
+    Debian-GNOME                gnome-terminal      gedit
+    Debian Xfce                 xfce4-terminal      mousepad
+    Debian KDE Plasma           konsole             kwrite
+    Debian Cinnamon             xterm / uxterm      gedit
+    Debian MATE                 mate-terminal       pluma
+    Debian LXDE                 lxterminal          mousepad
+    Debian LXQt                 qterminal           featherpad
+    ubuntu gnome              gnome-terminal      gedit
+    lubuntu LXQt              qterminal           featherpad
+    LMDE-4 Cinnamon           gnome-terminal      xed
+    
+}
+
 
 
 get_opts(){
@@ -127,6 +147,54 @@ do_init_conf(){
 }
 
 
+get_terminal(){
+    local TERMINAL1=
+    
+    if [ -f /usr/bin/lxterminal ];then
+      TERMINAL1="lxterminal --geometry=110x40 --title='PiSafe' -e bash -c "
+      
+    elif [ -f /usr/bin/xfce4-terminal ];then
+      TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
+    elif [ -f /usr/bin/mate-terminal ];then
+      TERMINAL1="mate-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
+    elif [ -f /usr/bin/gnome-terminal ];then
+      TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
+      
+    elif [ -f /usr/bin/xterm ];then
+      TERMINAL1="xterm -geometry 110x40 -T 'PiSafe' -e bash -c " 
+
+    elif [ -f /usr/bin/terminator ];then
+      TERMINAL1="terminator --geometry=110x40 -T 'PiSafe' -x bash -c "
+      
+    elif [ -f /usr/bin/konsole ];then
+      TERMINAL1="konsole -e bash -c " 
+    elif [ -f /usr/bin/qterminal ];then
+      TERMINAL1="qterminal -e bash -c "   
+      
+    elif [ -f /usr/bin/x-terminal-emulator ];then
+      TERMINAL1="$(readlink -f /usr/bin/x-terminal-emulator) -e bash -c "
+      
+    else
+      echo "Failed to locate any terminal emulators!!!"
+      exit 1
+    fi
+
+    echo "$TERMINAL1"
+}
+
+
+get_texteditor(){
+    TEXT_EDITORS="mousepad leafpad xed gedit featherpad kwrite pluma nano "
+    
+    for TEXT_EDITOR in $TEXT_EDITORS ; do
+        if [ ! -z $(which $TEXT_EDITOR) ]; then
+            echo $TEXT_EDITOR
+            return
+        fi    
+    done
+}
+
+
 set_conf_defaults(){
     set_config_var settings_script_ver $SCRIPTVER $CONFIG
     set_config_var default_path $HOME/Downloads $CONFIG
@@ -152,17 +220,22 @@ set_conf_defaults(){
     set_config_var log on $CONFIG
     set_config_var log_file /home/$USER/PiSafe.log $CONFIG
     
-    if [ ! -z $(which mousepad) ]; then
-        set_config_var text_editor mousepad $CONFIG
-    elif [ ! -z $(which leafpad) ]; then
-        set_config_var text_editor leafpad $CONFIG
-    elif [ ! -z $(which xed) ]; then
-        set_config_var text_editor xed $CONFIG
-    elif [ ! -z $(which gedit) ]; then
-        set_config_var text_editor gedit $CONFIG
-    else
-        set_config_var text_editor nano $CONFIG
-    fi
+    set_config_var text_editor $(get_texteditor) $CONFIG
+    
+    # get text editor
+    #if [ ! -z $(which mousepad) ]; then
+    #    set_config_var text_editor mousepad $CONFIG
+    #elif [ ! -z $(which leafpad) ]; then
+    ##    set_config_var text_editor leafpad $CONFIG
+    #elif [ ! -z $(which xed) ]; then
+    #    set_config_var text_editor xed $CONFIG
+    #elif [ ! -z $(which gedit) ]; then
+    #    set_config_var text_editor gedit $CONFIG
+    ##elif [ ! -z $(which featherpad) ]; then
+     #   set_config_var text_editor featherpad $CONFIG
+    #else
+    #    set_config_var text_editor nano $CONFIG
+    #fi
 }
 
 
@@ -1107,31 +1180,6 @@ get_tools() {
 }    
 
 
-get_terminal(){
-    local TERMINAL1=
-    if [ -f /usr/bin/lxterminal ];then
-      TERMINAL1="lxterminal --geometry=110x40 -e"
-    elif [ -f /usr/bin/xfce4-terminal ];then
-      TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c"
-    elif [ -f /usr/bin/mate-terminal ];then
-      TERMINAL1="mate-terminal --geometry=110x40 -x bash -c"
-    elif [ -f /usr/bin/xterm ];then
-      TERMINAL1="xterm --geometry=110x40 -e bash -c" 
-    #elif [ -f /usr/bin/konsole ];then
-    #  konsole -p tabtitle="$2" -e bash <(echo "$1")
-    elif [ -f /usr/bin/terminator ];then
-      TERMINAL1="terminator --geometry=110x40 -x bash -c"
-    elif [ -f /usr/bin/gnome-terminal ];then
-      TERMINAL1="gnome-terminal --geometry=110x40 -x bash -c"
-    elif [ -f /usr/bin/x-terminal-emulator ];then
-      TERMINAL1="$(readlink -f /usr/bin/x-terminal-emulator) -e bash -c"
-    else
-      echo "Failed to locate any terminal emulators!!!"
-      exit 1
-    fi
-
-    echo "$TERMINAL1"
-}
 
 
 do_install(){
@@ -1170,7 +1218,7 @@ Name=$PRODUCTNAME
 Comment=$PRODUCTCOMMENT
 #Icon=rpi-imager
 Icon=media-removable
-xExec=lxterminal --geometry=110x40 -e $SCRIPTNAME
+#Exec=lxterminal --geometry=110x40 -e $SCRIPTNAME
 Exec=$TERMINAL1 $SCRIPTNAME
 Categories=Utility
 StartupNotify=false" > "$PRODUCTNAME.desktop"   
