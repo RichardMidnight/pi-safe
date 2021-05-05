@@ -2,13 +2,18 @@
 
 COPYRIGHT="By Richard Reed 2018 - 2021"
 
+# This script basically 
+# 1- copies a drive with DD
+# 2- shrinks the partitions with pishrink
+# 3- compresses with zip or other
+
 # references
 # https://www.raspberrypi.org/documentation/installation/installing-images/linux.md
 # https://www.instructables.com/id/How-to-BackUp-and-Shrink-Your-Raspberry-Pi-Image/
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.0.5"
+SCRIPTVER="1.0.6"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -45,12 +50,11 @@ DE_COMPONENTS(){
     Debian MATE                 mate-terminal       pluma
     Debian LXDE                 lxterminal          mousepad
     Debian LXQt                 qterminal           featherpad
-    ubuntu gnome              gnome-terminal      gedit
-    lubuntu LXQt              qterminal           featherpad
-    LMDE-4 Cinnamon           gnome-terminal      xed
-    
-}
+    ubuntu gnome                gnome-terminal      gedit
+    lubuntu LXQt                qterminal           featherpad
+    LMDE-4 Cinnamon             gnome-terminal      xed
 
+}
 
 
 get_opts(){
@@ -199,7 +203,6 @@ set_conf_defaults(){
     set_config_var settings_script_ver $SCRIPTVER $CONFIG
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var hide_root_device on $CONFIG
- #   set_config_var hide_loop_device on $CONFIG
     set_config_var check_for_updates_on_startup on $CONFIG
 
 #backup settings
@@ -221,21 +224,6 @@ set_conf_defaults(){
     set_config_var log_file /home/$USER/PiSafe.log $CONFIG
     
     set_config_var text_editor $(get_texteditor) $CONFIG
-    
-    # get text editor
-    #if [ ! -z $(which mousepad) ]; then
-    #    set_config_var text_editor mousepad $CONFIG
-    #elif [ ! -z $(which leafpad) ]; then
-    ##    set_config_var text_editor leafpad $CONFIG
-    #elif [ ! -z $(which xed) ]; then
-    #    set_config_var text_editor xed $CONFIG
-    #elif [ ! -z $(which gedit) ]; then
-    #    set_config_var text_editor gedit $CONFIG
-    ##elif [ ! -z $(which featherpad) ]; then
-     #   set_config_var text_editor featherpad $CONFIG
-    #else
-    #    set_config_var text_editor nano $CONFIG
-    #fi
 }
 
 
@@ -245,7 +233,6 @@ get_settings(){
     DEFAULT_EXTENSION=$(get_config_var default_extension $CONFIG)
     COMPRESSION=$(get_config_var compression_level $CONFIG)
     HIDE_ROOT_DEVICE=$(get_config_var hide_root_device $CONFIG)
- #   HIDE_LOOP_DEVICE=$(get_config_var hide_loop_device $CONFIG)
     CHECK_FOR_UPDATES_ON_STARTUP=$(get_config_var check_for_updates_on_startup $CONFIG)
     
     DEBUG_MODE=$(get_config_var debug_mode $CONFIG)
@@ -1114,7 +1101,24 @@ get_sd_devices() {
 # --------------------------------------
 
 
-get_tools() {   
+do_install_lua(){
+    # try to find a version of lua that will install
+    # lua.org
+    LUA_VERS="lua5.4 lua5.3 lua5.2 lua5.1 "
+    for LUA_VER in $LUA_VERS; do
+        if [ ! -z $(which lua) ] ; then
+            # lua is installed
+            lua -v
+            return
+        fi
+        echo Trying $LUA_VER ...
+        sudo apt install $LUA_VER -y    
+    done
+    lua -v
+}
+
+
+do_install_tools() {   
     TOOL_MISSING=false
     TOOLS=$(echo $REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)
     
@@ -1125,9 +1129,10 @@ get_tools() {
     done
     
     if [ $TOOL_MISSING = "true" ]; then
-        echo "Install required tools ($REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL) [y/n]?"
-        read -n 1 -r RESULT
-        echo
+        echo "Installing required tools ($REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)"
+        #read -n 1 -r RESULT
+        #echo
+        RESULT=y
         if [ $RESULT != "y" ]; then
             echo
             echo_red   WARNING.  Not all the needed tools are installed.
@@ -1169,17 +1174,17 @@ get_tools() {
         fi
         
         # fix lua on ubuntu and mint
-        if [ -z $(which lua) ] ; then
-            sudo apt install lua5.1 -y
-            if [ -z $(which lua) ] ; then
-               dialog_msg "Error" "lua not installed." "red" 
-            fi
-        fi
-        
+        #if [ -z $(which lua) ] ; then
+        #    sudo apt install lua5.1 -y
+        #    if [ -z $(which lua) ] ; then
+        #       dialog_msg "Error" "lua not installed." "red" 
+        #    fi
+        #fi
+    
+        do_install_lua
+    
     fi
 }    
-
-
 
 
 do_install(){
@@ -1317,53 +1322,6 @@ do_uninstall(){
     dialog_msg "UNINSTALL" "$LOG_FILE not removed"
     #rm -f $LOG_FILE
 }
-
-
-
-
-retired_do_install() { 
-    INTERFACE=${1:-"cli"}
-    
-    if [ $INTERFACE = "gui" ]; then
-        RESULT=$(dialog_yesno "INSTALL" "Install $PRODUCTNAME $SCRIPTVER ?  ('No' to run without installing)")
-    else
-        RESULT=y
-    fi
-    
-    if [ $RESULT = "y" ]; then
-        do_write_log "Installing $PRODUCTNAME $SCRIPTVER"
-        sudo cp --backup=numbered $SCRIPTNAME /usr/local/bin/$SCRIPTNAME
-        sudo chmod +x /usr/local/bin/$SCRIPTNAME
-        echo Installed ver=$(/usr/local/bin/$SCRIPTNAME -v)
-    else
-        dialog_msg "INSTALL CANDELED" "$PRODUCTNAME not installed."
-        return 1
-    fi
-}
-
-
-retired_gui_do_uninstall(){
-    INSTALLED_VER=$(/usr/local/bin/$SCRIPTNAME -v)
-    MSG="Uninstall $PRODUCTNAME $INSTALLED_VER \
-    \nfrom '/usr/local/bin/' and the menu ?\
-    \n\nThis may not uninstall versions of $PRODUCTNAME prior to 0.8.x or so."
-    RESULT=$(dialog_yesno "UNINSTALL" "$MSG")
-    if [ $RESULT = "y" ]; then 
-        do_write_log "Uninstalling $PRODUCTNAME $INSTALLED_VER"
-      #  sudo rm "/usr/share/applications/$PRODUCTNAME.desktop"
-        rm "$HOME/.local/share/applications/$PRODUCTNAME.desktop"
-        #lxpanelctl restart
-        sudo rm "/usr/local/bin/$SCRIPTNAME"
-        sudo rm $CONFIG
-        #sudo rm $LOG_FILE
-    fi
-    
-    if [ -z $(which $SCRIPTNAME) ]; then
-        dialog_msg "UNINSTALL" "$PRODUCTNAME $INSTALLED_VER has been uninstalled \n\nLOG file '$LOG_FILE' has not been removed"
-    fi
-}
-
-
 
 
 do_backup(){
@@ -1944,8 +1902,6 @@ whiptail_countdown(){
 }
 
 
-
-
 gui_set_compression(){
     CHOICE=$(whiptail --title "SETTINGS-COMPRESSION" --radiolist \
     "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
@@ -2051,10 +2007,9 @@ gui_settings(){
         "Default directory   " "$DEFAULT_PATH" \
         "Default extension   " "$DEFAULT_EXTENSION" \
         "Compression         " "$COMPRESSION of 9" \
-        "Text editor"        "$TEXT_EDITOR" \
         "Options             " "Several options to turn on/off " \
         "                    " "      " \
-        "Edit config         " "Edit the settings file manually (pisafe.conf)" \
+        "Edit config file    " "Edit the settings file manually (pisafe.conf)" \
         "Factory defaults    " "Reset settings to factory defaults" \
         3>&1 1>&2 2>&3)
         
@@ -2376,9 +2331,6 @@ gui_menu(){
                  "  "        "   " \
                  "HELP"     "   Help"\
                 3>&1 1>&2 2>&3)
-                
-       #                  "  "        "   " \                  
-        #  "INSTALL"   "   Install $PRODUCTNAME into the menu" \      
  
                 
         case $MENU_CHOICE in
@@ -2438,24 +2390,15 @@ if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
 fi
 
 
-#get_texteditor
-#get_terminal
-#exit
-
-
-get_tools
+do_install_tools
 do_init_conf
 get_settings
 whiptail_calc_wt_size
 
 
-#install or update
+# check for updates
 if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
-   # if [ -z $(which $PRODUCTNAME) ]; then
-   #     gui_do_install
-   # else
-        do_update gui no
-   # fi    
+    do_update gui no
 fi
 
 
