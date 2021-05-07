@@ -1072,18 +1072,31 @@ do_install_lua(){
     # lua.org
     
     # see if lua is installed
-    LUA_INSTALLED=false
+   # lua -v 
+   # EXIT_CODE=$?
+   # if [ $EXIT_CODE = 0 ]; then
+   ##     return
+   # fi
+    
+    
+    # see if lua is installed, fix if needed 
+    LUA=
     LUA_VERS="lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
     for LUA_VER in $LUA_VERS; do
         #if [ ! -z $(which lua) ] ; then
-        if [ -f /usr/bin/$LUA_VER ] ; then
-            LUA_INSTALLED=true
+        #if [ -f /usr/bin/$LUA_VER ] ; then
+        $LUA_VER -v 2> /dev/null
+        if [ $? = 0 ]; then  #  LUA_VER found
+            #LUA_INSTALLED=true
             # lua is installed
             # lua -v
             # return
             
             # fix lua if needed
-            if [ ! -f /usr/bin/lua ] ; then
+            # if [ ! -f /usr/bin/lua ] ; then
+            lua -v 2> /dev/null
+            if [ $? != 0 ]; then   # lua not found
+              # should actually make an alias
               sudo cp /usr/bin/$LUA_VER /usr/bin/lua
               return
             fi
@@ -1091,16 +1104,16 @@ do_install_lua(){
         fi
      done 
      
-     # install and lua if not found  
+     # lua not found, try to install and fix   
      for LUA_VER in $LUA_VERS; do
         echo Trying to install $LUA_VER ...
         #sudo apt install $LUA_VER -y    
         sudo $INSTALL $LUA_VER
-        EXIT_CODE=$?
-        # now see if we need to make the lua link
-        if [ $EXIT_CODE = 0 ] ; then
-          if [ ! -f /usr/bin/lua ]; then
-              #make a link... but using copy for now
+        if [ $? = 0 ] ; then  # we got an install for LUA_VER
+          # see if we need to fix lua
+          lua -v 2> /dev/null
+          if [ $? != 0 ]; then
+              # sould acutally make an alias...  
               sudo cp /usr/bin/$LUA_VER /usr/bin/lua
               return
           else
