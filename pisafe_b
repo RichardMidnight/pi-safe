@@ -1090,7 +1090,7 @@ do_install_tools() {
     
     for TOOL in $TOOLS ; do
         #if [ ! $(which $TOOL) ]; then
-        if [ ! /usr/bin/$TOOL ]; then
+        if [ ! -f /usr/bin/$TOOL ]; then
             TOOL_MISSING=true
         fi
     done
@@ -1108,7 +1108,7 @@ do_install_tools() {
 
         for TOOL in $REQUIRED_TOOLS ; do
            # if [ ! $(which $TOOL) ]; then
-             if [ ! /usr/bin/$TOOL ]; then
+             if [ ! -f /usr/bin/$TOOL ]; then
                 echo_white Installing $TOOL ...
                 #sudo apt install -y $TOOL
                 sudo $INSTALL $TOOL
@@ -2347,7 +2347,8 @@ whiptail_calc_wt_size
 
 # check for updates
 if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
-    do_update gui no
+ #   do_update gui no
+ x=1
 fi
 
 
