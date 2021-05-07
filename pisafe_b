@@ -200,7 +200,8 @@ get_texteditor(){
     TEXT_EDITORS="mousepad leafpad xed gedit featherpad kwrite pluma nano "
     
     for TEXT_EDITOR in $TEXT_EDITORS ; do
-        if [ ! -z $(which $TEXT_EDITOR) ]; then
+        #if [ ! -z $(which $TEXT_EDITOR) ]; then
+        if [ -f /usr/bin/$TEXT_EDITOR ]; then
             echo $TEXT_EDITOR
             return
         fi    
@@ -1121,23 +1122,27 @@ do_install_tools() {
         # special installs ...
         
         # Install PiShrink if needed
-        if [ -z $(which pishrink.sh) ]; then
+        #if [ -z $(which pishrink.sh) ]; then
+        if [ ! -f /usr/local/bin/pishrink.sh) ]; then
             echo_white Installing pishrink...
             wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
             chmod +x pishrink.sh
             sudo mv pishrink.sh /usr/local/bin
             echo pishrink installed.
-            if [ -z $(which pishrink.sh) ] ; then
+            #if [ -z $(which pishrink.sh) ] ; then
+            if [ ! -f /usr/local/bin/pishrink.sh) ] ; then
                dialog_msg "Error" "pishrink not installed." "red" 
             fi
         fi
 
         # Install xz if needed
-        if [ -z $(which xz) ]; then
+        #if [ -z $(which xz) ]; then
+        if [ ! -f /usr/bin/xz ]; then
             echo_white Installing xz-utils...
             #sudo apt install xz-utils -y
             sudo $INSTALL xy_utils
-            if [ -z $(which xz) ] ; then
+            #if [ -z $(which xz) ] ; then
+            if ! -f /usr/bin/xz ]; then
                dialog_msg "Error" "xz not installed." "red" 
             fi
         fi
