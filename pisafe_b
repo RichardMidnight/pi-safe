@@ -1070,30 +1070,50 @@ get_sd_devices() {
 do_install_lua(){
     # try to find a version of lua that will install
     # lua.org
+    
+    # see if lua is installed
+    LUA_INSTALLED=false
     LUA_VERS="lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
     for LUA_VER in $LUA_VERS; do
         #if [ ! -z $(which lua) ] ; then
         if [ -f /usr/bin/$LUA_VER ] ; then
+            LUA_INSTALLED=true
             # lua is installed
             # lua -v
+            # return
+            
+            # fix lua if needed
+            if [ ! -f /usr/bin/lua ] ; then
+              sudo cp /usr/bin/$LUA_VER /usr/bin/lua
+              return
+            fi
             return
         fi
+     done 
+     
+     # install and lua if not found  
+     for LUA_VER in $LUA_VERS; do
         echo Trying to install $LUA_VER ...
         #sudo apt install $LUA_VER -y    
         sudo $INSTALL $LUA_VER
-        
+        EXIT_CODE=$?
         # now see if we need to make the lua link
-        if [ ! -f /usr/bin/lua ]; then
-          #make a link... but using copy for now
-          sudo cp /usr/bin/$LUA_VER /usr/bin/lua
+        if [ $EXIT_CODE = 0 ] ; then
+          if [ ! -f /usr/bin/lua ]; then
+              #make a link... but using copy for now
+              sudo cp /usr/bin/$LUA_VER /usr/bin/lua
+              return
+          else
+              return  
+          fi  
         fi
-        
     done
-    #lua -v
+    
+    lua -v
     
     #patch for manjaro
-    sudo cp /usr/bin/lua5.3 /usr/bin/lua
-    sudo cp /usr/bin/lua5.2 /usr/bin/lua
+    #sudo cp /usr/bin/lua5.3 /usr/bin/lua
+    #sudo cp /usr/bin/lua5.2 /usr/bin/lua
     
 }
 
