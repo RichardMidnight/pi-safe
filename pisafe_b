@@ -3,9 +3,9 @@
 COPYRIGHT="By Richard Reed 2018 - 2021"
 
 # This script basically 
-# 1- copies a drive with DD
-# 2- shrinks the partitions with pishrink
-# 3- compresses with zip or other
+# 1- copies a device with 'dd'
+# 2- shrinks the partitions with 'pishrink'
+# 3- compresses with 'zip' 
 
 # references
 # https://www.raspberrypi.org/documentation/installation/installing-images/linux.md
@@ -25,6 +25,14 @@ REQUIRED_TOOLS="lua pv bc whiptail zip pigz "
 REQUIRED_TOOLS_SPECIAL_INSTALL="pishrink.sh xz"
 INTERFACE="cli"
 
+
+if [ -f /usr/bin/apt ]; then
+    INSTALL="apt install -y"
+elif [ -f /usr/bin/pacman ]; then
+    INSTALL="pacman -S --noconfirm"
+fi
+
+
 WHITE='\033[1;37m'
 RED='\033[1;31m'
 NC='\033[0m' 		# No Color, standard text
@@ -39,7 +47,7 @@ BACKTITLE="$PRODUCTNAME ver $SCRIPTVER   === $PRODUCTCOMMENT === "
 
 
 DE_COMPONENTS(){
-    # this is just for a reference
+    # this is just a reference of tested OSs
     
     RaspberryPiOS-stretch       lxterminal          leafpad?
     RaspberrypiOS-buster        lxterminal          mousepad
@@ -53,7 +61,14 @@ DE_COMPONENTS(){
     ubuntu gnome                gnome-terminal      gedit
     lubuntu LXQt                qterminal           featherpad
     LMDE-4 Cinnamon             gnome-terminal      xed
+    mint cinnamon               gnome-terminal      xed
+    mint MATE                   mate-terminal       xed
+    Mint Xfce                   xfce4-terminal      Xed
 
+    bionic puppy    (ppm)       lxterminal          geany 
+    arch / manjaro  (pacman -S)
+    zorin (ubuntu based)
+    
 }
 
 
@@ -128,12 +143,6 @@ do_about(){
     echo
     echo "I hope this is helpful to others."
     echo
-}
-
-
-do_factory_reset(){
-    set_conf_defaults
-    get_settings
 }
 
 
@@ -312,6 +321,12 @@ EOF
 }
 
 
+do_factory_reset(){
+    set_conf_defaults
+    get_settings
+}
+
+
 # -------------------------------------------------------------
 
 
@@ -354,13 +369,11 @@ dialog_yesno(){
         
     else
         whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --defaultno --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH 3>&1 1>&2 2>&3
-        
         if [ $? = 0 ]; then 
             RESULT=y
         else
             RESULT=n
         fi
-        
         echo $RESULT
         return 0
     fi
@@ -425,16 +438,6 @@ do_beep_if_sound(){
 }
 
 
-#get_os_id(){
-#    cat /etc/os-release | grep -v VERSION| grep ID= | cut -d= -f2
-#}
-
-
-#get_os_pretty_name(){
-#    cat /etc/os-release | grep PRETTY
-#}
-
-
 get_elapsed_time() {
     # paramaters are in seconds
     local BEG=$1
@@ -458,8 +461,7 @@ get_bytes_h(){
     # currently shows 3 significant digits.
     
     NUM='^[0-9]+$'
-    if ! [[ "$BYTES" =~ $NUM ]] ; then   # not a number
-        #echo $BYTES    
+    if ! [[ "$BYTES" =~ $NUM ]] ; then   # not a number   
         return 1
     fi
     
@@ -508,7 +510,6 @@ get_file_path(){
 
 
 get_file_base() {
-   # basename "$*"
     local fullfilename=$*
     
     filename=$(basename "$fullfilename")
@@ -570,7 +571,6 @@ get_sd_name(){
 
 
 get_sd_size() {
-  
     local DEV=$1
     local HUMAN=${2:-"no"}
    
@@ -595,7 +595,6 @@ get_sd_size() {
         echo $SIZE_BYTES
     fi
     
-    
 # an alternative way:
 # echo $(( $(sudo blockdev --getsize64 /dev/sda) ))
 # echo $(( $(sudo blockdev --getsize64 /dev/sda)/1024/1024 ))mb    
@@ -611,7 +610,6 @@ get_device_serial(){
 
 
 get_root_device() {
-    # returns 
     local ROOT_PARTITION
     local ROOT_DRIVE
     
@@ -655,7 +653,7 @@ get_freespace() {
 
 get_folder_size() {
     local FOLDER=$*
-    # returns hunam readable
+    # returns human readable
     
     if [ -d "$FOLDER" ] ; then
         sudo du -sh "$FOLDER" | cut -d'/' -f1 | sed 's/\s\s*/ /g'
@@ -775,7 +773,6 @@ get_image_size() {
         return 0
     fi
     
-    
     if [ $HUMAN = "-h" ]; then
         echo $(get_bytes_h $SIZE_BYTES)
     else
@@ -842,7 +839,6 @@ check_indev(){
             \nThere is $(get_folder_size /home/pi/.local/share/Trash) in the Trash" 
         dialog_msg "WARNING 6" "$MSG" "red"  
     fi
-    
     
      # if we got this far, all is good
      return 0
@@ -1037,59 +1033,26 @@ do_list_info() {
         #echo "$(cat $CONFIG | grep "device_lock")"
         #echo
         echo
-       # echo "~~~ SD-CARD DEVICES ~~~  (hide root device = $HIDE_ROOT_DEVICE) (hide mmc = $HIDE_MMC_DEVICE)"
-       echo "~~~ SD-CARD DEVICES ~~~  (hide root device = $HIDE_ROOT_DEVICE)"
+        echo "~~~ SD-CARD DEVICES ~~~  (hide root device = $HIDE_ROOT_DEVICE)"
         echo "$(get_sd_devices)"
         echo   
         echo
         echo "~~~ IMAGE FILES in '$DIR' ~~~"
         SAVED_PWD=$PWD
-        #echo $OLD_DIR
-        #echo $DEFAULT_PATH
-        cd $DIR
-        #ls -1 -s -h -w1 *.img *.zip *.xz *.gz 2> /dev/null | sed 's/ /     /'
-        #ls -1 -s -h -w1 $DEFAULT_PATH/*.img $DEFAULT_PATH/*.zip $DEFAULT_PATH/*.xz $DEFAULT_PATH/*.gz 2> /dev/null | sed 's/ /     /'
-  
+        cd $DIR  
         do_list_image_files
         cd $SAVED_PWD
 }    
 
 
-get_sd_devices_old() {
-    local DEVICES= 
-    BOOT_FILTER="aspodiausdfpoiasdf"
-    LOOP_FILTER="aspodiausdfpoiasdf"
-    if [ $(get_config_var hide_root_device $CONFIG) = "on" ]; then
-        BOOT_FILTER=$(get_root_device)
-    fi       
-    if [ $(get_config_var hide_loop_device $CONFIG) = "on" ]; then
-        LOOP_FILTER="loop"
-    fi  
-       
-    DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER | grep -v $LOOP_FILTER) 
-    EXIT_CODE=$?
-
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
-    fi
-    
-    echo "${DEVICES[@]}"
-  }
-
-
 get_sd_devices() {
     local DEVICES= 
     BOOT_FILTER="aspodiausdfpoiasdf"
-    #LOOP_FILTER="aspodiausdfpoiasdf"
     if [ $(get_config_var hide_root_device $CONFIG) = "on" ]; then
         BOOT_FILTER=$(get_root_device)
-    fi       
-   # if [ $(get_config_var hide_loop_device $CONFIG) = "on" ]; then
-   #     LOOP_FILTER="loop"
-   # fi  
+    fi        
        
-   # DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER | grep -v $LOOP_FILTER) 
-   DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER)
+    DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER)
     EXIT_CODE=$?
 
     if [ $EXIT_CODE != 0 ]; then
@@ -1104,15 +1067,17 @@ get_sd_devices() {
 do_install_lua(){
     # try to find a version of lua that will install
     # lua.org
-    LUA_VERS="lua5.4 lua5.3 lua5.2 lua5.1 "
+    LUA_VERS="lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52"
     for LUA_VER in $LUA_VERS; do
-        if [ ! -z $(which lua) ] ; then
+        #if [ ! -z $(which lua) ] ; then
+        if [ -f /usr/bin/lua ] ; then
             # lua is installed
             lua -v
             return
         fi
         echo Trying $LUA_VER ...
-        sudo apt install $LUA_VER -y    
+        #sudo apt install $LUA_VER -y    
+        sudo $INSTALL $LUA_VER
     done
     lua -v
 }
@@ -1123,7 +1088,8 @@ do_install_tools() {
     TOOLS=$(echo $REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)
     
     for TOOL in $TOOLS ; do
-        if [ ! $(which $TOOL) ]; then
+        #if [ ! $(which $TOOL) ]; then
+        if [ ! /usr/bin/$TOOL ]; then
             TOOL_MISSING=true
         fi
     done
@@ -1140,9 +1106,11 @@ do_install_tools() {
         fi
 
         for TOOL in $REQUIRED_TOOLS ; do
-            if [ ! $(which $TOOL) ]; then
+           # if [ ! $(which $TOOL) ]; then
+             if [ ! /usr/bin/$TOOL ]; then
                 echo_white Installing $TOOL ...
-                sudo apt install -y $TOOL
+                #sudo apt install -y $TOOL
+                sudo $INSTALL $TOOL
                 EXIT_CODE=$?
                 if [ $EXIT_CODE != 0 ]; then
                     dialog_msg "Error" "$TOOL not installed." "red"
@@ -1167,19 +1135,12 @@ do_install_tools() {
         # Install xz if needed
         if [ -z $(which xz) ]; then
             echo_white Installing xz-utils...
-            sudo apt install xz-utils -y
+            #sudo apt install xz-utils -y
+            sudo $INSTALL xy_utils
             if [ -z $(which xz) ] ; then
                dialog_msg "Error" "xz not installed." "red" 
             fi
         fi
-        
-        # fix lua on ubuntu and mint
-        #if [ -z $(which lua) ] ; then
-        #    sudo apt install lua5.1 -y
-        #    if [ -z $(which lua) ] ; then
-        #       dialog_msg "Error" "lua not installed." "red" 
-        #    fi
-        #fi
     
         do_install_lua
     
@@ -1239,7 +1200,7 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
         \n\nOr you can execute it from any directory by typing '$SCRIPTNAME'."
         
         if [ $INTERFACE = "cli" ]; then
-            MSG="$PRODUCTNAME $SCRIPTVER installed.  Select it from the 'Accessories' menu or you can execute it a terminal window by typing '$SCRIPTNAME'."
+            MSG="$PRODUCTNAME $SCRIPTVER installed.  Select it from the 'Accessories' menu or you can execute it in a terminal window by typing '$SCRIPTNAME'."
         fi
         
         #whiptail --backtitle "$BACKTITLE" --title "INSTALLED" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
@@ -1318,7 +1279,6 @@ do_uninstall(){
         echo $PRODUCTNAME uninstalled
     fi
     
-    #echo $LOG_FILE not removed
     dialog_msg "UNINSTALL" "$LOG_FILE not removed"
     #rm -f $LOG_FILE
 }
@@ -1371,7 +1331,6 @@ do_backup(){
     #################################################
     # this section writes the data
     #################################################
-    #OUTFILE_BASE=$(get_file_path "$OUTFILE")/$(get_file_base "$OUTFILE")
     OUTFILE_BASE=$(get_file_path_base "$OUTFILE" )
 
     TIME1=$(date +%s)
@@ -1403,7 +1362,6 @@ do_backup(){
             EXIT_CODE=$?
             if [ $EXIT_CODE != 0 ]; then
                 echo Continuing without shrinking file system
-                #return $EXIT_CODE
             fi
         else
             echo "Filesystem not shrunk.  Setting is 'off'."
@@ -1471,14 +1429,6 @@ do_backup(){
             EXIT_CODE=$? 
             rm -f "$OUTFILE_BASE".img
             
-            #Imprecise progress bar on backside
-            #echo $(echo "scale=2; $BYTES/($k_ilo)" | bc)kb ;;
-            #SIZE=$(get_file_size "$OUTFILE_BASE".img)
-            #echo $(get_bytes_h $SIZE) to compress. This gz progress bar is imprecise.
-            #HALF_SIZE=$(echo "$SIZE/2" | bc )
-            #pigz -c -$COMPRESSION "$OUTFILE_BASE".img | pv -s $HALF_SIZE > "$OUTFILE"
-            #EXIT_CODE=$? 
-            #rm -f "$OUTFILE_BASE".img
         ;;
         
         *)
@@ -1614,7 +1564,6 @@ do_restore(){
         
         zip)
             RESTORE_BYTES=$(get_image_size "$INFILE")
-            #echo $RESTORE_BYTES
              if [ $INTERFACE = "cli" ]; then
                  #unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                  #pv "$INFILE" | unzip -p | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
@@ -1770,9 +1719,6 @@ whiptail_calc_wt_size() {
 
     WT_MB_HEIGHT=$WT_HEIGHT
     WT_MB_WIDTH=$WT_WIDTH
-
-    # use for pasting
-    # $WT_HEIGHT  $WT_WIDTH
 }
 
 
@@ -2243,8 +2189,6 @@ gui_select_sddevice(){
 
     #get this list of sd devices and add a field seperator |    
     IFS=$'\n'
-    #options=($(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? | sed 's/ ./ | /'))
-    #options=($(get_sd_devices | sed 's/ ./ '$FIELD_SEPERATOR' /'))
     options=($(get_sd_devices | sed 's/ / '$FIELD_SEPERATOR' /'))
     unset IFS
     
