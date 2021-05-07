@@ -1,6 +1,6 @@
 #!/bin/bash
 
-COPYRIGHT="By Richard Reed 2018 - 2021"
+COPYRIGHT="By Richard Reed 2018 - 2021" 
 
 # This script basically 
 # 1- copies a device with 'dd'
@@ -1123,14 +1123,14 @@ do_install_tools() {
         
         # Install PiShrink if needed
         #if [ -z $(which pishrink.sh) ]; then
-        if [ ! -f /usr/local/bin/pishrink.sh) ]; then
+        if [ ! -f /usr/local/bin/pishrink.sh ]; then
             echo_white Installing pishrink...
             wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
             chmod +x pishrink.sh
             sudo mv pishrink.sh /usr/local/bin
             echo pishrink installed.
             #if [ -z $(which pishrink.sh) ] ; then
-            if [ ! -f /usr/local/bin/pishrink.sh) ] ; then
+            if [ ! -f /usr/local/bin/pishrink.sh ] ; then
                dialog_msg "Error" "pishrink not installed." "red" 
             fi
         fi
