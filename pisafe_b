@@ -1097,6 +1097,7 @@ do_install_lua(){
             lua -v 2> /dev/null
             if [ $? != 0 ]; then   # lua not found
               # should actually make an alias
+              echo copying /usr/bin/$LUA_VER to /usr/bin/lua ...
               sudo cp /usr/bin/$LUA_VER /usr/bin/lua
               return
             fi
@@ -1114,6 +1115,7 @@ do_install_lua(){
           lua -v 2> /dev/null
           if [ $? != 0 ]; then
               # sould acutally make an alias...  
+              echo copying /usr/bin/$LUA_VER to /usr/bin/lua ...
               sudo cp /usr/bin/$LUA_VER /usr/bin/lua
               return
           else
