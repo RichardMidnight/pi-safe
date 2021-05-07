@@ -68,6 +68,8 @@ DE_COMPONENTS(){
     bionic puppy    - ppm       lxterminal          geany 
     arch / manjaro  - pacman -S
     zorin - ubuntu based
+    manjaro kde                 konsole             kate
+    manjaro xfce                xfce-terminal       mousepad
     
 }
 
@@ -197,7 +199,7 @@ get_terminal(){
 
 
 get_texteditor(){
-    TEXT_EDITORS="mousepad leafpad xed gedit featherpad kwrite pluma nano "
+    TEXT_EDITORS="mousepad leafpad xed gedit featherpad kwrite pluma kate nano "
     
     for TEXT_EDITOR in $TEXT_EDITORS ; do
         #if [ ! -z $(which $TEXT_EDITOR) ]; then
