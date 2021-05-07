@@ -65,9 +65,9 @@ DE_COMPONENTS(){
     mint MATE                   mate-terminal       xed
     Mint Xfce                   xfce4-terminal      Xed
 
-    bionic puppy    (ppm)       lxterminal          geany 
-    arch / manjaro  (pacman -S)
-    zorin (ubuntu based)
+    bionic puppy    - ppm       lxterminal          geany 
+    arch / manjaro  - pacman -S
+    zorin - ubuntu based
     
 }
 
