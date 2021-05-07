@@ -21,8 +21,8 @@ CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG=/home/$USER/.config/pisafe/pisafe.conf
 #LOG_FILE=/home/$USER/PiSafe.log
-REQUIRED_TOOLS="lua pv bc whiptail zip pigz "
-REQUIRED_TOOLS_SPECIAL_INSTALL="pishrink.sh xz"
+REQUIRED_TOOLS="pv bc whiptail zip pigz "
+REQUIRED_TOOLS_SPECIAL_INSTALL="lua pishrink.sh xz"
 INTERFACE="cli"
 
 
@@ -1070,19 +1070,26 @@ get_sd_devices() {
 do_install_lua(){
     # try to find a version of lua that will install
     # lua.org
-    LUA_VERS="lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52"
+    LUA_VERS="lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
     for LUA_VER in $LUA_VERS; do
         #if [ ! -z $(which lua) ] ; then
-        if [ -f /usr/bin/lua ] ; then
+        if [ -f /usr/bin/$LUA_VER ] ; then
             # lua is installed
-            lua -v
+            # lua -v
             return
         fi
-        echo Trying $LUA_VER ...
+        echo Trying to install $LUA_VER ...
         #sudo apt install $LUA_VER -y    
         sudo $INSTALL $LUA_VER
+        
+        # now see if we need to make the lua link
+        if [ ! -f /usr/bin/lua ]; then
+          #make a link... but using copy for now
+          sudo cp /usr/bin/$LUA_VER /usr/bin/lua
+        fi
+        
     done
-    lua -v
+    #lua -v
     
     #patch for manjaro
     sudo cp /usr/bin/lua5.3 /usr/bin/lua
@@ -2355,7 +2362,6 @@ whiptail_calc_wt_size
 # check for updates
 if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
     do_update gui no
- x=1
 fi
 
 
