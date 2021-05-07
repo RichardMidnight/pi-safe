@@ -1081,6 +1081,11 @@ do_install_lua(){
         sudo $INSTALL $LUA_VER
     done
     lua -v
+    
+    #patch for manjaro
+    sudo cp /usr/bin/lua5.3 /usr/bin/lua
+    sudo cp /usr/bin/lua5.2 /usr/bin/lua
+    
 }
 
 
@@ -2347,7 +2352,7 @@ whiptail_calc_wt_size
 
 # check for updates
 if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
- #   do_update gui no
+    do_update gui no
  x=1
 fi
 
