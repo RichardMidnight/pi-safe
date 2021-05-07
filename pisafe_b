@@ -1073,7 +1073,7 @@ do_install_lua(){
     
     
     # see if lua is installed, fix if needed 
-    LUA_VERS="lua lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
+    LUA_VERS="lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
     for LUA_VER in $LUA_VERS; do
         #if [ ! -z $(which lua) ] ; then
         #if [ -f /usr/bin/$LUA_VER ] ; then
@@ -1111,9 +1111,10 @@ do_install_lua(){
     
     # lua -v
     
-    #patch for manjaro
-    #sudo cp /usr/bin/lua5.3 /usr/bin/lua
-    #sudo cp /usr/bin/lua5.2 /usr/bin/lua
+    #crude patch for manjaro
+    sudo cp /usr/bin/lua5.4 /usr/bin/lua
+    sudo cp /usr/bin/lua5.3 /usr/bin/lua
+    sudo cp /usr/bin/lua5.2 /usr/bin/lua
     
 }
 
