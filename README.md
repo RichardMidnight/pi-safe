@@ -23,7 +23,7 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
 
  - Create a library of your own pi images, then restore them to whatever device you want, whenever you want.  
  
- - This adds a menu front-end to my 'sd' project which is a command-line version.
+ - Can be run fully from the command line.
 
  - Should work with most debian and arch distros, see below.   
 
@@ -32,9 +32,9 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
  
  .
  
-# EXAMPLE
+# SETUP
  
-   1) Install Raspberry PI OS on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This is your Master SD-card.
+   1) Install Raspberry PI OS on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This will be your Master SD-card.
    
    2) Install Pi-Safe as described below.
    
@@ -50,7 +50,18 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
    
 .   
 
+# INSTALL
+
+In a terminal window, type in
+
+      
+    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
+    bash pisafe
+    
+    Then you can select 'tools' 'install' from the menu to install it into your Raspberry Pi menu
    
+  
+  
 # TO MAKE AN IMAGE FILE  
    
    1) Boot your Pi with your Master SD-card as above.
@@ -64,18 +75,7 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
    5) Watch your image-file get created, shrunk and compressed automatically.
     
  .
-   
-
-# INSTALL
-
-In a terminal window, type in
-
-      
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
-    bash pisafe
-    
-    Then you can select 'tools' 'install' from the menu to install it into your Raspberry Pi menu
-    
+ 
    
    
 # COMPATIBILITY   
@@ -87,7 +87,7 @@ v1.0.5 Added support for other terminals: lxterminal, gnome-terminal, xfce-termi
 
 V1.0.5 Added support for other text editors: leafpad, mousepad, gedit, kwrite, pluma, featherpad, xed, geany, kate, nano.
 
-V1.1.0 Added support for Manjaro and maybe other Arch versions.
+V1.1.0 Added support for Manjaro and maybe other Arch-based distros.
  
    
    
