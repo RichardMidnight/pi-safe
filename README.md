@@ -27,9 +27,8 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
 
  - Should work with most debian and arch distros, see below.   
 
- - See Leepspvideo nice review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0
- -   "Very Impressive", "Makes a nice small image", "Really good all-in-one solution"
- -  
+ - See Leepspvideo nice review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0  "Very Impressive", "Makes a nice small image", "Really good all-in-one solution"
+   
  
  .
  
