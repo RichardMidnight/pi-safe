@@ -27,7 +27,7 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
 
  - Should work with most debian and arch distros, see below.   
 
- - See Leepspvideo nice review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0  "Very Impressive", "Makes a nice small image", "Really good all-in-one solution"
+ - See Leepspvideo nice review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0  -- "Very Impressive", "Makes a nice small image", "Really good all-in-one solution"
    
  
  .
@@ -74,7 +74,7 @@ In a terminal window, type in
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
     bash pisafe
     
-    Then you can select 'install' from the menu to install it into your Raspberry Pi menu
+    Then you can select 'tools' 'install' from the menu to install it into your Raspberry Pi menu
     
    
    
