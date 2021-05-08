@@ -59,7 +59,7 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
    
    3) Startup Pi-Safe from the menu.  Or in a terminal, type in 'pisafe'
         
-   4) Use the menu to select BACKUP, select your SD-card and the image-file a name.
+   4) Use the menu to select BACKUP, select your SD-card and give the image-file a name.
    
    5) Watch your image-file get created, shrunk and compressed automatically.
     
