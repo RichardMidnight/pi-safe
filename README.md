@@ -25,9 +25,11 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
  
  - This adds a menu front-end to my 'sd' project which is a command-line version.
 
- - Works with most debian and arch distros, see below.   
+ - Should work with most debian and arch distros, see below.   
 
- - See Leepspvideo review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0
+ - See Leepspvideo nice review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0
+ -   "Very Impressive", "Makes a nice small image", "Really good all-in-one solution"
+ -  
  
  .
  
