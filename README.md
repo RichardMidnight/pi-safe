@@ -80,7 +80,13 @@ In a terminal window, type in
 # COMPATIBILITY   
 Tested extensively on Raspberry pi 4 running Raspberry Pi OS Buster.
 
-Also light testing on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.20 for Rpi, Linux Mint, LMDE.
+Also tested on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.20 for Rpi, Linux Mint, LMDE.
+
+Added support for terminals: lxterminal, gnome-terminal, xfce-terminal, mate-terminal, konsole, xterm, uxterm, qterminal
+
+Addes support for text editors: leafpad, mousepad, gedit, kwrite, pluma, featherpad, xed, geany, kate, nano
+
+Added support for Manjaro and maybe other Arch versions.
  
    
    
