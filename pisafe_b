@@ -13,7 +13,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.0.6"
+SCRIPTVER="1.1.0"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -1067,54 +1067,60 @@ get_sd_devices() {
 # --------------------------------------
 
 
+
 do_install_lua(){
     # try to find a version of lua that will install
     # lua.org
     
-    
     # see if lua is installed, fix if needed 
-    LUA_VERS="lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
+    LUA_VERS="lua lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
     for LUA_VER in $LUA_VERS; do
-        #if [ ! -z $(which lua) ] ; then
-        #if [ -f /usr/bin/$LUA_VER ] ; then
         1>/dev/null 2>/dev/null $LUA_VER -v 
         if [ $? = 0 ]; then  #  LUA_VER found
             1>/dev/null lua -v
-            if [ $? != 0 ]; then   # lua not found
-              # should actually make an alias
-              echo Copying /usr/bin/$LUA_VER to /usr/bin/lua ...
-              sudo cp /usr/bin/$LUA_VER /usr/bin/lua
+            if [ $? = 0 ]; then   # lua works, can return
               return
+            else
+            
+                #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
+                for LUA_TEST in "lua5.4 lua5.3 lua5.2 lua5.1"; do
+                    if [ -f /usr/bin/$LUA_TEST ]; then
+                        # this should probably should be an alias...
+                        sudo cp /usr/bin/$LUA_TEST /usr/bin/lua
+                        return
+                    fi
+                done
+
             fi
-            return
         fi
      done 
+     
      
      # lua not found, try to install and fix   
      for LUA_VER in $LUA_VERS; do
         echo Trying to install $LUA_VER ...
-        #sudo apt install $LUA_VER -y    
         sudo $INSTALL $LUA_VER
-        if [ $? = 0 ] ; then  # we got an install for LUA_VER
+        if [ $? = 0 ] ; then  # no error so LUA_VER installed
           # see if we need to fix lua
           1>/dev/null lua -v
-          if [ $? != 0 ]; then
-              # sould acutally make an alias...  
-              echo Copying /usr/bin/$LUA_VER to /usr/bin/lua ...
-              sudo cp /usr/bin/$LUA_VER /usr/bin/lua
-              return
-          else
-              return  
+          if [ $? = 0 ]; then  # lua works, can return
+            return
+          else  # error so we need to fix it.
+          
+            #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
+            for LUA_TEST in "lua5.4 lua5.3 lua5.2 lua5.1"; do
+                if [ -f /usr/bin/$LUA_TEST ]; then
+                    # this should probably should be an alias...
+                    sudo cp /usr/bin/$LUA_TEST /usr/bin/lua
+                    return
+                fi
+            done
+            
           fi  
         fi
     done
     
-    # lua -v
-    
-    #crude patch for manjaro
-    sudo cp /usr/bin/lua5.4 /usr/bin/lua
-    sudo cp /usr/bin/lua5.3 /usr/bin/lua
-    sudo cp /usr/bin/lua5.2 /usr/bin/lua
+    lua -v
     
 }
 
