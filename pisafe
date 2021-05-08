@@ -1,6 +1,11 @@
 #!/bin/bash
 
-COPYRIGHT="By Richard Reed 2018 - 2021"
+COPYRIGHT="By Richard Reed 2018 - 2021" 
+
+# This script basically 
+# 1- copies a device with 'dd'
+# 2- shrinks the partitions with 'pishrink'
+# 3- compresses with 'zip' 
 
 # references
 # https://www.raspberrypi.org/documentation/installation/installing-images/linux.md
@@ -8,7 +13,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.0.5"
+SCRIPTVER="1.1.0"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -16,9 +21,17 @@ CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG=/home/$USER/.config/pisafe/pisafe.conf
 #LOG_FILE=/home/$USER/PiSafe.log
-REQUIRED_TOOLS="lua pv bc whiptail zip pigz "
-REQUIRED_TOOLS_SPECIAL_INSTALL="pishrink.sh xz"
+REQUIRED_TOOLS="pv bc whiptail zip pigz "
+REQUIRED_TOOLS_SPECIAL_INSTALL="lua pishrink.sh xz"
 INTERFACE="cli"
+
+
+if [ -f /usr/bin/apt ]; then
+    INSTALL="apt install -y"
+elif [ -f /usr/bin/pacman ]; then
+    INSTALL="pacman -S --noconfirm"
+fi
+
 
 WHITE='\033[1;37m'
 RED='\033[1;31m'
@@ -34,7 +47,7 @@ BACKTITLE="$PRODUCTNAME ver $SCRIPTVER   === $PRODUCTCOMMENT === "
 
 
 DE_COMPONENTS(){
-    # this is just for a reference
+    # this is just a reference of tested OSs
     
     RaspberryPiOS-stretch       lxterminal          leafpad?
     RaspberrypiOS-buster        lxterminal          mousepad
@@ -45,12 +58,20 @@ DE_COMPONENTS(){
     Debian MATE                 mate-terminal       pluma
     Debian LXDE                 lxterminal          mousepad
     Debian LXQt                 qterminal           featherpad
-    ubuntu gnome              gnome-terminal      gedit
-    lubuntu LXQt              qterminal           featherpad
-    LMDE-4 Cinnamon           gnome-terminal      xed
+    ubuntu gnome                gnome-terminal      gedit
+    lubuntu LXQt                qterminal           featherpad
+    LMDE-4 Cinnamon             gnome-terminal      xed
+    mint cinnamon               gnome-terminal      xed
+    mint MATE                   mate-terminal       xed
+    Mint Xfce                   xfce4-terminal      Xed
+
+    bionic puppy    - ppm       lxterminal          geany 
+    arch / manjaro  - pacman -S
+    zorin - ubuntu based
+    manjaro kde                 konsole             kate
+    manjaro xfce                xfce-terminal       mousepad
     
 }
-
 
 
 get_opts(){
@@ -127,12 +148,6 @@ do_about(){
 }
 
 
-do_factory_reset(){
-    set_conf_defaults
-    get_settings
-}
-
-
 do_init_conf(){
     if [ ! -d $(get_file_path $CONFIG) ]; then
         mkdir -p $(get_file_path $CONFIG)
@@ -184,10 +199,11 @@ get_terminal(){
 
 
 get_texteditor(){
-    TEXT_EDITORS="mousepad leafpad xed gedit featherpad kwrite pluma nano "
+    TEXT_EDITORS="mousepad leafpad xed gedit featherpad kwrite pluma kate nano "
     
     for TEXT_EDITOR in $TEXT_EDITORS ; do
-        if [ ! -z $(which $TEXT_EDITOR) ]; then
+        #if [ ! -z $(which $TEXT_EDITOR) ]; then
+        if [ -f /usr/bin/$TEXT_EDITOR ]; then
             echo $TEXT_EDITOR
             return
         fi    
@@ -199,7 +215,6 @@ set_conf_defaults(){
     set_config_var settings_script_ver $SCRIPTVER $CONFIG
     set_config_var default_path $HOME/Downloads $CONFIG
     set_config_var hide_root_device on $CONFIG
- #   set_config_var hide_loop_device on $CONFIG
     set_config_var check_for_updates_on_startup on $CONFIG
 
 #backup settings
@@ -221,21 +236,6 @@ set_conf_defaults(){
     set_config_var log_file /home/$USER/PiSafe.log $CONFIG
     
     set_config_var text_editor $(get_texteditor) $CONFIG
-    
-    # get text editor
-    #if [ ! -z $(which mousepad) ]; then
-    #    set_config_var text_editor mousepad $CONFIG
-    #elif [ ! -z $(which leafpad) ]; then
-    ##    set_config_var text_editor leafpad $CONFIG
-    #elif [ ! -z $(which xed) ]; then
-    #    set_config_var text_editor xed $CONFIG
-    #elif [ ! -z $(which gedit) ]; then
-    #    set_config_var text_editor gedit $CONFIG
-    ##elif [ ! -z $(which featherpad) ]; then
-     #   set_config_var text_editor featherpad $CONFIG
-    #else
-    #    set_config_var text_editor nano $CONFIG
-    #fi
 }
 
 
@@ -245,7 +245,6 @@ get_settings(){
     DEFAULT_EXTENSION=$(get_config_var default_extension $CONFIG)
     COMPRESSION=$(get_config_var compression_level $CONFIG)
     HIDE_ROOT_DEVICE=$(get_config_var hide_root_device $CONFIG)
- #   HIDE_LOOP_DEVICE=$(get_config_var hide_loop_device $CONFIG)
     CHECK_FOR_UPDATES_ON_STARTUP=$(get_config_var check_for_updates_on_startup $CONFIG)
     
     DEBUG_MODE=$(get_config_var debug_mode $CONFIG)
@@ -325,6 +324,12 @@ EOF
 }
 
 
+do_factory_reset(){
+    set_conf_defaults
+    get_settings
+}
+
+
 # -------------------------------------------------------------
 
 
@@ -367,13 +372,11 @@ dialog_yesno(){
         
     else
         whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --defaultno --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH 3>&1 1>&2 2>&3
-        
         if [ $? = 0 ]; then 
             RESULT=y
         else
             RESULT=n
         fi
-        
         echo $RESULT
         return 0
     fi
@@ -438,16 +441,6 @@ do_beep_if_sound(){
 }
 
 
-#get_os_id(){
-#    cat /etc/os-release | grep -v VERSION| grep ID= | cut -d= -f2
-#}
-
-
-#get_os_pretty_name(){
-#    cat /etc/os-release | grep PRETTY
-#}
-
-
 get_elapsed_time() {
     # paramaters are in seconds
     local BEG=$1
@@ -471,8 +464,7 @@ get_bytes_h(){
     # currently shows 3 significant digits.
     
     NUM='^[0-9]+$'
-    if ! [[ "$BYTES" =~ $NUM ]] ; then   # not a number
-        #echo $BYTES    
+    if ! [[ "$BYTES" =~ $NUM ]] ; then   # not a number   
         return 1
     fi
     
@@ -521,7 +513,6 @@ get_file_path(){
 
 
 get_file_base() {
-   # basename "$*"
     local fullfilename=$*
     
     filename=$(basename "$fullfilename")
@@ -583,7 +574,6 @@ get_sd_name(){
 
 
 get_sd_size() {
-  
     local DEV=$1
     local HUMAN=${2:-"no"}
    
@@ -608,7 +598,6 @@ get_sd_size() {
         echo $SIZE_BYTES
     fi
     
-    
 # an alternative way:
 # echo $(( $(sudo blockdev --getsize64 /dev/sda) ))
 # echo $(( $(sudo blockdev --getsize64 /dev/sda)/1024/1024 ))mb    
@@ -624,7 +613,6 @@ get_device_serial(){
 
 
 get_root_device() {
-    # returns 
     local ROOT_PARTITION
     local ROOT_DRIVE
     
@@ -668,7 +656,7 @@ get_freespace() {
 
 get_folder_size() {
     local FOLDER=$*
-    # returns hunam readable
+    # returns human readable
     
     if [ -d "$FOLDER" ] ; then
         sudo du -sh "$FOLDER" | cut -d'/' -f1 | sed 's/\s\s*/ /g'
@@ -788,7 +776,6 @@ get_image_size() {
         return 0
     fi
     
-    
     if [ $HUMAN = "-h" ]; then
         echo $(get_bytes_h $SIZE_BYTES)
     else
@@ -855,7 +842,6 @@ check_indev(){
             \nThere is $(get_folder_size /home/pi/.local/share/Trash) in the Trash" 
         dialog_msg "WARNING 6" "$MSG" "red"  
     fi
-    
     
      # if we got this far, all is good
      return 0
@@ -1050,59 +1036,26 @@ do_list_info() {
         #echo "$(cat $CONFIG | grep "device_lock")"
         #echo
         echo
-       # echo "~~~ SD-CARD DEVICES ~~~  (hide root device = $HIDE_ROOT_DEVICE) (hide mmc = $HIDE_MMC_DEVICE)"
-       echo "~~~ SD-CARD DEVICES ~~~  (hide root device = $HIDE_ROOT_DEVICE)"
+        echo "~~~ SD-CARD DEVICES ~~~  (hide root device = $HIDE_ROOT_DEVICE)"
         echo "$(get_sd_devices)"
         echo   
         echo
         echo "~~~ IMAGE FILES in '$DIR' ~~~"
         SAVED_PWD=$PWD
-        #echo $OLD_DIR
-        #echo $DEFAULT_PATH
-        cd $DIR
-        #ls -1 -s -h -w1 *.img *.zip *.xz *.gz 2> /dev/null | sed 's/ /     /'
-        #ls -1 -s -h -w1 $DEFAULT_PATH/*.img $DEFAULT_PATH/*.zip $DEFAULT_PATH/*.xz $DEFAULT_PATH/*.gz 2> /dev/null | sed 's/ /     /'
-  
+        cd $DIR  
         do_list_image_files
         cd $SAVED_PWD
 }    
 
 
-get_sd_devices_old() {
-    local DEVICES= 
-    BOOT_FILTER="aspodiausdfpoiasdf"
-    LOOP_FILTER="aspodiausdfpoiasdf"
-    if [ $(get_config_var hide_root_device $CONFIG) = "on" ]; then
-        BOOT_FILTER=$(get_root_device)
-    fi       
-    if [ $(get_config_var hide_loop_device $CONFIG) = "on" ]; then
-        LOOP_FILTER="loop"
-    fi  
-       
-    DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER | grep -v $LOOP_FILTER) 
-    EXIT_CODE=$?
-
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
-    fi
-    
-    echo "${DEVICES[@]}"
-  }
-
-
 get_sd_devices() {
     local DEVICES= 
     BOOT_FILTER="aspodiausdfpoiasdf"
-    #LOOP_FILTER="aspodiausdfpoiasdf"
     if [ $(get_config_var hide_root_device $CONFIG) = "on" ]; then
         BOOT_FILTER=$(get_root_device)
-    fi       
-   # if [ $(get_config_var hide_loop_device $CONFIG) = "on" ]; then
-   #     LOOP_FILTER="loop"
-   # fi  
+    fi        
        
-   # DEVICES=$(lsblk -d -p -n -o NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER | grep -v $LOOP_FILTER) 
-   DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER)
+    DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER)
     EXIT_CODE=$?
 
     if [ $EXIT_CODE != 0 ]; then
@@ -1114,20 +1067,80 @@ get_sd_devices() {
 # --------------------------------------
 
 
-get_tools() {   
+
+do_install_lua(){
+    # try to find a version of lua that will install
+    # lua.org
+    
+    # see if lua is installed, fix if needed 
+    LUA_VERS="lua lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
+    for LUA_VER in $LUA_VERS; do
+        1>/dev/null 2>/dev/null $LUA_VER -v 
+        if [ $? = 0 ]; then  #  LUA_VER found
+            1>/dev/null lua -v
+            if [ $? = 0 ]; then   # lua works, can return
+              return
+            else
+            
+                #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
+                for LUA_TEST in "lua5.4 lua5.3 lua5.2 lua5.1"; do
+                    if [ -f /usr/bin/$LUA_TEST ]; then
+                        # this should probably should be an alias...
+                        sudo cp /usr/bin/$LUA_TEST /usr/bin/lua
+                        return
+                    fi
+                done
+
+            fi
+        fi
+     done 
+     
+     
+     # lua not found, try to install and fix   
+     for LUA_VER in $LUA_VERS; do
+        echo Trying to install $LUA_VER ...
+        sudo $INSTALL $LUA_VER
+        if [ $? = 0 ] ; then  # no error so LUA_VER installed
+          # see if we need to fix lua
+          1>/dev/null lua -v
+          if [ $? = 0 ]; then  # lua works, can return
+            return
+          else  # error so we need to fix it.
+          
+            #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
+            for LUA_TEST in "lua5.4 lua5.3 lua5.2 lua5.1"; do
+                if [ -f /usr/bin/$LUA_TEST ]; then
+                    # this should probably should be an alias...
+                    sudo cp /usr/bin/$LUA_TEST /usr/bin/lua
+                    return
+                fi
+            done
+            
+          fi  
+        fi
+    done
+    
+    lua -v
+    
+}
+
+
+do_install_tools() {   
     TOOL_MISSING=false
     TOOLS=$(echo $REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)
     
     for TOOL in $TOOLS ; do
-        if [ ! $(which $TOOL) ]; then
+        #if [ ! $(which $TOOL) ]; then
+        if [ ! -f /usr/bin/$TOOL ]; then
             TOOL_MISSING=true
         fi
     done
     
     if [ $TOOL_MISSING = "true" ]; then
-        echo "Install required tools ($REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL) [y/n]?"
-        read -n 1 -r RESULT
-        echo
+        echo "Installing required tools ($REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)"
+        #read -n 1 -r RESULT
+        #echo
+        RESULT=y
         if [ $RESULT != "y" ]; then
             echo
             echo_red   WARNING.  Not all the needed tools are installed.
@@ -1135,9 +1148,11 @@ get_tools() {
         fi
 
         for TOOL in $REQUIRED_TOOLS ; do
-            if [ ! $(which $TOOL) ]; then
+           # if [ ! $(which $TOOL) ]; then
+             if [ ! -f /usr/bin/$TOOL ]; then
                 echo_white Installing $TOOL ...
-                sudo apt install -y $TOOL
+                #sudo apt install -y $TOOL
+                sudo $INSTALL $TOOL
                 EXIT_CODE=$?
                 if [ $EXIT_CODE != 0 ]; then
                     dialog_msg "Error" "$TOOL not installed." "red"
@@ -1148,38 +1163,35 @@ get_tools() {
         # special installs ...
         
         # Install PiShrink if needed
-        if [ -z $(which pishrink.sh) ]; then
+        #if [ -z $(which pishrink.sh) ]; then
+        if [ ! -f /usr/local/bin/pishrink.sh ]; then
             echo_white Installing pishrink...
             wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
             chmod +x pishrink.sh
             sudo mv pishrink.sh /usr/local/bin
             echo pishrink installed.
-            if [ -z $(which pishrink.sh) ] ; then
+            #if [ -z $(which pishrink.sh) ] ; then
+            if [ ! -f /usr/local/bin/pishrink.sh ] ; then
                dialog_msg "Error" "pishrink not installed." "red" 
             fi
         fi
 
         # Install xz if needed
-        if [ -z $(which xz) ]; then
+        #if [ -z $(which xz) ]; then
+        if [ ! -f /usr/bin/xz ]; then
             echo_white Installing xz-utils...
-            sudo apt install xz-utils -y
-            if [ -z $(which xz) ] ; then
+            #sudo apt install xz-utils -y
+            sudo $INSTALL xy_utils
+            #if [ -z $(which xz) ] ; then
+            if ! -f /usr/bin/xz ]; then
                dialog_msg "Error" "xz not installed." "red" 
             fi
         fi
-        
-        # fix lua on ubuntu and mint
-        if [ -z $(which lua) ] ; then
-            sudo apt install lua5.1 -y
-            if [ -z $(which lua) ] ; then
-               dialog_msg "Error" "lua not installed." "red" 
-            fi
-        fi
-        
+    
+        do_install_lua
+    
     fi
 }    
-
-
 
 
 do_install(){
@@ -1234,7 +1246,7 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
         \n\nOr you can execute it from any directory by typing '$SCRIPTNAME'."
         
         if [ $INTERFACE = "cli" ]; then
-            MSG="$PRODUCTNAME $SCRIPTVER installed.  Select it from the 'Accessories' menu or you can execute it a terminal window by typing '$SCRIPTNAME'."
+            MSG="$PRODUCTNAME $SCRIPTVER installed.  Select it from the 'Accessories' menu or you can execute it in a terminal window by typing '$SCRIPTNAME'."
         fi
         
         #whiptail --backtitle "$BACKTITLE" --title "INSTALLED" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
@@ -1313,57 +1325,9 @@ do_uninstall(){
         echo $PRODUCTNAME uninstalled
     fi
     
-    #echo $LOG_FILE not removed
     dialog_msg "UNINSTALL" "$LOG_FILE not removed"
     #rm -f $LOG_FILE
 }
-
-
-
-
-retired_do_install() { 
-    INTERFACE=${1:-"cli"}
-    
-    if [ $INTERFACE = "gui" ]; then
-        RESULT=$(dialog_yesno "INSTALL" "Install $PRODUCTNAME $SCRIPTVER ?  ('No' to run without installing)")
-    else
-        RESULT=y
-    fi
-    
-    if [ $RESULT = "y" ]; then
-        do_write_log "Installing $PRODUCTNAME $SCRIPTVER"
-        sudo cp --backup=numbered $SCRIPTNAME /usr/local/bin/$SCRIPTNAME
-        sudo chmod +x /usr/local/bin/$SCRIPTNAME
-        echo Installed ver=$(/usr/local/bin/$SCRIPTNAME -v)
-    else
-        dialog_msg "INSTALL CANDELED" "$PRODUCTNAME not installed."
-        return 1
-    fi
-}
-
-
-retired_gui_do_uninstall(){
-    INSTALLED_VER=$(/usr/local/bin/$SCRIPTNAME -v)
-    MSG="Uninstall $PRODUCTNAME $INSTALLED_VER \
-    \nfrom '/usr/local/bin/' and the menu ?\
-    \n\nThis may not uninstall versions of $PRODUCTNAME prior to 0.8.x or so."
-    RESULT=$(dialog_yesno "UNINSTALL" "$MSG")
-    if [ $RESULT = "y" ]; then 
-        do_write_log "Uninstalling $PRODUCTNAME $INSTALLED_VER"
-      #  sudo rm "/usr/share/applications/$PRODUCTNAME.desktop"
-        rm "$HOME/.local/share/applications/$PRODUCTNAME.desktop"
-        #lxpanelctl restart
-        sudo rm "/usr/local/bin/$SCRIPTNAME"
-        sudo rm $CONFIG
-        #sudo rm $LOG_FILE
-    fi
-    
-    if [ -z $(which $SCRIPTNAME) ]; then
-        dialog_msg "UNINSTALL" "$PRODUCTNAME $INSTALLED_VER has been uninstalled \n\nLOG file '$LOG_FILE' has not been removed"
-    fi
-}
-
-
 
 
 do_backup(){
@@ -1413,7 +1377,6 @@ do_backup(){
     #################################################
     # this section writes the data
     #################################################
-    #OUTFILE_BASE=$(get_file_path "$OUTFILE")/$(get_file_base "$OUTFILE")
     OUTFILE_BASE=$(get_file_path_base "$OUTFILE" )
 
     TIME1=$(date +%s)
@@ -1445,7 +1408,6 @@ do_backup(){
             EXIT_CODE=$?
             if [ $EXIT_CODE != 0 ]; then
                 echo Continuing without shrinking file system
-                #return $EXIT_CODE
             fi
         else
             echo "Filesystem not shrunk.  Setting is 'off'."
@@ -1513,14 +1475,6 @@ do_backup(){
             EXIT_CODE=$? 
             rm -f "$OUTFILE_BASE".img
             
-            #Imprecise progress bar on backside
-            #echo $(echo "scale=2; $BYTES/($k_ilo)" | bc)kb ;;
-            #SIZE=$(get_file_size "$OUTFILE_BASE".img)
-            #echo $(get_bytes_h $SIZE) to compress. This gz progress bar is imprecise.
-            #HALF_SIZE=$(echo "$SIZE/2" | bc )
-            #pigz -c -$COMPRESSION "$OUTFILE_BASE".img | pv -s $HALF_SIZE > "$OUTFILE"
-            #EXIT_CODE=$? 
-            #rm -f "$OUTFILE_BASE".img
         ;;
         
         *)
@@ -1656,7 +1610,6 @@ do_restore(){
         
         zip)
             RESTORE_BYTES=$(get_image_size "$INFILE")
-            #echo $RESTORE_BYTES
              if [ $INTERFACE = "cli" ]; then
                  #unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                  #pv "$INFILE" | unzip -p | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
@@ -1812,9 +1765,6 @@ whiptail_calc_wt_size() {
 
     WT_MB_HEIGHT=$WT_HEIGHT
     WT_MB_WIDTH=$WT_WIDTH
-
-    # use for pasting
-    # $WT_HEIGHT  $WT_WIDTH
 }
 
 
@@ -1944,8 +1894,6 @@ whiptail_countdown(){
 }
 
 
-
-
 gui_set_compression(){
     CHOICE=$(whiptail --title "SETTINGS-COMPRESSION" --radiolist \
     "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
@@ -2051,10 +1999,9 @@ gui_settings(){
         "Default directory   " "$DEFAULT_PATH" \
         "Default extension   " "$DEFAULT_EXTENSION" \
         "Compression         " "$COMPRESSION of 9" \
-        "Text editor"        "$TEXT_EDITOR" \
         "Options             " "Several options to turn on/off " \
         "                    " "      " \
-        "Edit config         " "Edit the settings file manually (pisafe.conf)" \
+        "Edit config file    " "Edit the settings file manually (pisafe.conf)" \
         "Factory defaults    " "Reset settings to factory defaults" \
         3>&1 1>&2 2>&3)
         
@@ -2288,8 +2235,6 @@ gui_select_sddevice(){
 
     #get this list of sd devices and add a field seperator |    
     IFS=$'\n'
-    #options=($(lsblk -d -n -o NAME,VENDOR,MODEL,SIZE /dev/sd? | sed 's/ ./ | /'))
-    #options=($(get_sd_devices | sed 's/ ./ '$FIELD_SEPERATOR' /'))
     options=($(get_sd_devices | sed 's/ / '$FIELD_SEPERATOR' /'))
     unset IFS
     
@@ -2376,9 +2321,6 @@ gui_menu(){
                  "  "        "   " \
                  "HELP"     "   Help"\
                 3>&1 1>&2 2>&3)
-                
-       #                  "  "        "   " \                  
-        #  "INSTALL"   "   Install $PRODUCTNAME into the menu" \      
  
                 
         case $MENU_CHOICE in
@@ -2438,19 +2380,15 @@ if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
 fi
 
 
-get_tools
+do_install_tools
 do_init_conf
 get_settings
 whiptail_calc_wt_size
 
 
-#install or update
+# check for updates
 if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
-   # if [ -z $(which $PRODUCTNAME) ]; then
-   #     gui_do_install
-   # else
-        do_update gui no
-   # fi    
+    do_update gui no
 fi
 
 
