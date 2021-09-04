@@ -16,9 +16,15 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
  
  - Supports all USB storage (I think).
  
- - Supports USB boot 
+ - Supports USB boot. 
  
- - Seems to support backing up the live boot SD-card.  You have to turn off "hide root backup".  
+ - Supports backing up to a mounted network device (ie SMB server). 
+   
+    - mkdir shared
+   
+    - sudo mount.cifs //102.168.1.18/shared shared -o user=USERNAME,vers=1.0
+ 
+ - Seems to support backing up the live boot SD-card.  You have to turn off "hide root device".  
     CAUTION: Reboot first, close everything and don't use the system while it is backing up!  You must send your backup image to a different drive!
 
  - Create a library of your own pi images, then restore them to whatever device you want, whenever you want.  
