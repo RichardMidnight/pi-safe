@@ -1,6 +1,6 @@
 # PiSafe  -  Raspberry Pi imaging app
 
-Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a compressed image-file right on your Pi!
+Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD drive) to/from compressed image-files right on your Pi!
 
  - Backup an SD card to an image-file.
 
@@ -14,18 +14,17 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
 
  - Images are compatible with Raspberry PI Imager that comes with the Pi and probably all other imaging software.
  
- - Supports all USB storage (I think).
+ - Supports USB storage devices.
  
- - Supports USB boot. 
+ - Supports backing up the live boot SD-card - but be careful, backing up a drive that is being written to can result in a courupted backup.  You have to turn off "hide root device" in "settings", "options" to enable this. 
  
- - Supports backing up to a mounted network device (ie SMB server). 
+    CAUTION: Reboot first, close everything and don't use the system while it is backing up!  You must send your backup image to a different drive
+
+ - Supports storing the image files on a mounted network device (ie SMB server). 
    
     - mkdir shared
    
     - sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=1.0
- 
- - Seems to support backing up the live boot SD-card.  You have to turn off "hide root device".  
-    CAUTION: Reboot first, close everything and don't use the system while it is backing up!  You must send your backup image to a different drive!
 
  - Create a library of your own pi images, then restore them to whatever device you want, whenever you want.  
  
@@ -35,44 +34,42 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD...) to/from a 
 
  - See Leepspvideo nice review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0  -- "Very Impressive", "Makes a nice small image", "Really good all-in-one solution"
    
- 
- .
- 
-# SETUP
- 
-   1) Install Raspberry PI OS on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This will be your Master SD-card.
-   
-   2) Install Pi-Safe as described below.
-   
-   3) You will need a USB-SD reader for your source SD-card (8GB).
-   
-   4) You will need some SD cards.  Use as small of an SD-card as you can because the entire card has to be read in before it is shrunk and compressed.  I have been using Sandisk Industrial 8GB cards.
-
-   5) Install Raspberry PI OS on a second (8GB) card.
-
-   6) Boot from the 8GB card, make changes, install other softwaare, change the desktop, whatever.
-
-   7) To make an image of that 8GB card that you can restore anytime in the future do the following...
-   
-.   
+ .   
 
 # INSTALL
 
 In a terminal window, type in
 
-      
+    
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
     bash pisafe
     
     Then you can select 'tools' 'install' from the menu to install it into your Raspberry Pi menu
+ 
+ 
+ 
+# SIMPLE SETUP
+ 
+  1) You will need a large "Master" SD-card (eg 32GB), a smaller "Source" SD-card (eg 8GB) and a USB-SD-card reader.
+  
+  2) Install Raspberry PI OS on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This is your "Master" SD-card.
    
+   3) Boot from the "Master" card and install Pi-Safe on it.
+   
+   4) Install Raspberry PI OS or whatever OS you want on the "Source" SD-card.  Use as small of an SD-card as you can because the entire card is read in before it is shrunk and compressed.  I have been using Sandisk Industrial 8GB cards.
+
+   5) Boot from the "Source" card (8GB), make changes, install other softwaare, change the desktop, whatever you want.
+
+   6) To make an image of the "Source" (8GB) card that you can restore anytime in the future do the following...
   
   
-# TO MAKE AN IMAGE FILE  
+
+  
+# USAGE - MAKE AN IMAGE FILE  
    
    1) Boot your Pi with your Master SD-card as above.
    
-   2) Put your source SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
+   2) Put your Source SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
    
    3) Startup Pi-Safe from the menu.  Or in a terminal, type in 'pisafe'
         
@@ -80,11 +77,11 @@ In a terminal window, type in
    
    5) Watch your image-file get created, shrunk and compressed automatically.
     
- .
  
    
    
 # COMPATIBILITY   
+
 Originally developed and tested on Raspberry pi 4 running Raspberry Pi OS Buster.
 
 Also tested on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.20 for Rpi, Linux Mint, LMDE.
