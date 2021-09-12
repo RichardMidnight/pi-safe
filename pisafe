@@ -13,7 +13,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.1.0"
+SCRIPTVER="1.1.1"
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -167,7 +167,7 @@ get_terminal(){
     
     if [ -f /usr/bin/lxterminal ];then
       TERMINAL1="lxterminal --geometry=110x40 --title='PiSafe' -e bash -c "
-      
+    
     elif [ -f /usr/bin/xfce4-terminal ];then
       TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
     elif [ -f /usr/bin/mate-terminal ];then
@@ -199,7 +199,7 @@ get_terminal(){
 
 
 get_texteditor(){
-    TEXT_EDITORS="mousepad leafpad xed gedit featherpad kwrite pluma kate nano "
+    TEXT_EDITORS="mousepad leafpad xed gedit featherpad kwrite pluma kate geany, nano "
     
     for TEXT_EDITOR in $TEXT_EDITORS ; do
         #if [ ! -z $(which $TEXT_EDITOR) ]; then
@@ -2379,17 +2379,18 @@ if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
     exit
 fi
 
-
 do_install_tools
+
 do_init_conf
 get_settings
 whiptail_calc_wt_size
 
-
-# check for updates
-if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
-    do_update gui no
+## check for updates if not uninstalling
+if [ ! -z "$1" ] && [ ! $1 = "uninstall" ]; then
+    # check for updates
+    if  [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
+        do_update gui no
+    fi
 fi
-
 
 cli_menu $1 $2 $3
