@@ -1,14 +1,14 @@
 # PiSafe  -  Raspberry Pi imaging app
 
-Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD drive) to/from compressed image-files right on your Pi!
+Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/from compressed image-files right on your Pi!
 
- - Backup an SD card to an image-file.
+ - Backup an SD card (or other media) to an image-file.
 
- - Restore an image-file to an SD card.
+ - Restore an image-file to an SD card (or other media).
 
  - Works entirely on a Raspberry Pi.  No Windows or Mac needed. 
  
- - Creates a compressed image-file that will resize to fill the new card it is restored to (thanks to PiShrink!).
+ - Creates a compressed image-file that will resize to fill the new media it is restored to (thanks to PiShrink!).
  
  - Supports .img .zip .xz and .gz file formats.
 
@@ -16,9 +16,9 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD drive) to/from
  
  - Supports USB storage devices.
  
- - Supports backing up the live boot SD-card - but be careful, backing up a drive that is being written to can result in a courupted backup.  You have to turn off "hide root device" in "settings", "options" to enable this. 
+ - Supports backing up the live boot media - but be careful, backing up media that is being written to can result in a courupted backup.  You have to turn off "hide root device" in "settings", "options" to enable this. 
  
-    CAUTION: Reboot first, close everything and don't use the system while it is backing up!  You must send your backup image to a different drive
+    CAUTION: Reboot first, close everything and don't use the system while it is backing up!  You must send your backup image to a different drive.
 
  - Supports storing the image files on a mounted network device (ie SMB server). 
    
@@ -26,7 +26,7 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD drive) to/from
    
     - sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=1.0
 
- - Create a library of your own pi images, then restore them to whatever device you want, whenever you want.  
+ - Create a library of your own pi images, then restore them to whatever media you want, whenever you want.  
  
  - Can be run fully from the command line.
 
@@ -34,21 +34,26 @@ Backup or Restore Raspberry Pi devices (SD-cards, USB sticks, SSD drive) to/from
 
  - See Leepspvideo nice review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0  -- "Very Impressive", "Makes a nice small image", "Really good all-in-one solution"
    
- .   
 
-# INSTALL
+# Install
 
 In a terminal window, type in
 
     
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
-    bash pisafe
+    bash pisafe install
+ 
+ 
+Beta version:
+
+    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.1.5 -O pisafe
+    bash pisafe install
     
-    Then you can select 'tools' 'install' from the menu to install it into your Raspberry Pi menu
  
  
  
-# SIMPLE SETUP
+ 
+# Simple Setup
  
   1) You will need a large "Master" SD-card (eg 32GB), a smaller "Source" SD-card (eg 8GB) and a USB-SD-card reader.
   
@@ -65,7 +70,7 @@ In a terminal window, type in
   
 
   
-# USAGE - MAKE AN IMAGE FILE  
+# Usage - make and image file 
    
    1) Boot your Pi with your Master SD-card as above.
    
@@ -80,7 +85,7 @@ In a terminal window, type in
  
    
    
-# COMPATIBILITY   
+# Compatibility   
 
 Originally developed and tested on Raspberry pi 4 running Raspberry Pi OS Buster.
 
@@ -94,7 +99,7 @@ V1.1.0 Added support for Manjaro and maybe other Arch-based distros.
  
    
    
- # REFERENCES
+ # References
  
 Thanks to Raspberry Pi for how to read and write an image file.
 
