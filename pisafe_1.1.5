@@ -350,7 +350,7 @@ dialog_msg() {
             echo $MSG
         fi
     else
-        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
+        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --scrolltext --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
     fi
 }
 
@@ -1062,6 +1062,7 @@ do_list_info() {
         DIR=${1:-$PWD}
         echo "~~~ CURRENT SYSTEM ~~~"
         echo $PRODUCTNAME ver $SCRIPTVER
+        echo $(cat /etc/os-release | grep "PRETTY_NAME=" | cut -d '"' -f2) kernel=$(uname -r)
         echo "Root device = /dev/$(get_root_device)"
         echo "Size      = $(get_sd_size /dev/$(get_root_device) -h )"
         echo "FreeSpace = $(get_freespace . -h)"
@@ -1087,16 +1088,16 @@ do_list_info() {
 
 get_sd_devices() {
     local DEVICES= 
-    BOOT_FILTER="aspodiausdfpoiasdf"
+    ROOT_FILTER="aspodiausdfpoiasdf"
     if [ $(get_config_var hide_root_device $CONFIG) = "on" ]; then
-        BOOT_FILTER=$(get_root_device)
+        ROOT_FILTER=$(get_root_device)
     fi   
     
-    if ! (( $BOOT_FILTER )); then
-       BOOT_FILTER="aspodiausdfpoiasdf"
+    if [ -z $ROOT_FILTER ]; then
+       ROOT_FILTER="aspodiausdfpoiasdf"
     fi     
        
-    DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $BOOT_FILTER)
+    DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $ROOT_FILTER)
     EXIT_CODE=$?
 
     if [ $EXIT_CODE != 0 ]; then
@@ -2821,6 +2822,8 @@ gui_tools(){
         "UPDATE"            "Check for updates" \
         "UNINSTALL"          "Uninstall $PRODUCTNAME" \
           "  "               "  " \
+          "  "              "MEDIA TOOLS" \
+        "DETAILS"             "Media details" \
         "ERASE"             "Quick format media as FAT32" \
         "WIPE"              "Destructively wipe media with zeros " \
         "TEST"              "Destructively test media with zeros and ones (slow)" \
@@ -2837,18 +2840,31 @@ gui_tools(){
             INSTALL)    do_install  ;;
             UPDATE)     do_update gui ;;
             UNINSTALL)  do_uninstall ;;
+            DETAILS)      
+                gui_select_sddevice "MEDIA DETAILS"
+                if ! (( $? )); then
+                  dialog_msg "MEDIA DETAILS $INDEV"  "$(sudo parted -s $INDEV print free) \n\n$(lsblk $INDEV -o maj:min,fsuse%)"
+                fi
+            #   dialog_msg "MEDIA DETAILS $INDEV"  "$(sudo parted -s -l print free) "
+                ;;
             ERASE)      
                 gui_select_sddevice "ERASE MEDIA"
-                do_format_fat32 $OUTDEV
+                if ! (( $? )); then
+                  do_format_fat32 $OUTDEV
+                fi  
                 ;;
             WIPE) 
                 gui_select_sddevice "WIPE MEDIA"
-                do_wipe_media $OUTDEV
+                if ! (( $? )); then
+                  do_wipe_media $OUTDEV
+                fi  
                 ;;
                 
             TEST) 
                 gui_select_sddevice "TEST MEDIA"
-                do_test_media $OUTDEV
+                if ! (( $? )); then
+                  do_test_media $OUTDEV
+                fi  
                 ;;
 
             TERMINAL)   read -n 1 -p "Press any key to return"  ;;
