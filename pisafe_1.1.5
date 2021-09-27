@@ -1062,7 +1062,7 @@ do_list_info() {
         DIR=${1:-$PWD}
         echo "~~~ CURRENT SYSTEM ~~~"
         echo $PRODUCTNAME ver $SCRIPTVER
-        echo $(cat /etc/os-release | grep "PRETTY_NAME=" | cut -d '"' -f2) kernel=$(uname -r)
+        echo $(cat /etc/os-release | grep "PRETTY_NAME=" | cut -d '"' -f2) hw=$(uname -m) kernel=$(uname -r)
         echo "Root device = /dev/$(get_root_device)"
         echo "Size      = $(get_sd_size /dev/$(get_root_device) -h )"
         echo "FreeSpace = $(get_freespace . -h)"
@@ -2842,10 +2842,20 @@ gui_tools(){
             UNINSTALL)  do_uninstall ;;
             DETAILS)      
                 gui_select_sddevice "MEDIA DETAILS"
+                MSG=
                 if ! (( $? )); then
-                  dialog_msg "MEDIA DETAILS $INDEV"  "$(sudo parted -s $INDEV print free) \n\n$(lsblk $INDEV -o maj:min,fsuse%)"
+                  LAST_PART_TYPE=$(sudo parted -ms $INDEV print | tail -1 | cut -d: -f 5)
+                  if [ $LAST_PART_TYPE = "ext4" ] ; then
+                    MSG="The last partition is ext4.  This filesystem can probably be shrunk.\n\n"
+                  else  
+                    MSG="Warning, the last partition is not ext4.  This filesystem probably cannot be shrunk.\n\n"
+                  fi
+                
+                  MSG="$MSG$(sudo parted -s $INDEV print free) \n\n$(lsblk $INDEV -o maj:min,fsuse%)"
+                  
+                  dialog_msg "MEDIA DETAILS: $INDEV" "$MSG"
                 fi
-            #   dialog_msg "MEDIA DETAILS $INDEV"  "$(sudo parted -s -l print free) "
+            #   dialog_msg  "$(sudo parted -s -l print free) "
                 ;;
             ERASE)      
                 gui_select_sddevice "ERASE MEDIA"
