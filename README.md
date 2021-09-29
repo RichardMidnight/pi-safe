@@ -18,7 +18,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
  
  - Supports backing up the live boot media - but be careful, backing up media that is being written to can result in a courupted backup.  You have to turn off "hide root device" in "settings", "options" to enable this. 
  
-    CAUTION: Reboot first, close everything and don't use the system while it is backing up!  You must send your backup image to a different drive.
+    CAUTION: Reboot first, close everything and don't use the system while it is doing step 1 of backing up!  You must send your backup image to a different drive.
 
  - Supports storing the image files on a mounted network device (ie SMB server). 
    
@@ -95,7 +95,7 @@ v1.0.5 Added support for other terminals: lxterminal, gnome-terminal, xfce-termi
 
 V1.0.5 Added support for other text editors: leafpad, mousepad, gedit, kwrite, pluma, featherpad, xed, geany, kate, nano.
 
-V1.1.0 Added support for Manjaro and maybe other Arch-based distros.
+V1.1.0 Added support for Manjaro and probably other Arch-based distros.
  
    
  # Tips
@@ -113,7 +113,7 @@ V1.1.0 Added support for Manjaro and maybe other Arch-based distros.
     - Alternatively you may be able to custom partition the media during your OS installation and put the main partition at the end.
     
  - Auto-expand filesystem on restore   
-    - PiSafe will setup the image file to auto-expand to fill the new media on first boot if your distro supports rc.local.  
+    - PiSafe will setup the image file to auto-expand to fill the new media on first boot after restoring if your distro supports rc.local.  
     - If not, you can resize your partition manual by booting from another media and using gparted.
    
  - Data compression
@@ -123,7 +123,7 @@ V1.1.0 Added support for Manjaro and maybe other Arch-based distros.
    
  # References
  
-Thanks to Raspberry Pi for how to read and write an image file.
+Thanks to the Raspberry Pi foundation for instructions on how to read and write an image file.
 
 Thanks to https://github.com/Drewsif/PiShrink for the PiShrink engine.
 
