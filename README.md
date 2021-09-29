@@ -98,6 +98,28 @@ V1.0.5 Added support for other text editors: leafpad, mousepad, gedit, kwrite, p
 V1.1.0 Added support for Manjaro and maybe other Arch-based distros.
  
    
+ # Tips
+ PiSafe is optimized for Raspberry Pis running Raspios around the year 2020.  It will work with many other linux distributions and other hardware but some features may not be optimized or may not work at all depending on the configuration.  The following tips can help you optimize PiSafe for your configuration.
+ 
+  - Freespace at end of media
+    - PiSafe will ignore freespace at the end of the media speeding up the backup process and using less working space.  
+    - If you have a small amount of data on a large media (eg using 10GB out of a 500GB drive), you can resize your partitions (with gparted) and leave freespace (unallocated) at the end of the media.  Note, freespace not at the end of the media cannot be ignored.
+ 
+  - Shrinking the filesystem on backup  
+    - Shrinking the filesystem is VERY VALUABLE because it creates a small image file, but also because it allows you to restore the image to a different size media.
+    - PiSafe will shrink your filesystem if your main partition is ext4 (and maybe ext3 and ext2) and is the last partition on the media.
+    - Alternatively you can zero-out your deleted files with bleachbit to optimize compression and then shrink your partitions with gparted.
+    - Alternatively if your main partition is the second to last one and the last one is a swap partition, you may be able to simply delete the swap partition.
+    - Alternatively you may be able to custom partition the media during your OS installation and put the main partition at the end.
+    
+ - Auto-expand filesystem on restore   
+    - PiSafe will setup the image file to auto-expand to fill the new media on first boot if your distro supports rc.local.  
+    - If not, you can resize your partition manual by booting from another media and using gparted.
+   
+ - Data compression
+    - Compressing the image file with zip, xz, or gz reduces the size of the image file to about 1/2.  
+    - The default is the industry standard zip.
+    - The default data compression level is set to 1 out of 9.  A higher setting will compress the file a bit more and can take a lot more time.
    
  # References
  
