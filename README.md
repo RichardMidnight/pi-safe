@@ -22,6 +22,8 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
 
  - Supports storing the image files on a mounted network device (ie SMB server). 
    
+   -  sudo apt install cifs-utils 
+   
     - mkdir shared
    
     - sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=1.0
