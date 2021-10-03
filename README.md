@@ -72,7 +72,7 @@ Beta version:
   
 
   
-# Usage - make and image file 
+# Usage - make an image file 
    
    1) Boot your Pi with your Master SD-card as above.
    
@@ -103,16 +103,16 @@ V1.1.0 Added support for Manjaro and probably other Arch-based distros.
  # Tips
  PiSafe is optimized for Raspberry Pis running Raspios around the year 2020.  It will work with many other linux distributions and other hardware but some features may not be optimized or may not work at all depending on the configuration.  The following tips can help you optimize PiSafe for your configuration.
  
-  - Freespace at end of media
-    - PiSafe will ignore freespace at the end of the media speeding up the backup process and using less working space.  
-    - If you have a small amount of data on a large media (eg using 10GB out of a 500GB drive), you can resize your partitions (with gparted) and leave freespace (unallocated) at the end of the media.  Note, freespace not at the end of the media cannot be ignored.
+  - Ignore Freespace at end of media  (beta, ver 1.1.5+ )
+    - PiSafe will ignore freespace at the end of the media, speeding up the backup process and using less working space.  
+    - If you have a small amount of data on a large media (eg using 10GB of a 500GB drive), you can resize your partitions (with gparted) and leave freespace (unallocated) at the end of the media to be ignored.  Note, freespace not at the end of the media cannot be ignored.
  
   - Shrinking the filesystem on backup  
-    - Shrinking the filesystem is VERY VALUABLE because it creates a small image file, but also because it allows you to restore the image to a different size media.
+    - Shrinking the filesystem is VERY VALUABLE because it creates a smaller image file, but also because it allows you to restore the image to a different size media.
     - PiSafe will shrink your filesystem if your main partition is ext4 (and maybe ext3 and ext2) and is the last partition on the media.
-    - Alternatively you can zero-out your deleted files with bleachbit to optimize compression and then shrink your partitions with gparted.
+    - If your install does not default to this partitioning setup you should be able to custom partition the media during your OS installation and put the main ext4 partition at the end.  This is needed with standard debian installations including RPD and Linux Mint.
     - Alternatively if your main partition is the second to last one and the last one is a swap partition, you may be able to simply delete the swap partition.
-    - Alternatively you may be able to custom partition the media during your OS installation and put the main partition at the end.
+    - Alternatively you can zero-out your deleted files with bleachbit to optimize compression and then shrink your partitions with gparted.
     
  - Auto-expand filesystem on restore   
     - PiSafe will setup the image file to auto-expand to fill the new media on first boot after restoring if your distro supports rc.local.  
