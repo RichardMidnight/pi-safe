@@ -108,7 +108,7 @@ V1.1.0 Added support for Manjaro and probably other Arch-based distros.
     - If you have a small amount of data on a large media (eg using 10GB of a 500GB drive), you can resize your partitions (with gparted) and leave freespace (unallocated) at the end of the media to be ignored.  Note, freespace not at the end of the media cannot be ignored.
  
   - Shrinking the filesystem on backup  
-    - Shrinking the filesystem is VERY VALUABLE because it creates a smaller image file, but also because it allows you to restore the image to a different size media.
+    - Shrinking the filesystem is VERY VALUABLE because it creates a smaller image file, and allows you to restore the image to a different size media.
     - PiSafe will shrink your filesystem if your main partition is ext4 (and maybe ext3 and ext2) and is the last partition on the media.
     - If your install does not default to this partitioning setup you should be able to custom partition the media during your OS installation and put the main ext4 partition at the end.  This is needed with standard debian installations including RPD and Linux Mint.
     - Alternatively if your main partition is the second to last one and the last one is a swap partition, you may be able to simply delete the swap partition.
