@@ -48,7 +48,7 @@ In a terminal window, type in
  
 Beta version:
 
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.1.5 -O pisafe
+    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_beta -O pisafe
     bash pisafe install
     
  
