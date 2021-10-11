@@ -13,7 +13,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.1.5"   # 2021/10/8 @ 12PM
+SCRIPTVER="1.1.5"   # 2021/10/11 @ 12P
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -1850,13 +1850,19 @@ media_partition_os() {
   if [ -e $mountdir/etc/os-release ]; then
     OS="$(cat $mountdir/etc/os-release | grep PRETTY_NAME | cut -d= -f2)"
     ARCH="$(file $mountdir/bin/bash | cut -d, -f2)"
+  #  OS="$OS $ARCH" 
     BITS="$(file $mountdir/bin/bash | cut -d, -f1)"
     if  [ !  -z "$(echo "$BITS" | grep 32 )" ]; then
       BITS=32
     elif [ !  -z "$(echo "$BITS" | grep 64 )" ]; then
       BITS=64
     fi
-    OS="$OS $ARCH-$BITS" 
+    if [[ ! "$ARCH" =~  "$BITS" ]]; then
+      ARCH=$ARCH-$BITS
+    fi  
+    #OS="$OS $ARCH-$BITS" 
+    OS="$OS $ARCH" 
+
      
   else
     sudo umount "$mountdir"	
@@ -1934,14 +1940,17 @@ media_backup_estimate() {
 
   MSG=$MSG"\n===== MEDIA BACKUP ESTIMATES ===== \n"
 
-  MSG=$MSG"Media size                         = '$(get_bytes_h $MEDIA_SIZE)'\n"
+  MSG=$MSG"Media size                         =  $(get_bytes_h $MEDIA_SIZE)\n"
 
 
   #1 - free space
  # if [ ! $MEDIA_FREESPACE_AT_END = 0 ]; then
-    MSG=$MSG"Remove '$(get_bytes_h $MEDIA_FREESPACE_AT_END)' of freespace      => '$(get_bytes_h $(($MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) )'   \n"
+   # MSG=$MSG"Remove '$(get_bytes_h $MEDIA_FREESPACE_AT_END)' of freespace      => '$(get_bytes_h $(($MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) )'   \n"
   #  MSG=$MSG"Copy size is '$(get_bytes_h $(($MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) )' \n"
  # fi
+
+   MSG=$MSG$(printf '%-35.34s' "Remove '$(get_bytes_h $MEDIA_FREESPACE_AT_END)' of freespace")
+   MSG=$MSG"=> $(get_bytes_h $(($MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) ) \n"
 
   
   # 2 - is it a complex file system?
@@ -1957,7 +1966,7 @@ media_backup_estimate() {
       ext4|ext3|ext2)
 	  # echo "The filesystem on the last partition ($MEDIA_LAST_PARTITION_NUMBER) is 'ext4' so this filesystem should shrink.  $(media_partition_size $1 $MEDIA_PARTITION_COUNT)"
 	  if [ $MEDIA_PARTITION_TABLE = "gpt" ] ||  ( [ $MEDIA_PARTITION_TABLE = "msdos" ] && [ $MEDIA_LAST_PARTITION_TYPE = "primary"  ] ) ; then
-	    SHRINK_BYTES=$(sudo lsblk $MEDIA -bo maj:min,fsavail | grep :$MEDIA_LAST_PARTITION_NUMBER | sed 's/[ ]\+/ /g' | cut -d " " -f3)
+	    SHRINK_BYTES=$(sudo lsblk $MEDIA -bo maj:min,fsavail | grep :$MEDIA_LAST_PARTITION_NUMBER | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
       else
 	    MSG=$MSG"\nWarning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This filesystem will not shrink and cannot be restored to a smaller media.\n"
 	  fi
@@ -1973,9 +1982,11 @@ media_backup_estimate() {
     fi
   UNCOMPRESSED_BYTES=$(( $MEDIA_SIZE - $MEDIA_FREESPACE_AT_END - $SHRINK_BYTES ))
   
-  MSG=$MSG"Shrink filesystem by $(get_bytes_h $SHRINK_BYTES)        => '$(get_bytes_h $UNCOMPRESSED_BYTES )' \n"
+  #MSG=$MSG"Shrink filesystem by $(get_bytes_h $SHRINK_BYTES)        => '$(get_bytes_h $UNCOMPRESSED_BYTES )' \n"
+  MSG=$MSG$(printf '%-35.34s' "Shrink filesystem by $(get_bytes_h $SHRINK_BYTES)")
+  MSG=$MSG"=> $(get_bytes_h $UNCOMPRESSED_BYTES ) \n"
   
-  MSG=$MSG"Estimated compression 2:1          => '$(get_bytes_h $((UNCOMPRESSED_BYTES / 2 )))' \n"
+  MSG=$MSG"Estimated compression 2:1          => $(get_bytes_h $((UNCOMPRESSED_BYTES / 2 ))) \n"
   
   
   
