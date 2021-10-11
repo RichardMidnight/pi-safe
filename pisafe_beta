@@ -1917,6 +1917,18 @@ media_backup_estimate() {
   MEDIA_PARTITION_LIST=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1)
   MEDIA_LAST_PARTITION_NUMBER=$(echo "$PARTED_OUTPUT" | tail -1 | cut -d: -f1)
   
+  case $MEDIA in
+      /dev/sd*)
+        MEDIA_LAST_PARTITION_NAME=$MEDIA$MEDIA_LAST_PARTITION_NUMBER
+      ;;
+      
+      /dev/mmcblk*)
+         MEDIA_LAST_PARTITION_NAME=$MEDIA"p"$MEDIA_LAST_PARTITION_NUMBER
+      ;;
+  esac
+  
+  
+  
   PARTED_OUTPUT=$(sudo parted $MEDIA unit B print free )
   
   MEDIA_FREESPACE_AT_END=$(echo "$PARTED_OUTPUT" | tail -1 | grep Free | sed 's/[ ]\+/ /g' | cut -d " " -f 4 | tr -d 'B' )
@@ -1966,7 +1978,9 @@ media_backup_estimate() {
       ext4|ext3|ext2)
 	  # echo "The filesystem on the last partition ($MEDIA_LAST_PARTITION_NUMBER) is 'ext4' so this filesystem should shrink.  $(media_partition_size $1 $MEDIA_PARTITION_COUNT)"
 	  if [ $MEDIA_PARTITION_TABLE = "gpt" ] ||  ( [ $MEDIA_PARTITION_TABLE = "msdos" ] && [ $MEDIA_LAST_PARTITION_TYPE = "primary"  ] ) ; then
-	    SHRINK_BYTES=$(sudo lsblk $MEDIA -bo maj:min,fsavail | grep :$MEDIA_LAST_PARTITION_NUMBER | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
+	    #SHRINK_BYTES=$(sudo lsblk $MEDIA -bo maj:min,fsavail | grep :$MEDIA_LAST_PARTITION_NUMBER | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
+       SHRINK_BYTES=$(sudo lsblk $MEDIA -lpbo name,fsavail | grep $MEDIA_LAST_PARTITION_NAME | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
+     
       else
 	    MSG=$MSG"\nWarning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This filesystem will not shrink and cannot be restored to a smaller media.\n"
 	  fi
