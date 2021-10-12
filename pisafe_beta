@@ -42,10 +42,10 @@ elif [ -f /usr/bin/pacman ]; then
 fi
 
 
-
 Desktop_environment_notes(){
     # this is just a reference of tested OSs from 2021
- 
+
+
     DISTRO                      TERMINAL            TEXT EDITOR         
     RaspberryPiOS-stretch       lxterminal          leafpad?
     RaspberrypiOS-buster        lxterminal          mousepad
@@ -72,11 +72,11 @@ Desktop_environment_notes(){
     
     Tested with
     --- ARM ---
-    Raspios Buster
+    Raspios Buster 
     Raspbian Stretch
     Raspbian Jessy      can work with limitations
     Manjaro
-    ubuntu
+    Ubuntu
     
     --- x86 ---
     RPD Buster
@@ -97,18 +97,19 @@ pisafe_help() {
     echo "  $SCRIPTNAME [function] [media/file] [file/media]"
     echo
     echo "CLI Function is:"
-    echo "                            - with no arguments it launches the PiSafe menu (recommended)"
-    echo "  list                      - list media and image-files "
-    echo "  backup [device] [file]    - backup media to image-file"
-    echo "  restore [file] [device]   - restore image-file to media"
-    echo "  erase [device] [-y]       - format media as FAT32"
-    echo "  wipe [device]             - wipe media.  fill with zeros"
-    echo "  test [device]             - test media.  write and read ones and zeros"
-    echo "  install [-y]              - install this script"
-    echo "  update                    - update script from website"
-    echo "  uninstall [-y]            - uninstall this script"
-    echo "  -v                        - display version"
-    echo "  help | -h                 - help"
+    echo "                               - with no arguments it launches the PiSafe menu (recommended)"
+    echo "  list                         - list media and image-files "
+    echo "  backup [device] [file]       - backup media to image-file"
+    echo "  restore [file] [device] [-y] - restore image-file to media"
+    echo "  analyze [dvice]              -   "
+    echo "  erase [device] [-y]          - format media as FAT32"
+    echo "  wipe [device]                - wipe media.  fill with zeros"
+    echo "  test [device]                - test media.  write and read ones and zeros"
+    echo "  install [-y]                 - install this script"
+    echo "  update [-y]                  - update script from website"
+    echo "  uninstall [-y]               - uninstall this script"
+    echo "  -v                           - display version"
+    echo "  help | -h                    - help"
     echo
     echo "Notes: "
     echo " - Supports .img .zip .xz .gz and .iso files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
@@ -196,10 +197,10 @@ env_texteditor(){
         if [ -f /usr/bin/$TEXT_EDITOR ]; then
             echo $TEXT_EDITOR
             return
-        fi    
+        fi
     done
 }
-
+ 
 
 env_root_device() {
     local ROOT_PARTITION
@@ -227,7 +228,6 @@ env_root_device() {
     ROOT_DEV=$(lsblk | grep $ROOT_MAJ:0 | cut -d" " -f1)
     echo $ROOT_DEV
 }
-
 
 
 # ---------- Config_var functions
@@ -383,9 +383,9 @@ dialog_msg() {
     if [ $INTERFACE = "cli" ]; then
         MSG="$PRODUCTNAME: $TITLE: $MSG"
         if [ $COLOR = "red" ]; then
-            echo_red $MSG
+            echo_red -e "$MSG"
         else    
-            echo $MSG
+            echo -e "$MSG"
         fi
     else
         whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE # $WT_MB_HEIGHT $WT_MB_WIDTH
@@ -785,10 +785,6 @@ get_folder_size() {
 
 # ---------------------------------------------------------
 
-
-
-
-
 check_indev(){
     #returns 0 if good
     # check INDEV
@@ -910,8 +906,7 @@ check_outfile(){
         return 6
     fi 
     
-    #otherwise good, return 0
-    return 0
+    #return 0
 }
 
 
@@ -1099,7 +1094,6 @@ do_install_lua(){
     done
     
     lua -v
-    
 }
 
 
@@ -1109,15 +1103,14 @@ pisafe_install_tools() {
     
     for TOOL in $TOOLS ; do
         #if [ ! $(which $TOOL) ]; then
-        if [ ! -f /usr/bin/$TOOL ]; then
+        if [ ! -f /usr/bin/$TOOL ]  && [ ! -f /usr/local/bin/$TOOL ] ; then
             TOOL_MISSING=true
+            #echo $TOOL
         fi
     done
     
     if [ $TOOL_MISSING = "true" ]; then
         echo "Installing required tools ($REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)"
-        #read -n 1 -r RESULT
-        #echo
         RESULT=y
         if [ $RESULT != "y" ]; then
             echo
@@ -1126,10 +1119,8 @@ pisafe_install_tools() {
         fi
 
         for TOOL in $REQUIRED_TOOLS ; do
-           # if [ ! $(which $TOOL) ]; then
              if [ ! -f /usr/bin/$TOOL ]; then
                 echo_white Installing $TOOL ...
-                #sudo apt install -y $TOOL
                 sudo $INSTALL $TOOL
                 EXIT_CODE=$?
                 if [ $EXIT_CODE != 0 ]; then
@@ -1141,13 +1132,11 @@ pisafe_install_tools() {
         # special installs ...
         
         # Install PiShrink if needed
-        #if [ -z $(which pishrink.sh) ]; then
         if [ ! -f /usr/local/bin/pishrink.sh ]; then
             echo_white Installing pishrink...
             wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
             sudo chmod +x pishrink.sh
             sudo mv pishrink.sh /usr/local/bin
-            #if [ -z $(which pishrink.sh) ] ; then
             if [ ! -f /usr/local/bin/pishrink.sh ] ; then
               dialog_msg "Error" "pishrink not installed." "red" 
             else
@@ -1156,13 +1145,10 @@ pisafe_install_tools() {
         fi
 
         # Install xz if needed
-        #if [ -z $(which xz) ]; then
         if [ ! -f /usr/bin/xz ]; then
             echo_white Installing xz-utils...
-            #sudo apt install xz-utils -y
-            sudo $INSTALL xy_utils
-            #if [ -z $(which xz) ] ; then
-            if ! -f /usr/bin/xz ]; then
+            sudo $INSTALL xz-utils
+            if [ ! -f /usr/bin/xz ]; then
                dialog_msg "Error" "xz not installed." "red" 
             fi
         fi
@@ -1193,9 +1179,6 @@ pisafe_install(){
     sudo chmod +x /usr/local/bin/$SCRIPTNAME
     echo Installed ver=$(/usr/local/bin/$SCRIPTNAME -v)
 
-    
-    # note: to find terminal emulator
-    # update-alternatives --list x-terminal-emulator
 
     # download the icon
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_icon.png -O pisafe_icon.png
@@ -1246,8 +1229,7 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 pisafe_update() {
     INTERFACE=${1:-"cli"}
     SUMMARY=${2:-"yes"}
-    
-    #echo_if_cli "This ver '$SCRIPTVER'"
+    local YES=${3:-"-n"}
       
     local SERVER_VER=
     #rm $SCRIPTNAME.tmp
@@ -1266,14 +1248,18 @@ pisafe_update() {
     fi
 
     if [ $(get_ver_to_int $SERVER_VER) -gt $(get_ver_to_int $SCRIPTVER) ]; then
+      if [ $YES = "-y" ]; then
+        RESULT="y"
+      else
         RESULT=$(dialog_yesno "UPDATE AVAILABLE" "Update $PRODUCTNAME from '$SCRIPTVER'  to '$SERVER_VER' ")
-        if [ $RESULT = "y" ]; then 
-            sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
-            sudo chmod +x /usr/local/bin/$SCRIPTNAME
-            echo "$($SCRIPTNAME -v) installed. Press any key to exit... "
-            read -n 1
-            exit 0
-        fi
+      fi
+    if [ $RESULT = "y" ]; then 
+        sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
+        sudo chmod +x /usr/local/bin/$SCRIPTNAME
+        echo "$($SCRIPTNAME -v) installed. Press any key to exit... "
+        read -n 1
+        exit 0
+    fi
     else  
         rm $SCRIPTNAME.tmp
        if [ $SUMMARY = yes ]; then
@@ -1609,8 +1595,12 @@ fi
 media_restore(){
     local INFILE=$1
     local OUTDEV=$2
-    local SAFETY=${3:-on}   # this lets us bypass some of the safety prompts
+    local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
     INTERFACE=${4:-cli}  #CLI or gui
+
+
+#echo silent=$SILENT $INTERFACE
+#exit
     
     echo_white Starting $PRODUCTNAME $SCRIPTVER Restore...
     echo "IN-FILE='$INFILE'"
@@ -1619,7 +1609,7 @@ media_restore(){
     do_write_log "Starting $PRODUCTNAME $SCRIPTVER Restore, '$INFILE', '$OUTDEV' '$(media_name $OUTDEV)'"
  
     
-    if [ $SAFETY != "off" ]; then
+    if [ $SILENT != "-y" ]; then
         check_infile
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then
@@ -1649,7 +1639,7 @@ media_restore(){
     fi
     
     
-    if [ $SAFETY != "off" ]; then
+    if [ $SILENT != "-y" ]; then
         echo
         echo "Write '$INFILE' to '$OUTDEV' '$(media_name $OUTDEV)' ?"
         echo_red WARNING... All existing data on \'$OUTDEV\' - will be erased!
@@ -1782,10 +1772,10 @@ media_list() {
   }
 
 
-menu_media_details(){
+media_details(){
     local MEDIA=$1
     local MSG=
-    MSG="Media: $(media_name $MEDIA) \n"
+    MSG="\n\nMedia: $(media_name $MEDIA) \n"
     echo "Serching for OSs..."
     MSG=$MSG"$(media_os $MEDIA)"
     echo "Calculating backup estimates..."
@@ -1794,7 +1784,7 @@ menu_media_details(){
     MSG="$MSG\n\n===== PARTITION TABLE DETAILS ===== \n$(sudo parted -s $MEDIA print free) \n\n"
     MSG="$MSG$(lsblk $MEDIA -o maj:min,fssize,fsused,fsavail,fsuse%)\n\n"
     
-    dialog_msg "MEDIA DETAILS: $(media_name $MEDIA)" "$MSG"
+   dialog_msg "MEDIA DETAILS: '$(media_name $MEDIA)'" "$MSG"
 }
 
 
@@ -1860,7 +1850,6 @@ media_partition_os() {
     if [[ ! "$ARCH" =~  "$BITS" ]]; then
       ARCH=$ARCH-$BITS
     fi  
-    #OS="$OS $ARCH-$BITS" 
     OS="$OS $ARCH" 
 
      
@@ -1889,7 +1878,6 @@ media_os() {
 
  # echo Looking for operating systems on partitions...
   for PARTITION in $MEDIA_PARTITION_LIST; do
-  #  echo testing $PARTITION
     OS=$(media_partition_os $MEDIA $PARTITION)
     RC=$?
      if ! (( $RC )); then
@@ -1910,7 +1898,6 @@ media_backup_estimate() {
   fi
   
   MEDIA_SIZE=$(sudo lsblk -ndb $MEDIA -o size)
-  
   PARTED_OUTPUT=$(sudo parted -ms $MEDIA print)  # no freespace
   MEDIA_PARTITION_TABLE=$(echo "$PARTED_OUTPUT" | head -n 2 | tail -n 1 | cut -d: -f6)   # msdos, gpt, other
   MEDIA_PARTITION_COUNT=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1 | wc -l)
@@ -1922,12 +1909,10 @@ media_backup_estimate() {
         MEDIA_LAST_PARTITION_NAME=$MEDIA$MEDIA_LAST_PARTITION_NUMBER
       ;;
       
-      /dev/mmcblk*)
+      /dev/mmcblk*|/dev/nvme*)
          MEDIA_LAST_PARTITION_NAME=$MEDIA"p"$MEDIA_LAST_PARTITION_NUMBER
       ;;
   esac
-  
-  
   
   PARTED_OUTPUT=$(sudo parted $MEDIA unit B print free )
   
@@ -1951,61 +1936,55 @@ media_backup_estimate() {
 
 
   MSG=$MSG"\n===== MEDIA BACKUP ESTIMATES ===== \n"
-
   MSG=$MSG"Media size                         =  $(get_bytes_h $MEDIA_SIZE)\n"
 
 
   #1 - free space
- # if [ ! $MEDIA_FREESPACE_AT_END = 0 ]; then
-   # MSG=$MSG"Remove '$(get_bytes_h $MEDIA_FREESPACE_AT_END)' of freespace      => '$(get_bytes_h $(($MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) )'   \n"
-  #  MSG=$MSG"Copy size is '$(get_bytes_h $(($MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) )' \n"
- # fi
-
    MSG=$MSG$(printf '%-35.34s' "Remove '$(get_bytes_h $MEDIA_FREESPACE_AT_END)' of freespace")
    MSG=$MSG"=> $(get_bytes_h $(($MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) ) \n"
 
   
   # 2 - is it a complex file system?
   if [ $MEDIA_PARTITION_COUNT -gt 3 ]; then
-    MSG=$MSG"Warning: Partitions=$MEDIA_PARTITION_COUNT.  This looks like a complex partition structure and may not shrink.\n"
+    MSG=$MSG"Warning: Partitions=$MEDIA_PARTITION_COUNT.  This looks like a complex partition structure and may not shrink. Pisafe will still work.\n"
   fi
 
-    SHRINK_BYTES=0
-    UNCOMPRESSED_BYTES=0
+  
   
   # 3 - ext and not logical?
+    SHRINK_BYTES=0
+    UNCOMPRESSED_BYTES=0
   case $MEDIA_LAST_PARTITION_FS in
+  
       ext4|ext3|ext2)
 	  # echo "The filesystem on the last partition ($MEDIA_LAST_PARTITION_NUMBER) is 'ext4' so this filesystem should shrink.  $(media_partition_size $1 $MEDIA_PARTITION_COUNT)"
-	  if [ $MEDIA_PARTITION_TABLE = "gpt" ] ||  ( [ $MEDIA_PARTITION_TABLE = "msdos" ] && [ $MEDIA_LAST_PARTITION_TYPE = "primary"  ] ) ; then
+	  if [ $MEDIA_PARTITION_TABLE = "gpt" ] || ( [ $MEDIA_PARTITION_TABLE = "msdos" ] && [ $MEDIA_LAST_PARTITION_TYPE = "primary"  ] ) ; then
 	    #SHRINK_BYTES=$(sudo lsblk $MEDIA -bo maj:min,fsavail | grep :$MEDIA_LAST_PARTITION_NUMBER | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
        SHRINK_BYTES=$(sudo lsblk $MEDIA -lpbo name,fsavail | grep $MEDIA_LAST_PARTITION_NAME | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
-     
       else
-	    MSG=$MSG"\nWarning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This filesystem will not shrink and cannot be restored to a smaller media.\n"
+	    MSG=$MSG"Warning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This filesystem will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
 	  fi
 	  ;;
       
+      
       *)
-	    MSG=$MSG"\nWarning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This filesystem will not shrink and cannot be restored to a smaller media.\n"
+	    MSG=$MSG"Warning: The last partition fs is '$MEDIA_LAST_PARTITION_FS'. This filesystem will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
 	  ;;
   esac
   
     if [ -z $SHRINK_BYTES ]; then
       SHRINK_BYTES=0
     fi
+    
+  # 4 Shrink Filesystem  
   UNCOMPRESSED_BYTES=$(( $MEDIA_SIZE - $MEDIA_FREESPACE_AT_END - $SHRINK_BYTES ))
-  
-  #MSG=$MSG"Shrink filesystem by $(get_bytes_h $SHRINK_BYTES)        => '$(get_bytes_h $UNCOMPRESSED_BYTES )' \n"
   MSG=$MSG$(printf '%-35.34s' "Shrink filesystem by $(get_bytes_h $SHRINK_BYTES)")
   MSG=$MSG"=> $(get_bytes_h $UNCOMPRESSED_BYTES ) \n"
   
+  # 5 Compression
   MSG=$MSG"Estimated compression 2:1          => $(get_bytes_h $((UNCOMPRESSED_BYTES / 2 ))) \n"
   
-  
-  
   echo "$MSG"
-  #dialog_msg "MEDIA DETAILS: $(media_name $INDEV)" "$MSG"
 	
 }
 
@@ -2437,7 +2416,7 @@ media_test(){
 
 
 ########################################
-###  WHIPTAIL GUI SECTION ##############
+###  WHIPTAIL GUI FUNCTIONS ##############
 ########################################
 
 
@@ -2606,7 +2585,7 @@ whiptail_countdown(){
 }
 
 
-
+##############################
 
 
 menu_set_compression(){
@@ -3015,7 +2994,7 @@ menu_tools(){
             ANALYZE)    
                 menu_select_sddevice "MEDIA ANALYSIS"
                 if ! (( $? )); then
-                  menu_media_details  $INDEV
+                  media_details $INDEV
                 fi  
                 ;;
             ERASE)      
@@ -3137,45 +3116,41 @@ case $1 in
         ;;
     
     restore|write)
-        do_write_log $1 $2 $3
-        media_restore $2 $3
+        do_write_log $1 $2 $3 $4
+        media_restore $2 $3 $4
         ;;
     
     list)
-        do_list_info
-        ;;
+        do_list_info  ;;
+
+    analyze)
+        media_details $2  ;;
+
 
     erase|format)
-        media_format_fat32 $2 $3
-        ;;
+        media_format_fat32 $2 $3   ;;
     
     wipe)
-        media_wipe $2
-        ;;
+        media_wipe $2  ;;
         
     test)
-        media_test $2
-        ;;
+        media_test $2 ;;
     
     install)
-        pisafe_install $2
-        ;;
+        pisafe_install $2 ;;
         
     update)
-        pisafe_update cli
+        pisafe_update cli yes $2
         ;;
     
     uninstall)
-        pisafe_uninstall $2
-        ;;
+        pisafe_uninstall $2 ;;
     
     help|-h)
-        pisafe_help
-        ;;
+        pisafe_help  ;;
     
     -v)
-        echo $SCRIPTVER
-        ;;
+        echo $SCRIPTVER  ;;
     
     gui)
         if [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then 
@@ -3185,7 +3160,7 @@ case $1 in
         ;;
     
     "")
-        menu_gui    ;;
+        menu_gui  ;;
     
     *)
       #  if [ ${SCRIPTNAME:0:6} = "pisafe" ]; then
@@ -3242,4 +3217,4 @@ if [ ! -z "$1" ] && [ ! $1 = "uninstall" ]; then
     fi
 fi
 
-menu_cli $1 $2 $3
+menu_cli $1 $2 $3 $4
