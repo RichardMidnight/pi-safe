@@ -2943,9 +2943,10 @@ menu_restore() {
               
    ###################################################       
     # do the restore
-    # the third parameter turns "SAFETY" to "off".  this is because we already checked with the GUI.
+   ### # the third parameter turns "SAFETY" to "off".  this is because we already checked with the GUI.
+   # the third parameter turns "SILENT" to "-y".  this is because we already checked with the GUI.
     
-    media_restore "$INFILE" $OUTDEV off gui
+    media_restore "$INFILE" $OUTDEV -y gui
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ] || [ $DEBUG_MODE = "on" ]; then
         echo Debug_mode=$DEBUG_MODE
