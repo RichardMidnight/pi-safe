@@ -20,7 +20,7 @@ PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
 CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG=/home/$USER/.config/pisafe/pisafe.conf
-REQUIRED_TOOLS="pv bc whiptail zip pigz "
+REQUIRED_TOOLS="pv bc whiptail zip unzip pigz "
 REQUIRED_TOOLS_SPECIAL_INSTALL="lua pishrink.sh xz"
 INTERFACE="cli"
 INDEV=
@@ -381,7 +381,7 @@ dialog_msg() {
     OK_BUTTON=${4:-"Back"}
     
     if [ $INTERFACE = "cli" ]; then
-        MSG="$PRODUCTNAME: $TITLE: $MSG"
+        MSG="$PRODUCTNAME: $TITLE: \n\n$MSG"
         if [ $COLOR = "red" ]; then
             echo_red -e "$MSG"
         else    
@@ -551,33 +551,8 @@ get_bytes_h(){
 }
 
 
-get_freespace() {
-    local FILENAME=${1:-"."}  
-    local FORMAT=${2:-"-B1"}   # -B1 for bytes    -h for humanreadable
-    local FREESPACE
-    
-    if [ -d "$FILENAME" ]; then
-        FREESPACE=$(df "$FILENAME" $FORMAT --output=avail | grep -v Avail)
-        EXIT_CODE=$?
-    else
-        FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
-        EXIT_CODE=$?
-    fi
-
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
-    fi
-    
-    echo $FREESPACE
-}   
-
 
 # ---------- file functions
-file_device(){
-    MOUNT_POINT=$(df -a "$1" | sed 's/  */ /g' | grep -v Mounted | cut -d ' ' -f 6  )
-    BLK_DEV=$(lsblk -n -l -p -o PKNAME,MOUNTPOINT,NAME | sed 's/  */ /g' | grep " $MOUNT_POINT " | cut -d " " -f 1)
-    echo $BLK_DEV
-}
 
 
 file_path(){
@@ -765,6 +740,34 @@ file_list_image_files(){
 }
 
 
+file_device(){
+    MOUNT_POINT=$(df -a "$1" | sed 's/  */ /g' | grep -v Mounted | cut -d ' ' -f 6  )
+    BLK_DEV=$(lsblk -n -l -p -o PKNAME,MOUNTPOINT,NAME | sed 's/  */ /g' | grep " $MOUNT_POINT " | cut -d " " -f 1)
+    echo $BLK_DEV
+}
+
+
+file_fs_freespace() {
+    local FILENAME=${1:-"."}  
+    local FORMAT=${2:-"-B1"}   # -B1 for bytes    -h for humanreadable
+    local FREESPACE
+    
+    if [ -d "$FILENAME" ]; then
+        FREESPACE=$(df "$FILENAME" $FORMAT --output=avail | grep -v Avail)
+        EXIT_CODE=$?
+    else
+        FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
+        EXIT_CODE=$?
+    fi
+
+    if [ $EXIT_CODE != 0 ]; then
+        return $EXIT_CODE
+    fi
+    
+    echo $FREESPACE
+}   
+
+
 get_folder_size() {
     local FOLDER=$*
     # returns human readable
@@ -779,8 +782,6 @@ get_folder_size() {
         echo 0
     fi
 }
-
-
 
 
 # ---------------------------------------------------------
@@ -825,10 +826,10 @@ check_indev(){
     fi
     
     # Warning if SD-card is bigger than freespace
-    if [ $(media_size $INDEV) -gt $(get_freespace "$DEFAULT_PATH") ]; then
+    if [ $(media_size $INDEV) -gt $(file_fs_freespace "$DEFAULT_PATH") ]; then
         MSG="Not enough free space on '$DEFAULT_PATH' 
          \n\n'$(media_name  $INDEV)' is $(media_size $INDEV -h)
-         \nfreespace on '$DEFAULT_PATH' is $(get_freespace "$DEFAULT_PATH" -h)
+         \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
          \n\nBe sure to specify a different drive" 
          dialog_msg "ERROR 5" "$MSG" "red" "OK"
         #return 1
@@ -836,10 +837,10 @@ check_indev(){
     
     # Warning if one and a half times the SD-card is bigger than freespace
     SPACENEEDED=$(( $(media_size $INDEV) + $(( $(media_size $INDEV) / 2 )) ))
-    if [ $SPACENEEDED -gt $(get_freespace "$DEFAULT_PATH") ]; then
+    if [ $SPACENEEDED -gt $(file_fs_freespace "$DEFAULT_PATH") ]; then
         MSG="Might not be enough free space on '$DEFAULT_PATH'
             \n\n'$(media_name $INDEV)' is $(media_size $INDEV -h)
-            \nfreespace on '$DEFAULT_PATH' is $(get_freespace "$DEFAULT_PATH" -h)
+            \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
             \nThere is $(get_folder_size /home/$USER/.local/share/Trash) in the Trash" 
         dialog_msg "WARNING 6" "$MSG" "red"  "OK"
     fi
@@ -1015,11 +1016,11 @@ do_list_info() {
         echo $(cat /etc/os-release | grep "PRETTY_NAME=" | cut -d '"' -f2) hw=$(uname -m) kernel=$(uname -r)
         echo "Root device = /dev/$(env_root_device)"
         echo "Size      = $(media_size /dev/$(env_root_device) -h )"
-        echo "FreeSpace = $(get_freespace . -h)"
+        echo "FreeSpace = $(file_fs_freespace . -h)"
         echo "TrashSize = $(get_folder_size /home/$USER/.local/share/Trash)"
         echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
         echo
-    #    echo "Default dir = '$DIR' - $(get_freespace $DIR -h) free"  
+    #    echo "Default dir = '$DIR' - $(file_fs_freespace $DIR -h) free"  
         #echo "~~~ PiSafe LOCKED DEVICES ~~~"
         #echo "$(cat $CONFIG | grep "device_lock")"
         #echo
@@ -1028,7 +1029,7 @@ do_list_info() {
         echo "$(media_list)"
         echo   
         echo
-        echo "~~~ IMAGE FILES in '$DIR' ($(get_freespace $DIR -h) free) ~~~"
+        echo "~~~ IMAGE FILES in '$DIR' ($(file_fs_freespace $DIR -h) free) ~~~"
         SAVED_PWD=$PWD
         cd $DIR  
         file_list_image_files
@@ -1775,7 +1776,7 @@ media_list() {
 media_details(){
     local MEDIA=$1
     local MSG=
-    MSG="\n\nMedia: $(media_name $MEDIA) \n"
+    MSG="Media: $(media_name $MEDIA) \n"
     echo "Serching for OSs..."
     MSG=$MSG"$(media_os $MEDIA)"
     echo "Calculating backup estimates..."
@@ -2454,8 +2455,8 @@ whiptail_calc_wt_size() {
 }
 
 
-function whiptail_fselect()
-# maybe call something like dialog's fselect
+whiptail_fselect() {
+
 #
 #  Arguments
 #     1  Dialog title
@@ -2474,7 +2475,7 @@ function whiptail_fselect()
 #        echo "Cancelled!"
 #fi
 # ----------------------------------------------------------------------
-{
+
     local TITLE=${1:-$MSG_INFO_TITLE}
     local LOCAL_PATH=${2:-$(pwd)}
     local FILE_MASK=${3:-"*"}
