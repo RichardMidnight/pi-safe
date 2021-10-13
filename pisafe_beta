@@ -72,18 +72,19 @@ Desktop_environment_notes(){
     
     Tested with
     --- ARM ---
-    Raspios Buster 
-    Raspbian Stretch
+    Raspios Buster      good
+    Raspbian Stretch    good
     Raspbian Jessy      can work with limitations
-    Manjaro
-    Ubuntu
+    Manjaro             good         
+    Ubuntu              good
     
     --- x86 ---
-    RPD Buster
-    mint
-    LMDE
-    ubuntu
-    lubuntu
+    debian Strech, Buster         no- last is logical swap.
+    RPD Buster                    see debian
+    mint  20.1                    no - last is ext logical.
+    LMDE 4                        good
+    ubuntu                        good
+    lubuntu                         good
 
 }
 
@@ -1793,6 +1794,7 @@ media_partition_os() {
   MEDIA=$1
   PARTITION=$2
   OS=
+  BITS=
   
   PARTED_OUTPUT=$(sudo parted -ms $MEDIA print)
   MEDIA_PARTITION_TABLE=$(echo "$PARTED_OUTPUT" | head -n 2 | tail -n 1 | cut -d: -f6)   # msdos, gpt, other
@@ -1841,7 +1843,6 @@ media_partition_os() {
   if [ -e $mountdir/etc/os-release ]; then
     OS="$(cat $mountdir/etc/os-release | grep PRETTY_NAME | cut -d= -f2)"
     ARCH="$(file $mountdir/bin/bash | cut -d, -f2)"
-  #  OS="$OS $ARCH" 
     BITS="$(file $mountdir/bin/bash | cut -d, -f1)"
     if  [ !  -z "$(echo "$BITS" | grep 32 )" ]; then
       BITS=32
@@ -1849,10 +1850,10 @@ media_partition_os() {
       BITS=64
     fi
     if [[ ! "$ARCH" =~  "$BITS" ]]; then
-      ARCH=$ARCH-$BITS
+      ARCH=$ARCH"-"$BITS
     fi  
-    OS="$OS $ARCH" 
-
+    
+    OS="$OS '$ARCH'" 
      
   else
     sudo umount "$mountdir"	
