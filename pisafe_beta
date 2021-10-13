@@ -13,7 +13,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.1.5"   # 2021/10/11 @ 12P
+SCRIPTVER="1.1.5"   # 2021/13/11 @ 12P
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -35,11 +35,6 @@ NC='\033[0m' 		# No Color, standard text
 echo_white()        { (echo -e "${WHITE}$*${NC}") }
 echo_red()          { (echo -e "${RED}$*${NC}") }
 
-if [ -f /usr/bin/apt ]; then
-    INSTALL="apt install -y"
-elif [ -f /usr/bin/pacman ]; then
-    INSTALL="pacman -S --noconfirm"
-fi
 
 
 Desktop_environment_notes(){
@@ -153,6 +148,23 @@ pisafe_about(){
 
 
 # ---------- Enviroment functions
+
+
+env_installer(){
+    local INSTALLER=
+    
+    if [ -f /usr/bin/apt ]; then             # debian
+        INSTALLER="apt install -y"
+    elif [ -f /usr/bin/pacman ]; then        # arch
+        INSTALLER="pacman -S --noconfirm"
+    elif [ -f /usr/bin/dnf ]; then            #rpm / fedora
+        INSTALLER="dnf install -y"  
+    fi
+    
+    echo "$INSTALLER"
+}
+
+
 
 env_terminal(){
     local TERMINAL1=
@@ -1102,6 +1114,7 @@ do_install_lua(){
 pisafe_install_tools() {   
     TOOL_MISSING=false
     TOOLS=$(echo $REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)
+    INSTALL=$(env_installer)
     
     for TOOL in $TOOLS ; do
         #if [ ! $(which $TOOL) ]; then
