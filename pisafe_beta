@@ -40,7 +40,6 @@ echo_red()          { (echo -e "${RED}$*${NC}") }
 Desktop_environment_notes(){
     # this is just a reference of tested OSs from 2021
 
-
     DISTRO                      TERMINAL            TEXT EDITOR         
     RaspberryPiOS-stretch       lxterminal          leafpad?
     RaspberrypiOS-buster        lxterminal          mousepad
@@ -79,8 +78,7 @@ Desktop_environment_notes(){
     mint  20.1                    no - last is ext logical.
     LMDE 4                        good
     ubuntu                        good
-    lubuntu                         good
-
+    lubuntu                       good
 }
 
 
@@ -165,7 +163,6 @@ env_installer(){
 }
 
 
-
 env_terminal(){
     local TERMINAL1=
     
@@ -206,7 +203,6 @@ env_texteditor(){
     TEXT_EDITORS="mousepad leafpad xed gedit featherpad kwrite pluma kate geany, nano "
     
     for TEXT_EDITOR in $TEXT_EDITORS ; do
-        #if [ ! -z $(which $TEXT_EDITOR) ]; then
         if [ -f /usr/bin/$TEXT_EDITOR ]; then
             echo $TEXT_EDITOR
             return
@@ -465,14 +461,6 @@ echo_if_cli (){
 }
 
 
-do_write_log(){
-    INFO=$*
-    if [ $LOG = "on" ]; then
-        touch $LOG_FILE
-        echo "$(date "+%Y-%m-%d %H:%M"), $INFO" >> $LOG_FILE
-    fi
-}
-
 
 is_number() {
   case $1 in
@@ -524,24 +512,21 @@ get_ver_to_int() {
 
 
 get_bytes_h(){
-    BYTES=$1
     # currently shows 3 significant digits.
+    local BYTES=$1
+    local LEN=${#BYTES}
+    local k_ilo=1024;
+    local m_ega=$k_ilo*$k_ilo;
+    local g_iga=$m_ega*$k_ilo;
+    local t_era=$g_iga*$k_ilo;
+    local p_eta=$t_era*$k_ilo;
+    
+    [ -z "$BYTES" ] && return
     
     NUM='^[0-9]+$'
     if ! [[ "$BYTES" =~ $NUM ]] ; then   # not a number   
         return 1
     fi
-    
-    [ -z "$BYTES" ] && return
-    #need some error checking that it is a number
-    
-    k_ilo=1024;
-    m_ega=$k_ilo*$k_ilo;
-    g_iga=$m_ega*$k_ilo;
-    t_era=$g_iga*$k_ilo;
-    p_eta=$t_era*$k_ilo;
-    
-    LEN=${#BYTES}
     
     case $LEN in
         4) echo $(echo "scale=2; $BYTES/($k_ilo)" | bc)kb ;;
@@ -628,7 +613,7 @@ file_image_size() {
     local INFILE="$1"
     local HUMAN=${2:-"no"}
     
-    file_check_for_img_file "$INFILE" > /dev/null
+    file_image_exists "$INFILE" > /dev/null
     if [ $? != 0 ] ; then
         # image file not found
         echo 0
@@ -672,7 +657,7 @@ file_image_size() {
 }    
 
 
-file_check_for_img_file(){
+file_image_exists(){
     # returns 0 if there is an imagefile
     # returns 1 if no imagefile
 
@@ -781,7 +766,7 @@ file_fs_freespace() {
 }   
 
 
-get_folder_size() {
+file_folder_size() {
     local FOLDER=$*
     # returns human readable
     
@@ -854,12 +839,12 @@ check_indev(){
         MSG="Might not be enough free space on '$DEFAULT_PATH'
             \n\n'$(media_name $INDEV)' is $(media_size $INDEV -h)
             \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
-            \nThere is $(get_folder_size /home/$USER/.local/share/Trash) in the Trash" 
+            \nThere is $(file_folder_size /home/$USER/.local/share/Trash) in the Trash" 
         dialog_msg "WARNING 6" "$MSG" "red"  "OK"
     fi
     
      # if we got this far, all is good
-     return 0
+     #return 0
 }
 
 
@@ -919,8 +904,6 @@ check_outfile(){
         dialog_msg "ERROR 6" "File '$(file_path_base $OUTFILE).img.$(file_ext "$OUTFILE")' already exists" "red"
         return 6
     fi 
-    
-    #return 0
 }
 
 
@@ -938,7 +921,7 @@ check_infile(){
     fi 
     
     # quit or warning if no img file found
-    file_check_for_img_file "$INFILE"
+    file_image_exists "$INFILE"
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         dialog_msg "ERROR 3" "No image file found in '$INFILE'" "red"
@@ -1030,8 +1013,8 @@ do_list_info() {
         echo "Root device = /dev/$(env_root_device)"
         echo "Size      = $(media_size /dev/$(env_root_device) -h )"
         echo "FreeSpace = $(file_fs_freespace . -h)"
-        echo "TrashSize = $(get_folder_size /home/$USER/.local/share/Trash)"
-        echo "RootTrash = $(get_folder_size /root/.local/share/Trash)"
+        echo "TrashSize = $(file_folder_size /home/$USER/.local/share/Trash)"
+        echo "RootTrash = $(file_folder_size /root/.local/share/Trash)"
         echo
     #    echo "Default dir = '$DIR' - $(file_fs_freespace $DIR -h) free"  
         #echo "~~~ PiSafe LOCKED DEVICES ~~~"
@@ -1144,9 +1127,9 @@ pisafe_install_tools() {
             fi
         done
         
-        # special installs ...
+        # Special installs ...
         
-        # Install PiShrink if needed
+        # Install PiShrink
         if [ ! -f /usr/local/bin/pishrink.sh ]; then
             echo_white Installing pishrink...
             wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
@@ -1159,7 +1142,7 @@ pisafe_install_tools() {
             fi
         fi
 
-        # Install xz if needed
+        # Install xz
         if [ ! -f /usr/bin/xz ]; then
             echo_white Installing xz-utils...
             sudo $INSTALL xz-utils
@@ -1174,6 +1157,15 @@ pisafe_install_tools() {
 }    
 
 
+pisafe_write_log(){
+    INFO=$*
+    if [ $LOG = "on" ]; then
+        touch $LOG_FILE
+        echo "$(date "+%Y-%m-%d %H:%M"), $INFO" >> $LOG_FILE
+    fi
+}
+
+
 pisafe_install(){
     SILENT=${1:-"-n"}
     
@@ -1186,7 +1178,7 @@ pisafe_install(){
         fi
     fi
     
-    do_write_log "Installing $PRODUCTNAME v $SCRIPTVER"
+    pisafe_write_log "Installing $PRODUCTNAME v $SCRIPTVER"
     #dialog_msg "installing"  "Installing $PRODUCTNAME ..."
     
     # Install the CLI script
@@ -1295,7 +1287,7 @@ pisafe_uninstall(){
         fi
     fi
     
-    do_write_log "Uninstalling $PRODUCTNAME $INSTALLED_VER"
+    pisafe_write_log "Uninstalling $PRODUCTNAME $INSTALLED_VER"
     
     # remove from the menu
     sudo rm -f "/usr/share/applications/$PRODUCTNAME.desktop"
@@ -1380,7 +1372,7 @@ media_backup(){
     echo "IN-DEV='$INDEV'"
     echo "OUT-FILE='$OUTFILE'"
     echo  "Compression set to level $COMPRESSION of 9"
-    do_write_log "Starting $PRODUCTNAME $SCRIPTVER Backup, '$INDEV' '$(media_name $INDEV)', '$OUTFILE', Compression=$COMPRESSION"
+    pisafe_write_log "Starting $PRODUCTNAME $SCRIPTVER Backup, '$INDEV' '$(media_name $INDEV)', '$OUTFILE', Compression=$COMPRESSION"
       
     if [ $INTERFACE = "cli" ]; then
         check_indev
@@ -1514,12 +1506,12 @@ fi
     case $(file_ext "$OUTFILE") in
         img)
             echo Not compressing .img file ...
-        ;;
+            ;;
         
         iso)
             echo Not compressing .iso file ...
             mv $OUTFILE_BASE.img $OUTFILE_BASE.iso
-        ;;
+            ;;
         
         zip)
          #   local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
@@ -1537,7 +1529,7 @@ fi
             #sudo pv "$OUTFILE_BASE".img | sudo zip -$COMPRESSION  > "$OUTFILE"
             #EXIT_CODE=$? 
             #sudo rm -f "$OUTFILE_BASE".img 
-        ;;
+            ;;
         
         xz)
             #sudo xz -z -v -T0 -$COMPRESSION "$OUTFILE_BASE".img
@@ -1553,7 +1545,7 @@ fi
 			  sudo xz -z -v -T0 -$COMPRESSION "$OUTFILE_BASE".img
 			fi	
             rm -f "$OUTFILE_BASE".img
-        ;;
+            ;;
         
         gz)
             #echo $(file_size "$OUTFILE_BASE".img -h) to compress.  Sorry, gz has no progress bar.   Please wait...
@@ -1566,14 +1558,13 @@ fi
             pv "$OUTFILE_BASE".img | pigz -$COMPRESSION > "$OUTFILE"
             EXIT_CODE=$? 
             rm -f "$OUTFILE_BASE".img
-            
-        ;;
+            ;;
         
         *)
             echo
             echo_red ERROR... unsupported file extension \'$(file_ext "$OUTFILE")\'.
             return 1
-        ;;
+            ;;
     esac
     
     if [ $EXIT_CODE != 0 ]; then
@@ -1597,12 +1588,12 @@ fi
     if [ $EXIT_CODE != 0 ]; then
         echo
         echo_red  "ERROR. $EXIT_CODE"
-        do_write_log "FAILED $PRODUCTNAME $SCRIPTVER Backup, IN-DEV='$INDEV',  OUT-FILE='$OUTFILE', Compression set to level $COMPRESSION"
+        pisafe_write_log "FAILED $PRODUCTNAME $SCRIPTVER Backup, IN-DEV='$INDEV',  OUT-FILE='$OUTFILE', Compression set to level $COMPRESSION"
         return $EXIT_CODE
     else
         do_beep_if_sound
         echo_white "Backup done. '$INDEV' backed up to '$OUTFILE' in $(get_elapsed_time $TIME1 $TIME4)." 
-        do_write_log "Finished $PRODUCTNAME $SCRIPTVER Backup,  $(media_size $INDEV -h) to  $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4) " 
+        pisafe_write_log "Finished $PRODUCTNAME $SCRIPTVER Backup,  $(media_size $INDEV -h) to  $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4) " 
     fi
 }
 
@@ -1621,7 +1612,7 @@ media_restore(){
     echo "IN-FILE='$INFILE'"
     echo "OUT-DEV='$OUTDEV'"
     echo "Safety='$SAFETY'"
-    do_write_log "Starting $PRODUCTNAME $SCRIPTVER Restore, '$INFILE', '$OUTDEV' '$(media_name $OUTDEV)'"
+    pisafe_write_log "Starting $PRODUCTNAME $SCRIPTVER Restore, '$INFILE', '$OUTDEV' '$(media_name $OUTDEV)'"
  
     
     if [ $SILENT != "-y" ]; then
@@ -1702,7 +1693,7 @@ media_restore(){
                 --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 EXIT_CODE=$?
             fi
-        ;;
+            ;;
         
         zip)
             RESTORE_BYTES=$(file_image_size "$INFILE")
@@ -1716,7 +1707,7 @@ media_restore(){
                 --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                  EXIT_CODE=$?
             fi
-        ;;
+            ;;
         
         xz)
             if [ $INTERFACE = "cli" ]; then
@@ -1728,7 +1719,7 @@ media_restore(){
                 --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 EXIT_CODE=$?
             fi
-        ;;
+            ;;
 
         gz)
             if [ $INTERFACE = "cli" ]; then
@@ -1740,13 +1731,13 @@ media_restore(){
                 --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 EXIT_CODE=$?
             fi    
-        ;;
+            ;;
 
         *)
             echo
             echo_red ERROR.  Unsupported file extension. 
             return  1 
-        ;;
+            ;;
 
     esac        
     TIME2=$(date +%s)
@@ -1755,12 +1746,12 @@ media_restore(){
     if [ $EXIT_CODE != 0 ]; then
         echo
         echo_red  "ERROR. $EXIT_CODE"
-        do_write_log "Restore failed $EXIT_CODE"
+        pisafe_write_log "Restore failed $EXIT_CODE"
         return $EXIT_CODE
     else
         do_beep_if_sound
         echo_white "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
-        do_write_log "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
+        pisafe_write_log "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
     fi
 }
 
@@ -1784,7 +1775,7 @@ media_list() {
     fi
     
     echo "${DEVICES[@]}"
-  }
+}
 
 
 media_details(){
@@ -1899,7 +1890,6 @@ media_os() {
       echo "$OS found on Partition $PARTITION\n"
     fi
   done
-
 }
 
 
@@ -2000,7 +1990,6 @@ media_backup_estimate() {
   MSG=$MSG"Estimated compression 2:1          => $(get_bytes_h $((UNCOMPRESSED_BYTES / 2 ))) \n"
   
   echo "$MSG"
-	
 }
 
 
@@ -2111,7 +2100,7 @@ TEST_RESULTS=Succeeded
 echo
 dialog_msg "ERASE MEDIA" "'$NAME' ($DEVICE) has been erased \n\nYou can remove the SD card from the reader"
 
-do_write_log "ERASE MEDIA '$NAME' on $DEVICE...  $TEST_RESULTS"   
+pisafe_write_log "ERASE MEDIA '$NAME' on $DEVICE...  $TEST_RESULTS"   
 }
 
 
@@ -2202,8 +2191,7 @@ media_wipe(){
     echo
     dialog_msg "WIPE MEDIA" "'$NAME' ($DEVICE) has been wiped with zeros \n\nYou can remove the SD card from the reader"   
     
-    do_write_log "WIPE MEDIA '$NAME' on $DEVICE...  $TEST_RESULTS"   
-    
+    pisafe_write_log "WIPE MEDIA '$NAME' on $DEVICE...  $TEST_RESULTS"   
 }
 
 
@@ -2424,7 +2412,7 @@ media_test(){
     MESSAGE="$MESSAGE\n$TEST_RESULTS\n\n$(get_elapsed_time $TIME1 $TIME6)"
     dialog_msg "TEST MEDIA '$NAME' $DEVICE"  "$MESSAGE"
     
-    do_write_log "TEST MEDIA '$NAME' on $DEVICE...  $TEST_RESULTS"   
+    pisafe_write_log "TEST MEDIA '$NAME' on $DEVICE...  $TEST_RESULTS"   
 }
 
 
@@ -2547,7 +2535,8 @@ whiptail_fselect() {
 
         #exit if bad whiptail statement
         FSX=${FILE_SELECTED:0:3}
-        if [ ! -z $FSX ] && [ $FSX = "Box" ]; then
+       # if [ ! -z $FSX ] && [ $FSX = "Box" ]; then
+        if [ ~$FSX = "~Box" ]; then
             echo "ERROR in whiptail in whiptail_fselect.  Maybe a space in a filename?"
 			echo "${FILES[@]}"
             exit 1
@@ -2699,7 +2688,7 @@ menu_options(){
         config_var_set $SELECTED on $CONFIG
     done
     config_var_get_settings
-    }
+}
 
 
 menu_settings(){
@@ -3127,21 +3116,21 @@ INTERFACE="cli"
 case $1 in
     
     backup|read)
-        do_write_log $1 $2 $3
+        pisafe_write_log $1 $2 $3
         media_backup $2 $3
         ;;
     
     restore|write)
-        do_write_log $1 $2 $3 $4
+        pisafe_write_log $1 $2 $3 $4
         media_restore $2 $3 $4
         ;;
     
     list)
         do_list_info  ;;
 
+
     analyze)
         media_details $2  ;;
-
 
     erase|format)
         media_format_fat32 $2 $3   ;;
@@ -3151,6 +3140,7 @@ case $1 in
         
     test)
         media_test $2 ;;
+    
     
     install)
         pisafe_install $2 ;;
@@ -3190,29 +3180,11 @@ esac
 }
 
 
-# probably delete get_opts
-get_opts(){
-while getopts ":y" opt; do
-  case "${opt}" in
-    y) ANSWER_YES=on; echo ON;;
- #   p) parallel=off;;
- #   d) debug=on;;
-   # h) pisafe_help; exit;;
- #   a) autoexpand=off ;;
- #   v) verbose=on;;
-   # v)  echo $SCRIPTVER; exit;;
-    *) pisafe_help; exit;;
-  esac
-done
-shift $((OPTIND-1))
-}
-
-
 
 ##########################################################
 
-# if arg = -v, then show version and exit the script
-if  [ ! -z "$1" ]  && [ $1 = "-v" ]; then
+# if -v, show version and exit
+if  [ ~$1 = ~-v ]; then
     echo $SCRIPTVER
     exit
 fi
@@ -3224,10 +3196,8 @@ config_var_get_settings
 
 whiptail_calc_wt_size
 
-
 ## check for updates if not uninstalling
-if [ ! -z "$1" ] && [ ! $1 = "uninstall" ]; then
-    # check for updates
+if [ ! ~$1 = ~uninstall ]; then
     if  [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
         pisafe_update gui no
     fi
