@@ -13,7 +13,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 # https://github.com/Drewsif/PiShrink
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.1.5"   # 2021/13/11 @ 12P
+SCRIPTVER="1.1.5"   # 2021/10/18 
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -28,6 +28,11 @@ OUTDEV=
 INFILE=
 OUTFILE=
 BACKTITLE="$PRODUCTNAME ver $SCRIPTVER   === $PRODUCTCOMMENT === "
+
+LOG=on
+SKIP_FREESPACE=on
+LOG_FILE="/home/$USER/.config/pisafe/PiSafe.log"
+CHECK_FOR_UPDATES_ON_STARTUP=on
 
 WHITE='\033[1;37m'
 RED='\033[1;31m'
@@ -200,7 +205,7 @@ env_terminal(){
 
 
 env_texteditor(){
-    TEXT_EDITORS="mousepad leafpad xed gedit featherpad kwrite pluma kate geany, nano "
+    TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
     
     for TEXT_EDITOR in $TEXT_EDITORS ; do
         if [ -f /usr/bin/$TEXT_EDITOR ]; then
@@ -240,6 +245,7 @@ env_root_device() {
 
 
 # ---------- Config_var functions
+
 
 config_var_init_configfile(){
     if [ ! -d $(file_path $CONFIG) ]; then
@@ -381,6 +387,179 @@ config_var_factory_reset(){
 }
 
 
+
+########################################
+###  WHIPTAIL GUI FUNCTIONS ##############
+########################################
+
+
+whiptail_calc_wt_size() {
+    # NOTE: it's tempting to redirect stderr to /dev/null, so supress error 
+    # output from tput. However in this case, tput detects neither stdout or 
+    # stderr is a tty and so only gives default 80, 24 values
+
+    WT_HEIGHT=20
+    WT_WIDTH=80
+    WT_HEIGHT_TALL=$(($(tput lines)-10))
+    WT_WIDTH_WIDE=$(($(tput cols)-7))
+
+    #WT_HEIGHT=$(($(tput lines)-10))
+    #WT_WIDTH=$(tput cols)
+    #WT_WIDTH=$(($(tput cols)-10))
+
+
+    if [ -z "$WT_WIDTH" ] || [ "$WT_WIDTH" -lt 60 ]; then
+        WT_WIDTH=80
+    fi
+    if [ "$WT_WIDTH" -gt 178 ]; then
+        WT_WIDTH=80
+    fi
+
+    #WT_WIDTH=$(($WT_WIDTH-7))
+    WT_MENU_HEIGHT=$(($WT_HEIGHT-7))
+    WT_MENU_HEIGHT_TALL=$(($WT_HEIGHT_TALL-7))
+
+    #WT_MB_HEIGHT=18
+    #WT_MB_WIDTH=70
+
+    WT_MB_HEIGHT=$WT_HEIGHT
+    WT_MB_WIDTH=$WT_WIDTH
+}
+
+
+whiptail_fselect() {
+
+#
+#  Arguments
+#     1  Dialog title
+#     2  Source path to list files and directories
+#     3  File mask (by default *)
+#     4  "yes" to allow go back in the file system.
+#
+#  Returns
+#     0  if a file was selected and loads the FILE_SELECTED variable 
+#        with the selected file.
+#     1  if the user cancels.
+#
+#if whiptail_fselect "Please, select a file" /home/user ; then
+#        echo "File Selected: \"$FILE_SELECTED\"."
+#else
+#        echo "Cancelled!"
+#fi
+# ----------------------------------------------------------------------
+
+    local TITLE=${1:-$MSG_INFO_TITLE}
+    local LOCAL_PATH=${2:-$(pwd)}
+    local FILE_MASK=${3:-"*"}
+    #local FILE_MASK='( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" )'
+    local ALLOW_BACK=${4:-no}
+    local FILES=()
+
+    [ "$ALLOW_BACK" != "no" ] && FILES+=(".." "..")
+
+    IFS=$'\t\n'
+
+    FILES=("FILENAME" "     SIZE   (IMAGESIZE)")
+
+    # First add folders      
+    for DIR in $(find $LOCAL_PATH -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f\t" | sort 2> /dev/null)
+    do
+        FILES+=($DIR  "     folder")
+    done              
+                
+    # Then add files                                
+    for FILE in $(find $LOCAL_PATH -maxdepth 1 \
+                                    \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" \) \
+                                    -type f \
+                                    -printf "%f\t     %s\n" | sort  2> /dev/null)                                                                  
+    do
+        FILES+=($FILE)
+    done
+	unset IFS
+
+
+    # convert filesizes to human readable and add image size
+    num='^[0-9]+$'
+    arraylength=${#FILES[@]}
+    
+    if [ $arraylength = 0 ]; then
+        FILES=(no files)
+    fi
+    
+    for (( i=0; i<${arraylength}; i++ )); do
+		arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
+		if [[ "$arrayelement" =~ $num ]] ; then  
+            #FILES[$i]=$(echo "    " $(get_bytes_h $arrayelement -h))
+            FILES[$i]=$(echo "    " $(get_bytes_h $arrayelement -h) \($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h)\)) 
+		else
+            PREVIOUS_ELEMENT=$(echo "${FILES[$i]}")
+        fi
+    done
+ 
+ 
+    # let user select file
+    while true
+    do
+        FILE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$LOCAL_PATH" \
+                                --menu "Choose a file" $WT_HEIGHT_TALL $WT_WIDTH_WIDE $WT_MENU_HEIGHT_TALL "${FILES[@]}"  3>&1 1>&2 2>&3)
+
+        #exit if bad whiptail statement
+        FSX=${FILE_SELECTED:0:3}
+       # if [ ! -z $FSX ] && [ $FSX = "Box" ]; then
+        if [ ~$FSX = "~Box" ]; then
+            echo "ERROR in whiptail in whiptail_fselect.  Maybe a space in a filename?"
+			echo "${FILES[@]}"
+            exit 1
+        fi
+        
+        if [ -z "$FILE_SELECTED" ]; then
+            return 1
+        else
+            if [ "$FILE_SELECTED" = ".." ] && [ "$ALLOW_BACK" != "no" ]; then
+                return 0
+
+            elif [ -d "$LOCAL_PATH/$FILE_SELECTED" ] ; then
+                if whiptail_fselect "$TITLE" "$LOCAL_PATH/$FILE_SELECTED" "$FILE_MASK" "yes" ; then
+                    if [ "$FILE_SELECTED" != ".." ]; then
+                        return 0
+                    fi
+                else
+                    return 1
+                fi
+
+            elif [ -f "$LOCAL_PATH/$FILE_SELECTED" ] ; then
+                FILE_SELECTED="$LOCAL_PATH/$FILE_SELECTED"
+                return 0
+            fi
+        fi
+    done
+}
+
+
+whiptail_countdown(){  
+    local MAX=${1:-10}
+    local TITLE=${2:-"COUNTDOWN... press any key to stop or 'y' to continue now"}
+    MSG=${3:-"Countdown for $MAX seconds.\n\n"}
+
+    for ((i=$MAX; i>=0; i--)) ; do
+		TERM=vt220 whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --infobox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
+		#sleep .75
+        read -t 1 -N 1 INPUT
+        if [ ! -z $INPUT ]; then
+            if [ $INPUT = "y" ]; then
+                echo continuing...
+                return 0
+            else
+              echo $INPUT
+              return 2
+            fi
+        fi 
+        MSG=$(echo "$MSG.$i")
+    done 
+}
+
+
+
 # ---------- Dialog functions
 
 dialog_msg() {
@@ -392,7 +571,7 @@ dialog_msg() {
     if [ $INTERFACE = "cli" ]; then
         MSG="$PRODUCTNAME: $TITLE: \n\n$MSG"
         if [ $COLOR = "red" ]; then
-            echo_red -e "$MSG"
+            echo_red "$MSG"
         else    
             echo -e "$MSG"
         fi
@@ -403,10 +582,9 @@ dialog_msg() {
 
 
 dialog_yesno(){
-   
     TITLE="$1"
     MSG="$2"
-    DEFAULT=${3:-"yes"}
+    DEFAULT=${3:-""}   # defaults to Yes.  can specify --defaultno
     COLOR=${4:-"white"}
     
     if [ $INTERFACE = "cli" ]; then
@@ -421,15 +599,16 @@ dialog_yesno(){
             esac
         done
         
-    else
-        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --defaultno --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH 3>&1 1>&2 2>&3
+    else    
+        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" $DEFAULT --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH 3>&1 1>&2 2>&3
         if [ $? = 0 ]; then 
-            RESULT=y
+            echo y
+            return 0
         else
-            RESULT=n
+            echo n
+            return 0
         fi
-        echo $RESULT
-        return 0
+
     fi
 }
 
@@ -462,7 +641,7 @@ echo_if_cli (){
 
 
 
-is_number() {
+is_number_XX() {
   case $1 in
     ''|*[!0-9]*) return 0 ;;
     *) return 1 ;;
@@ -484,7 +663,7 @@ do_countdown(){
 }
 
 
-do_beep_if_sound(){
+do_beep(){
     if [ $SOUND = on ] ; then
         #do_beep
         speaker-test -t sign -f 700 > /dev/null  & sleep .5 && kill -9 $! 
@@ -782,73 +961,7 @@ file_folder_size() {
 }
 
 
-# ---------------------------------------------------------
-
-check_indev(){
-    #returns 0 if good
-    # check INDEV
-    
-    # stop if indev is blank
-    if [ -z $INDEV ] ; then
-        dialog_msg "ERROR 1" "IN-DEV '$INDEV' can't be blank" "red" "OK"
-        return 1
-    fi 
-    
-    # add '/dev/' if missing
-    if [ "${INDEV:0:5}" != "/dev/" ]; then
-        echo "Device prefix not specified.  Adding '/dev/'"
-        INDEV="/dev/"$INDEV
-        echo "IN-DEV='$INDEV'"
-    fi
-    
-    # Stop if INDEV does not exists
-    if  [ ! -e $INDEV ]  ; then
-        dialog_msg "ERROR 2" "IN-DEV '$INDEV' not found" "red" "OK"
-        return 1
-    fi 
-    
-    # warning if INDEV is root device
-    if [ $INDEV = /dev/$(env_root_device) ]; then
-        dialog_msg "WARNING 3" "SD-card '$(media_name $INDEV)' is root device '/dev/$(env_root_device)'." "red" "OK"
-        #return 1
-    fi
-    
-    # Warning if SD-card is bigger than 16GB
-    if [ $(media_size $INDEV) -gt 16000000000 ]; then
-        MESG=" '$(media_name $INDEV)' is larger than 16GB.  \
-         \n\nUse a smaller SD card if you can.  \
-         \nIt will be faster because the entire SD card must be read before it can be compressed.\
-         \n\nA good 8gb card with RaspiOS in a Raspberry Pi 4 takes about 10 minutes"
-        #whiptail --backtitle "$BACKTITLE" --title "WARNING" --msgbox "$MESG" $WT_MB_HEIGHT $WT_MB_WIDTH  
-        dialog_msg "WARNING 4" "$MESG" "red" "OK"
-    fi
-    
-    # Warning if SD-card is bigger than freespace
-    if [ $(media_size $INDEV) -gt $(file_fs_freespace "$DEFAULT_PATH") ]; then
-        MSG="Not enough free space on '$DEFAULT_PATH' 
-         \n\n'$(media_name  $INDEV)' is $(media_size $INDEV -h)
-         \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
-         \n\nBe sure to specify a different drive" 
-         dialog_msg "ERROR 5" "$MSG" "red" "OK"
-        #return 1
-    fi
-    
-    # Warning if one and a half times the SD-card is bigger than freespace
-    SPACENEEDED=$(( $(media_size $INDEV) + $(( $(media_size $INDEV) / 2 )) ))
-    if [ $SPACENEEDED -gt $(file_fs_freespace "$DEFAULT_PATH") ]; then
-        MSG="Might not be enough free space on '$DEFAULT_PATH'
-            \n\n'$(media_name $INDEV)' is $(media_size $INDEV -h)
-            \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
-            \nThere is $(file_folder_size /home/$USER/.local/share/Trash) in the Trash" 
-        dialog_msg "WARNING 6" "$MSG" "red"  "OK"
-    fi
-    
-     # if we got this far, all is good
-     #return 0
-}
-
-
-check_outfile(){
+file_check_outfile(){
     # uses global variable OUTFILE
     # returns 0 if good
     
@@ -907,7 +1020,7 @@ check_outfile(){
 }
 
 
-check_infile(){
+file_check_infile(){
     # quit if infile is blank
     if [ -z "$INFILE" ] ; then
         dialog_msg "ERROR 1" "File '$INFILE' cannot be blank" "red"
@@ -929,79 +1042,7 @@ check_infile(){
     fi 
 }
 
-
-check_outdev(){
-    # quit if outdev is blank
-    if [ -z $OUTDEV ]; then
-        dialog_msg "ERROR 1" "Device '$OUTDEV' cannot be blank" "red"
-        return 1
-    fi
-    
-    # Add '/dev/' if missing
-    if [ ${OUTDEV:0:5} != "/dev/" ]; then
-        echo_if_cli "Device prefix not specified.  Adding '/dev/'"
-        OUTDEV="/dev/"$OUTDEV
-        echo_if_cli "OUT-DEV='$OUTDEV'"
-    fi
-    
-    # Quit if OUTDEV is not found
-    if  [ ! -e $OUTDEV ]  ; then
-        dialog_msg "ERROR 2" "Device '$OUTDEV' not found" "red"
-        return 2
-    fi 
-           
-           
-        
-    #stop if drive is pisafe_locked
-    #  $(config_var_get safety $CONFIG)
-    VENDOR=$(lsblk -n -d --output vendor /dev/sda)
-    SERIAL=$(lsblk -n -d --output serial /dev/sda)
-    #echo Device Vendor and Serial_number=$VENDOR $SERIAL
-    #if [ $(config_var_get device_$VENDOR$SERIAL $CONFIG) = "locked" ]; then
-    #  do_beep_if_sound
-    #  echo Drive $OUTDEV serial number $VENDOR$SERIAL is $PRODUCTNAME locked.  exiting.
-    #  return 1
-    #fi
-    
-    #stop if outdev is piSave-locked
-    if [ $(config_var_get device_lock_$(media_serialno $OUTDEV) $CONFIG) = "on" ]; then
-        dialog_msg "RESTORE ERROR " "Device '$(media_serialno $OUTDEV)' is locked by PiSafe in the config file" "red"
-        return 1
-    fi
-    
-    
-    
-    # Stop if outdev is the root device
-    if [ $OUTDEV = /dev/$(env_root_device) ]; then
-        dialog_msg "RESTORE ERROR" "Restore to root device not allowed" "red"
-        return 1
-    fi
-    
-    #stop if INFILE is on OUTDEV
-    if [ "$(file_device "$INFILE")" = $OUTDEV ]; then
-        dialog_msg "RESTORE ERROR" "Restore to same device as '$INFILE' not allowed" "red"
-        return 1
-    fi
-    
-    # Warning if device is large
-    if [ $(media_size $OUTDEV) -gt $LARGE_DEVICE_WRITE_WARNING ]; then
-        dialog_msg "RESTORE WARNING" "'$(media_name $OUTDEV)' 
-        \nis larger than $(get_bytes_h $LARGE_DEVICE_WRITE_WARNING)... 
-        \n\nBe sure this is the right device" "red" "OK"
-    fi
-     
-    # Stop if imagefile is larger than device
-    if [ $(file_image_size "$INFILE") -gt $(media_size $OUTDEV) ]; then
-        dialog_msg "RESTORE ERROR" "Not enough room
-        \nThe image in '$INFILE' is ' $(file_image_size "$INFILE" -h)' 
-        \nand '$OUTDEV' is only '$(media_size $OUTDEV -h)'" "red"
-        return 1
-    fi
-}
-
-
 # -----------------------------------------------
-
 
 
 
@@ -1223,11 +1264,9 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
             MSG="$PRODUCTNAME $SCRIPTVER installed.  Select it from the 'Accessories' menu or you can execute it in a terminal window by typing '$SCRIPTNAME'."
         fi
         
-        #whiptail --backtitle "$BACKTITLE" --title "INSTALLED" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
         dialog_msg  "INSTALL:" "$MSG" "white" "OK"
     else
         MSG="$PRODUCTNAME not installed.  '/usr/local/bin/$SCRIPTNAME' not found. "
-        #whiptail --backtitle "$BACKTITLE" --title "ERROR" --msgbox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
         dialog_msg  "INSTALL:" "$MSG" "white" "OK"
     fi
 }
@@ -1327,7 +1366,6 @@ media_size() {
     if [ "${DEV:0:5}" != "/dev/" ]; then
         #echo "Device prefix not specified.  Adding '/dev/'"
         DEV="/dev/"$DEV
-        #echo "IN-DEV='$INDEV'"
     fi
    
     SIZE_BYTES=$(lsblk $DEV -d -n -b -o size  2> /dev/null)
@@ -1358,6 +1396,149 @@ media_serialno(){
 }
 
 
+media_check_indev(){
+    #returns 0 if good
+    # check INDEV
+    
+    # stop if indev is blank
+    if [ -z $INDEV ] ; then
+        dialog_msg "ERROR 1" "IN-DEV '$INDEV' can't be blank" "red" "OK"
+        return 1
+    fi 
+    
+    # add '/dev/' if missing
+    if [ "${INDEV:0:5}" != "/dev/" ]; then
+        echo "Device prefix not specified.  Adding '/dev/'"
+        INDEV="/dev/"$INDEV
+        echo "IN-DEV='$INDEV'"
+    fi
+    
+    # Stop if INDEV does not exists
+    if  [ ! -e $INDEV ]  ; then
+        dialog_msg "ERROR 2" "IN-DEV '$INDEV' not found" "red" "OK"
+        return 1
+    fi 
+    
+    # warning if INDEV is root device
+    if [ $INDEV = /dev/$(env_root_device) ]; then
+        dialog_msg "WARNING 3" "SD-card '$(media_name $INDEV)' is root device '/dev/$(env_root_device)'." "red" "OK"
+        #return 1
+    fi
+    
+    
+    
+    # warning if device root fs is read only
+  #  ROOTREADONLY=$(media_os $INDEV | grep READONLY)
+  #  if [ ! -z "$ROOTREADONLY" ] && [ $AUTO_EXPAND_FS = on ]; then
+  #    if [ $(dialog_yesno "WARNING 4" "'$(media_name $INDEV)' root is read-only and cannot auto-expand. Turn off auto-expand?" ) = "y" ]; then
+  #      AUTO_EXPAND_FS=off
+  #      dialog_msg "WARNING 4" "Auto-expand turned off" "red" "OK"
+  #    fi
+  #  fi
+   
+   
+     # warning if device root fs is an overlay
+    OVERLAY=$(media_os $INDEV | grep OVERLAY)
+    if [ ! -z "$OVERLAY" ] && [ $AUTO_EXPAND_FS = on ]; then
+      if [ $(dialog_yesno "WARNING 4" "'$(media_name $INDEV)' boot fs has an overlay and cannot auto-expand. Turn off auto-expand?" ) = "y" ]; then
+        AUTO_EXPAND_FS=off
+        dialog_msg "WARNING 4" "Auto-expand turned off" "red" "OK"
+      fi
+    fi
+   
+   
+    
+    
+    
+    # Warning if SD-card is bigger than 16GB
+    if [ $(media_size $INDEV) -gt 16000000000 ]; then
+        MESG=" '$(media_name $INDEV)' is larger than 16GB.  \
+         \n\nUse a smaller SD card if you can.  \
+         \nIt will be faster because the entire SD card must be read before it can be compressed.\
+         \n\nA good 8gb card with RaspiOS in a Raspberry Pi 4 takes about 10 minutes"
+         dialog_msg "WARNING 4" "$MESG" "red" "OK"
+    fi
+    
+    # Warning if SD-card is bigger than freespace
+    if [ $(media_size $INDEV) -gt $(file_fs_freespace "$DEFAULT_PATH") ]; then
+        MSG="Not enough free space on '$DEFAULT_PATH' 
+         \n\n'$(media_name  $INDEV)' is $(media_size $INDEV -h)
+         \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
+         \n\nBe sure to specify a different drive" 
+         dialog_msg "ERROR 5" "$MSG" "red" "OK"
+    fi
+    
+    # Warning if one and a half times the SD-card is bigger than freespace
+    SPACENEEDED=$(( $(media_size $INDEV) + $(( $(media_size $INDEV) / 2 )) ))
+    if [ $SPACENEEDED -gt $(file_fs_freespace "$DEFAULT_PATH") ]; then
+        MSG="Might not be enough free space on '$DEFAULT_PATH'
+            \n\n'$(media_name $INDEV)' is $(media_size $INDEV -h)
+            \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
+            \nThere is $(file_folder_size /home/$USER/.local/share/Trash) in the Trash" 
+        dialog_msg "WARNING 6" "$MSG" "red"  "OK"
+    fi
+}
+
+
+media_check_outdev(){
+    # quit if outdev is blank
+    if [ -z $OUTDEV ]; then
+        dialog_msg "ERROR 1" "Device '$OUTDEV' cannot be blank" "red"
+        return 1
+    fi
+    
+    # Add '/dev/' if missing
+    if [ ${OUTDEV:0:5} != "/dev/" ]; then
+        echo_if_cli "Device prefix not specified.  Adding '/dev/'"
+        OUTDEV="/dev/"$OUTDEV
+        echo_if_cli "OUT-DEV='$OUTDEV'"
+    fi
+    
+    # Quit if OUTDEV is not found
+    if  [ ! -e $OUTDEV ]  ; then
+        dialog_msg "ERROR 2" "Device '$OUTDEV' not found" "red"
+        return 2
+    fi 
+           
+        
+    VENDOR=$(lsblk -n -d --output vendor /dev/sda)
+    SERIAL=$(lsblk -n -d --output serial /dev/sda)
+    
+    #stop if outdev is piSave-locked
+    if [ $(config_var_get device_lock_$(media_serialno $OUTDEV) $CONFIG) = "on" ]; then
+        dialog_msg "RESTORE ERROR " "Device '$(media_serialno $OUTDEV)' is locked by PiSafe in the config file" "red"
+        return 1
+    fi
+    
+    # Stop if outdev is the root device
+    if [ $OUTDEV = /dev/$(env_root_device) ]; then
+        dialog_msg "RESTORE ERROR" "Restore to root device not allowed" "red"
+        return 1
+    fi
+    
+    #stop if INFILE is on OUTDEV
+    if [ "$(file_device "$INFILE")" = $OUTDEV ]; then
+        dialog_msg "RESTORE ERROR" "Restore to same device as '$INFILE' not allowed" "red"
+        return 1
+    fi
+    
+    # Warning if device is large
+    if [ $(media_size $OUTDEV) -gt $LARGE_DEVICE_WRITE_WARNING ]; then
+        dialog_msg "RESTORE WARNING" "'$(media_name $OUTDEV)' 
+        \nis larger than $(get_bytes_h $LARGE_DEVICE_WRITE_WARNING)... 
+        \n\nBe sure this is the right device" "red" "OK"
+    fi
+     
+    # Stop if imagefile is larger than device
+    if [ $(file_image_size "$INFILE") -gt $(media_size $OUTDEV) ]; then
+        dialog_msg "RESTORE ERROR" "Not enough room
+        \nThe image in '$INFILE' is ' $(file_image_size "$INFILE" -h)' 
+        \nand '$OUTDEV' is only '$(media_size $OUTDEV -h)'" "red"
+        return 1
+    fi
+}
+
+
 media_backup(){
     #echo 1 - sudo dd bs=4M if=/dev/$INDEV of=$OUTFILE.img status=progress conv=fsync 
     #echo 2 - sudo pishrink.sh $OUTFILE.img
@@ -1368,6 +1549,9 @@ media_backup(){
     local SAFETY=${3:-on}   # off lets us bypass some of the safety prompts
     INTERFACE=${4:-cli}  #CLI or gui
     
+   
+    
+    
     echo_white Starting $PRODUCTNAME $SCRIPTVER Backup...
     echo "IN-DEV='$INDEV'"
     echo "OUT-FILE='$OUTFILE'"
@@ -1375,13 +1559,13 @@ media_backup(){
     pisafe_write_log "Starting $PRODUCTNAME $SCRIPTVER Backup, '$INDEV' '$(media_name $INDEV)', '$OUTFILE', Compression=$COMPRESSION"
       
     if [ $INTERFACE = "cli" ]; then
-        check_indev
+        media_check_indev
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then
             return $EXIT_CODE
         fi     
         
-        check_outfile   
+        file_check_outfile   
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then
             return $EXIT_CODE
@@ -1392,13 +1576,13 @@ media_backup(){
     # Final check before writing data
     if [ -z $INDEV ] || [ ! -e $INDEV ] ; then
         echo
-        echo_red "ERROR b1: IN-DEV '$INDEV'.  Can't be blank.  Must exist."
+        echo_red "ERROR b1: IN-DEV '$INDEV' must exist. "
         return 1
     fi 
     
     if [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] ; then
         echo
-        echo_red "ERROR b2: OUT-FILE '$OUTFILE'. Cant be blank. Can't exist. "
+        echo_red "ERROR b2: OUT-FILE '$OUTFILE' can't exist. "
         return 2
     fi  
 
@@ -1415,39 +1599,33 @@ media_backup(){
     BLOCKS_TO_READ=$(( $(media_size $INDEV) / $BS ))
     
     
-# new section #######  
-if [ $SKIP_FREESPACE = "on" ]; then
+	# new section #######  
+	if [ $SKIP_FREESPACE = "on" ]; then
 
-  #  echo __$PRODUCTNAME will ignore freespace at the end of the device.
-    #echo Looking for freespace at end of device to skip...
-    START_OF_FREESPACE=$(sudo parted -ms "$INDEV" unit B print free)
-    rc=$?
-    if (( $rc )); then
-        error $LINENO "parted failed with rc $rc"
-        exit 15
-    fi
-    START_OF_FREESPACE=$(tail -1 <<< "$START_OF_FREESPACE" | grep free | cut -d ':' -f 2 | tr -d 'B')
-    #echo __start_of_freespace=$START_OF_FREESPACE
-    if ! (( $START_OF_FREESPACE )); then 
-        #echo No freespace found. 
-        START_OF_FREESPACE=$(media_size $INDEV)
-    #else     
-       # echo Skipping $( get_bytes_h $(( $(media_size $INDEV) - $START_OF_FREESPACE )) ) of freespace at end of media.  
-    fi
+		START_OF_FREESPACE=$(sudo parted -ms "$INDEV" unit B print free)
+		rc=$?
+		if (( $rc )); then
+			error $LINENO "parted failed with rc $rc"
+			exit 15
+		fi
+		START_OF_FREESPACE=$(tail -1 <<< "$START_OF_FREESPACE" | grep free | cut -d ':' -f 2 | tr -d 'B')
+		if ! (( $START_OF_FREESPACE )); then 
+			START_OF_FREESPACE=$(media_size $INDEV)
+		fi
 
-    BYTES_TO_READ=$START_OF_FREESPACE
-    BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS + 1))
+		BYTES_TO_READ=$START_OF_FREESPACE
+		BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS + 1))
 
-    echo Media size=$(media_size $INDEV -h)
-    echo Skipping $(get_bytes_h $(( $(media_size $INDEV) - $START_OF_FREESPACE )) ) of freespace found at end.
-    echo Reading=$(get_bytes_h $START_OF_FREESPACE)
+		echo Media size=$(media_size $INDEV -h)
+		echo Skipping $(get_bytes_h $(( $(media_size $INDEV) - $START_OF_FREESPACE )) ) of freespace found at end.
+		echo Reading=$(get_bytes_h $START_OF_FREESPACE)
 
-else
-  BYTES_TO_READ=$(media_size $INDEV)
-  BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS + 1))
+	else
+	  BYTES_TO_READ=$(media_size $INDEV)
+	  BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS + 1))
 
-fi    
-#end of new section    
+	fi    
+	#end of new section    
     
     #sudo dd bs=4M if=$INDEV of="$OUTFILE_BASE".img status=progress conv=fsync 
    MEDIA_SIZE=$(sudo lsblk -ndb $MEDIA -o size)
@@ -1514,9 +1692,6 @@ fi
             ;;
         
         zip)
-         #   local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
-          #  sleep 5
-            # the sleep and second file_size is to let the 
             local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
             local DOTSIZE=$(( $FILESIZE_M / 50 ))m
             echo Each dot=$DOTSIZE MB
@@ -1525,7 +1700,7 @@ fi
             zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
             EXIT_CODE=$?
             
-            #With progress bar... loses .img in the image
+            #warning, with progress bar it loses .img in the image name
             #sudo pv "$OUTFILE_BASE".img | sudo zip -$COMPRESSION  > "$OUTFILE"
             #EXIT_CODE=$? 
             #sudo rm -f "$OUTFILE_BASE".img 
@@ -1591,7 +1766,7 @@ fi
         pisafe_write_log "FAILED $PRODUCTNAME $SCRIPTVER Backup, IN-DEV='$INDEV',  OUT-FILE='$OUTFILE', Compression set to level $COMPRESSION"
         return $EXIT_CODE
     else
-        do_beep_if_sound
+        do_beep
         echo_white "Backup done. '$INDEV' backed up to '$OUTFILE' in $(get_elapsed_time $TIME1 $TIME4)." 
         pisafe_write_log "Finished $PRODUCTNAME $SCRIPTVER Backup,  $(media_size $INDEV -h) to  $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4) " 
     fi
@@ -1604,9 +1779,6 @@ media_restore(){
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
     INTERFACE=${4:-cli}  #CLI or gui
 
-
-#echo silent=$SILENT $INTERFACE
-#exit
     
     echo_white Starting $PRODUCTNAME $SCRIPTVER Restore...
     echo "IN-FILE='$INFILE'"
@@ -1616,13 +1788,13 @@ media_restore(){
  
     
     if [ $SILENT != "-y" ]; then
-        check_infile
+        file_check_infile
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then
             return $EXIT_CODE
         fi
     
-        check_outdev
+        media_check_outdev
         EXIT_CODE=$?
         if [ $EXIT_CODE != 0 ]; then
             return $EXIT_CODE
@@ -1633,14 +1805,14 @@ media_restore(){
     # quit if INFILE is not a file
     if [ -z "$INFILE" ] || [ ! -e "$INFILE" ]; then
         echo
-        echo_red "ERROR: IN-FILE '$INFILE' cannot be blank. must exist."
+        echo_red "ERROR r1: IN-FILE '$INFILE' must exist."
         return 1
     fi 
     
     #quit if OUTDEV is not a device
     if [ -z $OUTDEV ] || [ ! -e $OUTDEV ]; then
         echo
-        echo_red "ERROR: OUT-DEV '$OUTDEV' cannot be blank.  must exist."
+        echo_red "ERROR r2: OUT-DEV '$OUTDEV' must exist."
         return 1
     fi
     
@@ -1649,7 +1821,7 @@ media_restore(){
         echo
         echo "Write '$INFILE' to '$OUTDEV' '$(media_name $OUTDEV)' ?"
         echo_red WARNING... All existing data on \'$OUTDEV\' - will be erased!
-        do_beep_if_sound
+        do_beep
         read  -p "You must type 'YES' to continue:" -r RESULT
         echo
     
@@ -1658,7 +1830,7 @@ media_restore(){
             return 1
         fi
         
-        do_beep_if_sound
+        do_beep
         echo_red "WARNING '$OUTDEV' '$(media_name $OUTDEV)' "
         echo_red "Will be overwritten starting in 10 seconds ... Ctrl-C to stop"
         do_countdown 10
@@ -1674,7 +1846,7 @@ media_restore(){
     local INFILEEXT=$(file_ext "$INFILE")
     
     echo_if_cli "Erasing MBR, signature, and partition table from '$OUTDEV'..." "white"
-	sudo dd if=/dev/zero of=$OUTDEV bs=512 count=1 > /dev/null
+	sudo dd if=/dev/zero of=$OUTDEV bs=512 count=2 > /dev/null
     
     echo        
     echo_white "Writing '$INFILE' to '$OUTDEV' ... "    
@@ -1749,7 +1921,7 @@ media_restore(){
         pisafe_write_log "Restore failed $EXIT_CODE"
         return $EXIT_CODE
     else
-        do_beep_if_sound
+        do_beep
         echo_white "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
         pisafe_write_log "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
     fi
@@ -1769,12 +1941,17 @@ media_list() {
        
     DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $ROOT_FILTER)
     EXIT_CODE=$?
-
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
     fi
     
     echo "${DEVICES[@]}"
+    
+    #test
+   # for DEVICE in $(lsblk -I 8,179 -dnpo name); do
+   #   echo $(media_os $DEVICE)
+   # done
+    
 }
 
 
@@ -1799,6 +1976,7 @@ media_partition_os() {
   PARTITION=$2
   OS=
   BITS=
+  OVERLAY=
   
   PARTED_OUTPUT=$(sudo parted -ms $MEDIA print)
   MEDIA_PARTITION_TABLE=$(echo "$PARTED_OUTPUT" | head -n 2 | tail -n 1 | cut -d: -f6)   # msdos, gpt, other
@@ -1806,7 +1984,8 @@ media_partition_os() {
   msdos)
     MEDIA_PARTITION_FS="$(echo "$PARTED_OUTPUT" | grep ^$PARTITION: | cut -d ':' -f 5)"
     if [ ! "$MEDIA_PARTITION_FS" = "ext4" ]; then
-      return 2
+  #    return 2
+  x=1
     fi
     ;;
   gpt)
@@ -1858,6 +2037,14 @@ media_partition_os() {
     fi  
     
     OS="$OS '$ARCH'" 
+    
+  #  rootreadonly="$(cat $mountdir/etc/fstab | grep /boot | grep ,ro )"
+  
+  #elif [ -e $mountdir/config.txt ]; then
+   # OVERLAY="$(cat $mountdir/config.txt | grep ^dtoverlay=vc4-fkms )"
+
+	elif [ -e $mountdir/cmdline.txt ]; then
+		OVERLAY="$(cat $mountdir/cmdline.txt | grep boot=overlay )"
      
   else
     sudo umount "$mountdir"	
@@ -1869,7 +2056,13 @@ media_partition_os() {
   sudo umount "$mountdir"	
   sudo losetup -d "$loopback"
 
-  echo $OS
+  
+	if [ ! -z "$OVERLAY" ]; then
+		echo "$OS (OVERLAY)"
+	else	
+	    echo $OS
+	fi
+  
 }
 
 
@@ -1880,10 +2073,10 @@ media_os() {
  PARTED_OUTPUT=$(sudo parted -ms $MEDIA print)  # no freespace
 #  MEDIA_PARTITION_TABLE=$(echo "$PARTED_OUTPUT" | head -n 2 | tail -n 1 | cut -d: -f6)   # msdos, gpt, other
 #  MEDIA_PARTITION_COUNT=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1 | wc -l)
-  MEDIA_PARTITION_LIST=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1)
+  MEDIA_PARTITIONS=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1)
 
  # echo Looking for operating systems on partitions...
-  for PARTITION in $MEDIA_PARTITION_LIST; do
+  for PARTITION in $MEDIA_PARTITIONS; do
     OS=$(media_partition_os $MEDIA $PARTITION)
     RC=$?
      if ! (( $RC )); then
@@ -2026,7 +2219,7 @@ media_format_fat32(){
     
  
     if [ $SILENT != "-y" ]; then
-        RESULT=$(dialog_yesno "ERASE MEDIA" "All existing data on '$NAME' ($DEVICE) will be erased.  Are you sure you want to continue? y/n?")
+        RESULT=$(dialog_yesno "ERASE MEDIA" "All existing data on '$NAME' ($DEVICE) will be erased.  Are you sure you want to continue? y/n?" "--defaultno")
         if [ $RESULT != "y" ]; then
             echo
             dialog_msg "ERASE MEDIA" "'$DEVICE' not erased"
@@ -2036,12 +2229,11 @@ media_format_fat32(){
  
  
  
-    do_beep_if_sound
+    do_beep
     dialog_countdown 10 "" "Erasing Media '$(media_name $OUTDEV)' in 10 seconds...\n\n"
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         dialog_msg "ERASE MEDIA" "Erase Media stopped... \n\nA key was pressed. "
-        #whiptail --backtitle "$BACKTITLE" --title "ERASE MEDIA" --msgbox "Erase Media stopped... \n\n a key was pressed. " $WT_MB_HEIGHT $WT_MB_WIDTH
         return $EXIT_CODE
     fi    
  
@@ -2144,7 +2336,7 @@ media_wipe(){
     
  
     if [ $SILENT != "-y" ]; then
-        RESULT=$(dialog_yesno "WIPE MEDIA" "All existing data on '$NAME' ($DEVICE) will be erased.  Are you sure you want to continue? y/n?")
+        RESULT=$(dialog_yesno "WIPE MEDIA" "All existing data on '$NAME' ($DEVICE) will be erased.  Are you sure you want to continue? y/n?" "--defaultno")
         if [ $RESULT != "y" ]; then
             echo
             dialog_msg "WIPE MMEDIA" "'$DEVICE' not erased"
@@ -2153,11 +2345,10 @@ media_wipe(){
     fi
  
     #Countdown 
-    do_beep_if_sound
+    do_beep
     dialog_countdown 10 "" "Wiping Media '$(media_name $OUTDEV)' in 10 seconds...\n\n"
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
-        #whiptail --backtitle "$BACKTITLE" --title "WIPE MEDIA" --msgbox "Wipe Media stopped... \n\n a key was pressed. " $WT_MB_HEIGHT $WT_MB_WIDTH
         dialog_msg "WIPE MEDIA" "Wipe Media stopped... \n\n a key was pressed. "
         return $EXIT_CODE
     fi    
@@ -2232,18 +2423,19 @@ media_test(){
  #   read -n 1 -r RESULT
  #   echo
  
-    RESULT=$(dialog_yesno "TEST MEDIA '$NAME' $DEVICE"   "'$NAME' ($DEVICE) will be completely erased in testing.  Back it up first if needed.  Are you sure you want to continue?")
+    RESULT=$(dialog_yesno "TEST MEDIA '$NAME' $DEVICE"   "'$NAME' ($DEVICE) will be completely erased in testing.  Back it up first if needed.  Are you sure you want to continue?" "--defaultno")
     if [ $RESULT != 'y' ] ; then
       return 3
     fi
     
     
     # countdown
-    do_beep_if_sound
+    do_beep
     dialog_countdown 10 "" "Overwriting '$(media_name $OUTDEV)' in 10 seconds...\n\n"
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
-        whiptail --backtitle "$BACKTITLE" --title "TEST MEDIA" --msgbox "Test Media stopped... \n\n a key was pressed. " $WT_MB_HEIGHT $WT_MB_WIDTH
+        #whiptail --backtitle "$BACKTITLE" --title "TEST MEDIA" --msgbox "Test Media stopped... \n\n a key was pressed. " $WT_MB_HEIGHT $WT_MB_WIDTH
+		dialog_msg	"TEST MEDIA" "Test Media stopped... \n\n a key was pressed. "
         return $EXIT_CODE
     fi    
     
@@ -2418,175 +2610,6 @@ media_test(){
 
 
 
-########################################
-###  WHIPTAIL GUI FUNCTIONS ##############
-########################################
-
-
-whiptail_calc_wt_size() {
-    # NOTE: it's tempting to redirect stderr to /dev/null, so supress error 
-    # output from tput. However in this case, tput detects neither stdout or 
-    # stderr is a tty and so only gives default 80, 24 values
-
-    WT_HEIGHT=20
-    WT_WIDTH=80
-    WT_HEIGHT_TALL=$(($(tput lines)-10))
-    WT_WIDTH_WIDE=$(($(tput cols)-7))
-
-    #WT_HEIGHT=$(($(tput lines)-10))
-    #WT_WIDTH=$(tput cols)
-    #WT_WIDTH=$(($(tput cols)-10))
-
-
-    if [ -z "$WT_WIDTH" ] || [ "$WT_WIDTH" -lt 60 ]; then
-        WT_WIDTH=80
-    fi
-    if [ "$WT_WIDTH" -gt 178 ]; then
-        WT_WIDTH=80
-    fi
-
-    #WT_WIDTH=$(($WT_WIDTH-7))
-    WT_MENU_HEIGHT=$(($WT_HEIGHT-7))
-    WT_MENU_HEIGHT_TALL=$(($WT_HEIGHT_TALL-7))
-
-    #WT_MB_HEIGHT=18
-    #WT_MB_WIDTH=70
-
-    WT_MB_HEIGHT=$WT_HEIGHT
-    WT_MB_WIDTH=$WT_WIDTH
-}
-
-
-whiptail_fselect() {
-
-#
-#  Arguments
-#     1  Dialog title
-#     2  Source path to list files and directories
-#     3  File mask (by default *)
-#     4  "yes" to allow go back in the file system.
-#
-#  Returns
-#     0  if a file was selected and loads the FILE_SELECTED variable 
-#        with the selected file.
-#     1  if the user cancels.
-#
-#if whiptail_fselect "Please, select a file" /home/user ; then
-#        echo "File Selected: \"$FILE_SELECTED\"."
-#else
-#        echo "Cancelled!"
-#fi
-# ----------------------------------------------------------------------
-
-    local TITLE=${1:-$MSG_INFO_TITLE}
-    local LOCAL_PATH=${2:-$(pwd)}
-    local FILE_MASK=${3:-"*"}
-    #local FILE_MASK='( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" )'
-    local ALLOW_BACK=${4:-no}
-    local FILES=()
-
-    [ "$ALLOW_BACK" != "no" ] && FILES+=(".." "..")
-
-    IFS=$'\t\n'
-
-    FILES=("FILENAME" "     SIZE   (IMAGESIZE)")
-
-    # First add folders      
-    for DIR in $(find $LOCAL_PATH -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f\t" | sort 2> /dev/null)
-    do
-        FILES+=($DIR  "     folder")
-    done              
-                
-    # Then add files                                
-    for FILE in $(find $LOCAL_PATH -maxdepth 1 \
-                                     \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" \) \
-                                    -type f \
-                                    -printf "%f\t     %s\n" | sort  2> /dev/null)                                                                  
-    do
-        FILES+=($FILE)
-    done
-	unset IFS
-
-
-    # convert filesizes to human readable and add image size
-    num='^[0-9]+$'
-    arraylength=${#FILES[@]}
-    
-    if [ $arraylength = 0 ]; then
-        FILES=(no files)
-    fi
-    
-    for (( i=0; i<${arraylength}; i++ )); do
-		arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
-		if [[ "$arrayelement" =~ $num ]] ; then  
-            #FILES[$i]=$(echo "    " $(get_bytes_h $arrayelement -h))
-            FILES[$i]=$(echo "    " $(get_bytes_h $arrayelement -h) \($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h)\)) 
-		else
-            PREVIOUS_ELEMENT=$(echo "${FILES[$i]}")
-        fi
-    done
- 
- 
-    # let user select file
-    while true
-    do
-        FILE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$LOCAL_PATH" \
-                                --menu "Choose a file" $WT_HEIGHT_TALL $WT_WIDTH_WIDE $WT_MENU_HEIGHT_TALL "${FILES[@]}"  3>&1 1>&2 2>&3)
-
-        #exit if bad whiptail statement
-        FSX=${FILE_SELECTED:0:3}
-       # if [ ! -z $FSX ] && [ $FSX = "Box" ]; then
-        if [ ~$FSX = "~Box" ]; then
-            echo "ERROR in whiptail in whiptail_fselect.  Maybe a space in a filename?"
-			echo "${FILES[@]}"
-            exit 1
-        fi
-        
-        if [ -z "$FILE_SELECTED" ]; then
-            return 1
-        else
-            if [ "$FILE_SELECTED" = ".." ] && [ "$ALLOW_BACK" != "no" ]; then
-                return 0
-
-            elif [ -d "$LOCAL_PATH/$FILE_SELECTED" ] ; then
-                if whiptail_fselect "$TITLE" "$LOCAL_PATH/$FILE_SELECTED" "$FILE_MASK" "yes" ; then
-                    if [ "$FILE_SELECTED" != ".." ]; then
-                        return 0
-                    fi
-                else
-                    return 1
-                fi
-
-            elif [ -f "$LOCAL_PATH/$FILE_SELECTED" ] ; then
-                FILE_SELECTED="$LOCAL_PATH/$FILE_SELECTED"
-                return 0
-            fi
-        fi
-    done
-}
-
-
-whiptail_countdown(){  
-    local MAX=${1:-10}
-    local TITLE=${2:-"COUNTDOWN... press any key to stop or 'y' to continue now"}
-    MSG=${3:-"Countdown for $MAX seconds.\n\n"}
-
-    for ((i=$MAX; i>=0; i--)) ; do
-		TERM=vt220 whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --infobox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
-		#sleep .75
-        read -t 1 -N 1 INPUT
-        if [ ! -z $INPUT ]; then
-            if [ $INPUT = "y" ]; then
-                echo continuing...
-                return 0
-            else
-              echo $INPUT
-              return 2
-            fi
-        fi 
-        MSG=$(echo "$MSG.$i")
-    done 
-}
 
 
 ##############################
@@ -2612,7 +2635,7 @@ menu_set_compression(){
 }
 
     
-menu_default_path(){
+menu_settings_default_path(){
     MSG="Enter new default path   '$DEFAULT_PATH'"
     TEMP_PATH="$DEFAULT_PATH"
     while true; do
@@ -2629,7 +2652,8 @@ menu_default_path(){
                 config_var_set default_path $DEFAULT_PATH $CONFIG
                 return 0
             else
-                whiptail --title ERROR --msgbox "ERROR Directory '$NEWPATH' does not exist" $WT_MB_HEIGHT $WT_MB_WIDTH
+                #whiptail --title ERROR --msgbox "ERROR Directory '$NEWPATH' does not exist" $WT_MB_HEIGHT $WT_MB_WIDTH
+                dialog_msg "ERROR" "ERROR Directory '$NEWPATH' does not exist"
                 TEMP_PATH="$NEWPATH"
             fi
         
@@ -2638,7 +2662,7 @@ menu_default_path(){
 }
 
 
-menu_set_default_extension(){
+menu_settings_default_extension(){
      CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS-EXTENSION" --radiolist \
             "Choose default extension (compression format)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
             "zip" "Default" on \
@@ -2654,9 +2678,9 @@ menu_set_default_extension(){
 }
 
 
-menu_options(){
+menu_settings_options(){
     #"hide_mmc_device" "Hide internal sd card (CAUTION)" "$HIDE_MMC_DEVICE" \
-    #echo "starting menu_options"
+    #echo "starting menu_settings_options"
 
     ON=$(whiptail --title "SETTINGS-OPTIONS" --checklist "Enable options" $WT_HEIGHT  $WT_WIDTH  $WT_MENU_HEIGHT \
 "shrink_fs" "Shrink filesystem on backup" "$SHRINK_FS" \
@@ -2708,16 +2732,17 @@ menu_settings(){
             return $EXIT_CODE
         else
             case "$SELECTION" in
-            "Default d"*)   menu_default_path ;;
-            "Default e"*)   menu_set_default_extension ;;
+            "Default d"*)   menu_settings_default_path ;;
+            "Default e"*)   menu_settings_default_extension ;;
             "Compression"*) menu_set_compression ;;
             Text*)          ;;
-            Options*)      menu_options ;;
+            Options*)      menu_settings_options ;;
 
             "    "*)        ;;
             Edit*)          $TEXT_EDITOR $CONFIG; config_var_get_settings ;;
             Factory*) 
-                whiptail --title WARNING --defaultno --yesno "Are you sure you want to reset the settings to factory defaults?" $WT_MB_HEIGHT $WT_MB_WIDTH 
+                #whiptail --title WARNING --defaultno --yesno "Are you sure you want to reset the settings to factory defaults?" $WT_MB_HEIGHT $WT_MB_WIDTH 
+                dialog_yesno "WARNING" "Are you sure you want to reset the settings to factory defaults?" "--defaultno" 
                 if [ $? = 0 ] ; then
                     config_var_factory_reset 
                 fi ;;
@@ -2740,7 +2765,8 @@ menu_select_sddevice(){
     
     arraylength=${#options[@]}
     if [ $arraylength = 0 ]; then
-        whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "No media found." $WT_MB_HEIGHT  $WT_MB_WIDTH
+        #whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "No media found." $WT_MB_HEIGHT  $WT_MB_WIDTH
+        dialog_msg ERROR "No media found." 
         return 1
     fi
 
@@ -2799,7 +2825,7 @@ menu_get_outfile(){
             EXT=$DEFAULT_EXTENSION
         fi
  
-        check_outfile
+        file_check_outfile
         EXIT_CODE=$?
         if [ $EXIT_CODE = 0 ]; then
             break
@@ -2826,6 +2852,9 @@ menu_backup(){
     INDEV=$1  #use global vars  
     OUTFILE=$2   #use global vars
     
+    #reset auto-expand from config file in case it was turned off temporarily
+    AUTO_EXPAND_FS=$(config_var_get auto_expand_fs $CONFIG)
+    
     # get INDEV
     # Set global variables INDEV and OUTDEV
     menu_select_sddevice "BACKUP" 
@@ -2834,7 +2863,7 @@ menu_backup(){
         return $EXIT_CODE
     fi   
     
-    check_indev
+    media_check_indev
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
@@ -2850,13 +2879,20 @@ menu_backup(){
     
 
     #confirm to continue
-    whiptail  --backtitle "$BACKTITLE" --title "BACKUP : Create Image-file" --defaultno \
-        --yesno "Backup '$(media_name $INDEV)' on '$INDEV' 
+    MSG="Backup '$(media_name $INDEV)' on '$INDEV' 
         \nto '$OUTFILE'.
         \n\nA good 8GB card with RaspiOS on a Pi4 takes about 10 minutes with zip
         \nand about 7 minutes with gz.
         \nThis will switch to the terminal screen to watch the progress ...
-        \n\nCreate backup image-file now?"   $WT_HEIGHT $WT_WIDTH
+        \n\nCreate backup image-file now?"
+    dialog_yesno "BACKUP : Create Image-file"  "$MSG"  --defaultno
+  #  whiptail  --backtitle "$BACKTITLE" --title "BACKUP : Create Image-file" --defaultno \
+  #      --yesno "Backup '$(media_name $INDEV)' on '$INDEV' 
+  #      \nto '$OUTFILE'.
+  #      \n\nA good 8GB card with RaspiOS on a Pi4 takes about 10 minutes with zip
+  #      \nand about 7 minutes with gz.
+  #      \nThis will switch to the terminal screen to watch the progress ...
+  #      \n\nCreate backup image-file now?"   $WT_HEIGHT $WT_WIDTH
     EXIT_CODE=$?       
     if [ $EXIT_CODE != 0 ] ; then
         return $EXIT_CODE
@@ -2898,7 +2934,7 @@ menu_restore() {
         return 1
     fi
 
-    check_infile
+    file_check_infile
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
@@ -2913,7 +2949,7 @@ menu_restore() {
         return $EXIT_CODE
     fi    
 
-    check_outdev
+    media_check_outdev
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
@@ -2936,7 +2972,7 @@ menu_restore() {
     fi
 
     #Countdown 
-    do_beep_if_sound
+    do_beep
     dialog_countdown 10 "" "Overwriting '$(media_name $OUTDEV)' in 10 seconds...\n\n"
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
@@ -3091,11 +3127,8 @@ menu_gui(){
             
             RESTORE)        menu_restore  ;;
             
-            LIST)
-                echo "Getting list of images ready..."
-                LIST_INFO="$(do_list_info $DEFAULT_PATH)"
-                whiptail --backtitle "$BACKTITLE"  --title "LIST" --scrolltext --msgbox "$LIST_INFO" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
-                ;;
+            LIST)           echo "Getting list of images ready..."
+                            dialog_msg "LIST" "$(do_list_info $DEFAULT_PATH)"  ;;
             
             SETTINGS)       menu_settings    ;;
             
@@ -3103,8 +3136,10 @@ menu_gui(){
             
             HELP)           dialog_msg "HELP" "$(pisafe_help)" ;;
             
-            ABOUT)          dialog_msg "ABOUT" "$(pisafe_about)"  ;;      
+            ABOUT)          dialog_msg "ABOUT" "$(pisafe_about)"  ;;     
+             
             "  "*)          ;;
+            
             * )             return          ;;
         esac
     done
