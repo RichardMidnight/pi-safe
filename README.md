@@ -117,7 +117,7 @@ V1.1.0 Added support for Manjaro and probably other Arch-based distros.
  - Auto-expand filesystem on restore   
     - PiSafe will setup the image file to auto-expand to fill the new media on first boot after restoring if your distro supports rc.local.  
     - If not, you can resize your partition manual by booting from another media and using gparted.
-    - Note: Auto-expand will not work on a read-only root partitions because it needs to edit the rc.local file and reboot.  Recomend turning off auto-expand in Settings/Options.
+    - Note: Auto-expand may not work on an overlay filesystem.  Recomend turning off auto-expand in Settings/Options.  
    
  - Data compression
     - Compressing the image file with zip, xz, or gz reduces the size of the image file to 1/2 or smaller.  
