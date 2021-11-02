@@ -8,11 +8,11 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
 
  - Works entirely on a Raspberry Pi.  No Windows or Mac needed. 
  
- - Creates a compressed image-file that will resize to fill the new media it is restored to (thanks to PiShrink!).
+ - Creates a compressed image-file that will resize to fill the new media to which it is restored.
  
  - Supports .img .zip .xz and .gz file formats.
 
- - Images are compatible with Raspberry PI Imager that comes with the Pi and probably all other imaging software.
+ - Images are compatible popular imaging software such as Raspberry PI Imager.
  
  - Supports USB storage devices.
  
@@ -20,7 +20,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
  
     CAUTION: Reboot first, close everything and don't use the system while it is doing step 1 of backing up!  You must send your backup image to a different drive.
 
- - Supports storing the image files on a mounted network device (ie SMB server). 
+ - Supports storing the image files on a mounted network device (ie an SMB server). 
    
    -  sudo apt install cifs-utils 
    
@@ -30,7 +30,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
 
  - Create a library of your own pi images, then restore them to whatever media you want, whenever you want.  
  
- - Can be run fully from the command line.
+ - Can be run fully from the command line or use the easy menu interface.
 
  - Should work with most debian and arch distros, see below.   
 
