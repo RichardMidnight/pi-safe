@@ -2231,7 +2231,128 @@ fi
 }
 
 
-media_format_fat32(){
+media_format(){
+    local DEVICE=$1
+    local FORMAT=${2:-"fat32"}    # fat32, ntfs, ext4
+    local SILENT=${3:-"-n"}
+    
+    local ROOT="/dev/$(env_root_device)"
+    local TYPE=$(lsblk $DEVICE -dnpo TYPE)
+    local NAME="$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE) ($DEVICE)"
+    local PART1=$DEVICE\1
+    
+
+    if [ -z $1 ] ; then
+        echo "Error 1: Device not specified, choose:"
+        lsblk -dp
+        return 1
+    fi
+
+    if [ ! -e $DEVICE ]; then
+      echo "Error 2: $DEVICE does not exist"
+      return 2
+    fi
+
+    if [ $1 = $ROOT ] ; then
+        echo "Error 3: Can not format root device"
+        return 3
+    fi
+    
+    if  [ $TYPE != disk ]; then
+        echo "Error 4: $DEVICE is not a disk"
+        return 4
+    fi
+    
+    if [ $SILENT != "-y" ]; then
+        RESULT=$(ui_yesno "ERASE" "WARNING!!  \n\nFormat '$DEVICE' to '$FORMAT' \n\nAll existing data on '$NAME' will be erased.  \n\nAre you sure you want to continue? y/n?" "--defaultno")
+        if [ $RESULT != "y" ]; then
+            ui_msg "ERASE" "$DEVICE not erased"
+            return
+        fi
+    fi
+ 
+    echo_white "Formatting '$DEVICE' to '$FORMAT'..."
+
+
+    ui_countdown 10 "" "Erasing Media '$(media_name $DEVICE)' in 10 seconds...\n\n"
+    if (( $? )); then
+        return 2
+    fi
+
+    echo "Unmounting '$DEVICE'..."
+    #udisksctl unmount -b "$DEVICE"1
+    #udisksctl unmount -b "$DEVICE"2
+    #udisksctl unmount -b "$DEVICE"3
+    umount $DEVICE? 2> /dev/null
+
+    echo "Writing zeros to '$DEVICE'..."
+    sudo dd if=/dev/zero of=$DEVICE bs=512 count=4
+    if (( $? != 0 )); then
+        echo "Error 9: writing zeros failed"
+        return 9
+    fi
+
+    if [ $FORMAT = "fat32" ]; then
+        PART_TABLE=msdos
+    else
+        PART_TABLE=gpt
+    fi
+    echo "Writing new '$PART_TABLE' partition table to '$DEVICE'..."
+    sudo parted -s $DEVICE mklabel $PART_TABLE
+    if (( $? != 0 )); then
+        echo "Error 10: mklabel failed"
+        return 10
+    fi
+
+    echo "Creating '$PART_TYPE' partition on '$DEVICE'..."
+    sudo parted -s -a opt $DEVICE mkpart primary $PART_TYPE 4M 100%
+    if (( $? != 0 )); then
+        echo "Error 11: mkpart failed"
+        return 11
+    fi
+
+    echo "Formatting the partition to '$PART_TYPE'..."
+
+    case $FORMAT in
+        fat32)
+            sudo mkfs.vfat $PART1
+            EC=$?
+            ;;
+        
+        ntfs)
+            sudo mkfs.ntfs -f $PART1
+            EC=$?
+            ;;
+        
+        ext4)
+            sudo mkfs.ext4 -E root_owner=$UID:$GID -F $PART1
+            EC=$?
+            ;;
+    esac
+
+    if (( $EC != 0 )); then
+        echo "Error 12: mkfs failed"
+        return 12
+    fi
+
+    echo "Mounting the drive..."
+    sleep 2
+    udisksctl mount -b  "$DEVICE"1
+    if (( $? != 0 )); then
+        echo "Error 13: mount failed"
+        return 13
+    fi
+    echo
+
+    #echo Partition Table ...
+    #sudo parted "$DEVICE" print
+    #sleep 5
+
+    ui_msg "ERASE MEDIA" "'$NAME' ($DEVICE) has been erased. \n\nIt has been remounted."
+}
+
+
+media_format_fat32_xx(){
     local DEVICE=$1
     local SILENT=${2:-n}  #-y or -n
     local ROOT="/dev/$(env_root_device)"
@@ -2456,7 +2577,7 @@ media_test_pattern(){
     DEVICE_BLOCK_COUNT=$(( $DEVICE_SIZE_BYTES / $BLOCK_SIZE_BYTES ))
   
 # just do 2% for testing
-DEVICE_BLOCK_COUNT=$(( $DEVICE_BLOCK_COUNT / 20 ))
+#DEVICE_BLOCK_COUNT=$(( $DEVICE_BLOCK_COUNT / 20 ))
 
      
     date 
@@ -2477,7 +2598,7 @@ DEVICE_BLOCK_COUNT=$(( $DEVICE_BLOCK_COUNT / 20 ))
     fi
     
 #######
-sudo hexedit /dev/sdb
+#sudo hexedit /dev/sdb
 
     
     date
@@ -2546,7 +2667,7 @@ media_test(){
       return 2
     fi
     if [ $SILENT != '-y' ]; then
-        MSG="'$NAME' ($DEVICE) will be completely erased in testing.  Back it up first if needed.  \n\nThis will switch to a terminal screen to do the testing.  \n\nAre you sure you want to continue?"
+        MSG="WARNING!! '$NAME' ($DEVICE) will be completely erased in testing.  Back it up first if needed.  \n\nThis will switch to a terminal screen to do the testing.  \n\nAre you sure you want to continue?"
         RESULT=$(ui_yesno "TEST MEDIA '$NAME' $DEVICE" "$MSG" "--defaultno")
         if [ $RESULT != 'y' ] ; then
           return 3
@@ -2776,6 +2897,7 @@ menu_select_sddevice(){
     
     OUTDEV=$DEVICE_SELECTED
     INDEV=$DEVICE_SELECTED
+    echo $DEVICE_SELECTED
     return 0
 }
 
@@ -2838,6 +2960,28 @@ menu_get_outfile(){
     else
         OUTFILE=$(file_path_base "$OUTFILE").img.$(file_ext "$OUTFILE")
     fi    
+}
+
+
+menu_format(){
+    local DEVICE=
+    local FORMAT=
+    
+    DEVICE=$(menu_select_sddevice "ERASE MEDIA")
+    if (( $? )); then
+        return 2
+    fi
+    
+    FORMAT=$(whiptail --clear --backtitle "$BACKTITLE" --title "Select format" --ok-button "Select" --cancel-button "Exit" --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+                "fat32"     "     Most universal format" \
+                "ntfs"      "     Native Windows format" \
+                "ext4"      "     Native Linux format" \
+                3>&1 1>&2 2>&3)
+    if (( $? )); then
+        return 2
+    fi
+ 
+    media_format "$DEVICE" "$FORMAT"  
 }
 
 
@@ -3006,7 +3150,7 @@ menu_tools(){
           "  "               "  " \
           "  "              "=== MEDIA TOOLS ===" \
         "DETAILS"          "Media details" \
-        "ERASE"             "Quick format media as FAT32" \
+        "ERASE"             "Quick format media" \
         "WIPE"              "Destructively wipe media with zeros " \
         "TEST"              "Destructively test media with zeros and ones (slow)" \
         "  "               "  " \
@@ -3030,10 +3174,12 @@ menu_tools(){
                 ;;
                 
             ERASE)      
-                menu_select_sddevice "ERASE MEDIA"
-                if ! (( $? )); then
-                  media_format_fat32 $OUTDEV
-                fi  
+                #menu_select_sddevice "ERASE MEDIA"
+                #if ! (( $? )); then
+                #  media_format_fat32 $OUTDEV
+                #fi
+                menu_format
+                  
                 ;;
                 
             WIPE) 
