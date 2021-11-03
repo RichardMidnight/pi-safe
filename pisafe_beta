@@ -684,7 +684,7 @@ do_countdown(){
 do_beep(){
     if [ $SOUND = on ] ; then
         #do_beep
-        speaker-test -t sign -f 700 > /dev/null  & sleep .5 && kill -9 $! > /dev/null
+        (speaker-test -t sign -f 700 > /dev/null  & sleep .5 && kill -9 $! ) > /dev/null
         sleep .5  # to allow the beep to end
     fi
 }
@@ -3369,11 +3369,6 @@ if  [ ~$1 = ~-v ]; then
     echo $SCRIPTVER
     exit
 fi
-
-
-do_beep
-exit
-
 
 pisafe_install_tools
 
