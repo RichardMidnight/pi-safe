@@ -303,7 +303,7 @@ config_var_get_settings(){
     HIDE_ROOT_DEVICE=$(config_var_get hide_root_device $CONFIG)
     CHECK_FOR_UPDATES_ON_STARTUP=$(config_var_get check_for_updates_on_startup $CONFIG)
  
- # backup settings
+    # backup settings
     SHRINK_FS=$(config_var_get shrink_fs $CONFIG)
     AUTO_EXPAND_FS=$(config_var_get auto_expand_fs $CONFIG)
     DEFAULT_EXTENSION=$(config_var_get default_extension $CONFIG)
@@ -311,11 +311,11 @@ config_var_get_settings(){
     LARGE_DEVICE_READ_WARNING=$(config_var_get large_device_read_warning $CONFIG) 
     SKIP_FREESPACE=$(config_var_get skip_freespace $CONFIG)
     
-# restore settings
+    # restore settings
     LARGE_DEVICE_WRITE_WARNING=$(config_var_get large_device_write_warning $CONFIG) 
     SAFETY=$(config_var_get safety $CONFIG)  
 
-# other    
+    # other    
     DEBUG_MODE=$(config_var_get debug_mode $CONFIG)
     SOUND=$(config_var_get sound $CONFIG)
     LOG=$(config_var_get log $CONFIG)
@@ -684,7 +684,7 @@ do_countdown(){
 do_beep(){
     if [ $SOUND = on ] ; then
         #do_beep
-        speaker-test -t sign -f 700 > /dev/null  & sleep .5 && kill -9 $! 
+        speaker-test -t sign -f 700 > /dev/null  & sleep .5 && kill -9 $! > /dev/null
         sleep .5  # to allow the beep to end
     fi
 }
@@ -1648,7 +1648,7 @@ media_backup(){
    
    
     if [ ! $(file_ext "$OUTFILE") = "iso" ]; then 
-        echo_white "Step 2 of 3 - Shrinking filesystem with PiShrink ..."
+        echo_white "Step 2 of 3 - Shrinking filesystem ..."
         PI_SHRINK_OPTS=
 
         if [ $AUTO_EXPAND_FS = "off" ] ; then 
@@ -1936,15 +1936,26 @@ media_restore(){
 
 
 media_list() {
+    HIDE_ROOT_DEVICE_OVERRIDE=$1    # y n or blank
     local DEVICES= 
-    ROOT_FILTER="aspodiausdfpoiasdf"
-    if [ $(config_var_get hide_root_device $CONFIG) = "on" ]; then
-        ROOT_FILTER=$(env_root_device)
-    fi   
+   # ROOT_FILTER="aspodiausdfpoiasdf"
+   
+    case $HIDE_ROOT_DEVICE_OVERRIDE in
+        y)      ROOT_FILTER=$(env_root_device) ;;
+        
+        n)      ROOT_FILTER="aspodiausdfpoiasdf" ;;
+        
+        *)     if [ $(config_var_get hide_root_device $CONFIG) = "on" ]; then
+                    ROOT_FILTER=$(env_root_device)
+                else    
+                    ROOT_FILTER="aspodiausdfpoiasdf"
+                fi   
+                ;;
+   esac
     
-    if [ -z $ROOT_FILTER ]; then
-       ROOT_FILTER="aspodiausdfpoiasdf"
-    fi     
+  #  if [ -z $ROOT_FILTER ]; then
+  #     ROOT_FILTER="aspodiausdfpoiasdf"
+  #  fi     
        
     DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $ROOT_FILTER)
     EXIT_CODE=$?
@@ -2870,11 +2881,12 @@ menu_settings(){
 
 menu_select_sddevice(){
     TITLE=$1
+    HIDE_ROOT_DEVICE_OVERRIDE=$2    # y n or blank
     FIELD_SEPERATOR="|"
 
     #get this list of sd devices and add a field seperator |    
     IFS=$'\n'
-    options=($(media_list | sed 's/ / '$FIELD_SEPERATOR' /'))
+    options=($(media_list $2 | sed 's/ / '$FIELD_SEPERATOR' /'))
     unset IFS
     
     arraylength=${#options[@]}
@@ -2963,11 +2975,11 @@ menu_get_outfile(){
 }
 
 
-menu_format(){
+menu_formatxx(){
     local DEVICE=
     local FORMAT=
     
-    DEVICE=$(menu_select_sddevice "ERASE MEDIA")
+    DEVICE=$(menu_select_sddevice "ERASE MEDIA" "y")
     if (( $? )); then
         return 2
     fi
@@ -3142,6 +3154,8 @@ menu_restore() {
 
 menu_tools(){
     local SELECTION
+    local DEVICE
+    local FORMAT
     while true; do
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "TOOLS" --cancel-button "Back" --menu " Choose " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
         "INSTALL"           "Install $PRODUCTNAME into the menu" \
@@ -3167,32 +3181,40 @@ menu_tools(){
             UPDATE)     pisafe_update gui ;;
             UNINSTALL)  pisafe_uninstall ;;
             DETAILS)    
-                menu_select_sddevice "MEDIA DETAILS"
+                DEVICE=$(menu_select_sddevice "MEDIA DETAILS")
                 if ! (( $? )); then
-                  media_details $INDEV
+                  media_details $DEVICE
                 fi  
                 ;;
                 
-            ERASE)      
-                #menu_select_sddevice "ERASE MEDIA"
-                #if ! (( $? )); then
-                #  media_format_fat32 $OUTDEV
-                #fi
-                menu_format
-                  
+            ERASE)                  
+                DEVICE=$(menu_select_sddevice "ERASE MEDIA" "y")
+                if (( $? )); then
+                    return 2
+                fi
+                
+                FORMAT=$(whiptail --clear --backtitle "$BACKTITLE" --title "Select format" --ok-button "Select" --cancel-button "Exit" --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+                            "fat32"     "     Most universal format" \
+                            "ntfs"      "     Native Windows format" \
+                            "ext4"      "     Native Linux format" 3>&1 1>&2 2>&3)
+                if (( $? )); then
+                    return 2
+                fi
+             
+                media_format "$DEVICE" "$FORMAT"  
                 ;;
                 
             WIPE) 
-                menu_select_sddevice "WIPE MEDIA"
+                DEVICE=$(menu_select_sddevice "WIPE MEDIA" "y")
                 if ! (( $? )); then
-                  media_wipe $OUTDEV
+                  media_wipe $DEVICE
                 fi  
                 ;;
                 
             TEST) 
-                menu_select_sddevice "TEST MEDIA"
+                DEVICE=$(menu_select_sddevice "TEST MEDIA" "y")
                 if ! (( $? )); then
-                  media_test $OUTDEV
+                  media_test $DEVICE
                 fi  
                 ;;
         
@@ -3347,6 +3369,11 @@ if  [ ~$1 = ~-v ]; then
     echo $SCRIPTVER
     exit
 fi
+
+
+do_beep
+exit
+
 
 pisafe_install_tools
 
