@@ -156,8 +156,6 @@ pisafe_about(){
 
 
 # ---------- Enviroment functions
-
-
 env_installer(){
     local INSTALLER=
 
@@ -225,25 +223,6 @@ env_root_device() {
     local ROOT_PARTITION
     local ROOT_DRIVE
     
-    
-#    ROOT_PARTITION=$(lsblk -l | grep "/$" | cut -d' ' -f1 2> /dev/null) 
-    
-#    if [ -z $ROOT_PARTITION ]; then
-#        return 1  # can't find root partition or root device
-#    fi
-    
-#    if [[ $ROOT_PARTITION =~ "p" ]]; then
-#        ROOT_DRIVE=$(echo $ROOT_PARTITION | cut -d'p' -f1)
-#    elif [[ $ROOT_PARTITION =~ "sd" ]]; then
-#        ROOT_DRIVE=${ROOT_PARTITION:0:3}
-#    else
-#        return 2  # can't find root device
-#    fi    
-    
-    
- #   echo $ROOT_DRIVE
-    
-    
     # new simpler way
     ROOT_PARTITION=$(findmnt -no source /)
     ROOT_MAJ=$(findmnt  -n -e  -o MAJ:MIN / | cut -d: -f1)
@@ -253,7 +232,6 @@ env_root_device() {
 
 
 # ---------- Config_var functions
-
 
 config_var_init_configfile(){
     if [ ! -d $(file_path $CONFIG) ]; then
@@ -387,12 +365,6 @@ EOF
 }
 
 
-config_var_factory_reset(){
-    config_var_set_defaults
-    config_var_get_settings
-}
-
-
 
 ########################################
 ###  WHIPTAIL GUI FUNCTIONS ##############
@@ -409,11 +381,6 @@ whiptail_calc_wt_size() {
     WT_HEIGHT_TALL=$(($(tput lines)-10))
     WT_WIDTH_WIDE=$(($(tput cols)-7))
 
-    #WT_HEIGHT=$(($(tput lines)-10))
-    #WT_WIDTH=$(tput cols)
-    #WT_WIDTH=$(($(tput cols)-10))
-
-
     if [ -z "$WT_WIDTH" ] || [ "$WT_WIDTH" -lt 60 ]; then
         WT_WIDTH=80
     fi
@@ -421,12 +388,8 @@ whiptail_calc_wt_size() {
         WT_WIDTH=80
     fi
 
-    #WT_WIDTH=$(($WT_WIDTH-7))
     WT_MENU_HEIGHT=$(($WT_HEIGHT-7))
     WT_MENU_HEIGHT_TALL=$(($WT_HEIGHT_TALL-7))
-
-    #WT_MB_HEIGHT=18
-    #WT_MB_WIDTH=70
 
     WT_MB_HEIGHT=$WT_HEIGHT
     WT_MB_WIDTH=$WT_WIDTH
@@ -549,7 +512,6 @@ whiptail_countdown(){
 
     for ((i=$MAX; i>=0; i--)) ; do
 		TERM=vt220 whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --infobox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
-		#sleep .75
         read -t 1 -N 1 INPUT
         if [ ! -z $INPUT ]; then
             if [ $INPUT = "y" ]; then
@@ -566,9 +528,7 @@ whiptail_countdown(){
 
 
 
-# ---------- Dialog functions
-
-# change dialog to UI:  UI_mode  ui_msg, ui_yesno, ui_countdown...
+# ---------- UI functions
 
 ui_msg() {
     TITLE="$1"
@@ -656,37 +616,39 @@ do_countdown(){
     sleep 1
     for number in $(seq 1 $MAX) ; do
 		echo -n ".$(($MAX-$number))"
-		#sleep 1
-        
-        
-           
-     read -t 1 -N 1 INPUT
+        read -t 1 -N 1 INPUT
         if [ ! -z $INPUT ]; then
             if [ $INPUT = "y" ]; then
                 echo continuing...
                 return 0
             else
-              echo $INPUT
-              return 2
+                echo $INPUT
+                return 2
             fi
         fi 
         MSG=$(echo "$MSG.$i")
-    
-    
-        
-        
     done 
     echo ...
-    
 }
 
 
 do_beep(){
+    FREQ=${1:-700}
+    TIME=${2:-.5}
     if [ $SOUND = on ] ; then
-        #do_beep
-        (speaker-test -t sign -f 700 > /dev/null  & sleep .5 && kill -9 $! ) > /dev/null
-        sleep .5  # to allow the beep to end
+        (speaker-test -t sign -f $FREQ > /dev/null  & sleep $TIME && kill -9 $! ) > /dev/null
+      #  sleep .5  # to allow the beep to end
     fi
+}
+
+do_beep_up(){
+    do_beep 700 .4
+    do_beep 900 .6
+}
+
+do_beep_down(){
+   do_beep 900 .5
+   do_beep 700 .5
 }
 
 
@@ -988,11 +950,9 @@ file_check_outfile(){
         return 1
     fi  
     
-    # Message if path does not exist
     # Quit if path does not exist
     if [ ! -d  "$(file_path $OUTFILE)" ] ; then     
         ui_msg "Error 2" "Directory does not exist '$(file_path $OUTFILE)'" "red"
-        #continue 
         return 2
     fi
     
@@ -1107,7 +1067,6 @@ do_install_lua(){
             if [ $? = 0 ]; then   # lua works, can return
               return
             else
-            
                 #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
                 for LUA_TEST in "lua5.4 lua5.3 lua5.2 lua5.1"; do
                     if [ -f /usr/bin/$LUA_TEST ]; then
@@ -1116,7 +1075,6 @@ do_install_lua(){
                         return
                     fi
                 done
-
             fi
         fi
      done 
@@ -1132,7 +1090,6 @@ do_install_lua(){
           if [ $? = 0 ]; then  # lua works, can return
             return
           else  # error so we need to fix it.
-          
             #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
             for LUA_TEST in "lua5.4 lua5.3 lua5.2 lua5.1"; do
                 if [ -f /usr/bin/$LUA_TEST ]; then
@@ -1141,7 +1098,6 @@ do_install_lua(){
                     return
                 fi
             done
-            
           fi  
         fi
     done
@@ -1159,7 +1115,6 @@ pisafe_install_tools() {
         #if [ ! $(which $TOOL) ]; then
         if [ ! -f /usr/bin/$TOOL ]  && [ ! -f /usr/local/bin/$TOOL ] ; then
             TOOL_MISSING=true
-            #echo $TOOL
         fi
     done
     
@@ -1235,7 +1190,6 @@ pisafe_install(){
     fi
     
     pisafe_write_log "Installing $PRODUCTNAME v $SCRIPTVER"
-    #ui_msg "installing"  "Installing $PRODUCTNAME ..."
     
     # Install the CLI script
     sudo cp --backup=numbered $SCRIPTNAME /usr/local/bin/$SCRIPTNAME
@@ -1309,11 +1263,11 @@ pisafe_update() {
     fi
 
     if [ $(get_ver_to_int $SERVER_VER) -gt $(get_ver_to_int $SCRIPTVER) ]; then
-      if [ $YES = "-y" ]; then
-        RESULT="y"
-      else
-        RESULT=$(ui_yesno "UPDATE AVAILABLE" "Update $PRODUCTNAME from '$SCRIPTVER'  to '$SERVER_VER' ")
-      fi
+        if [ $YES = "-y" ]; then
+            RESULT="y"
+        else
+            RESULT=$(ui_yesno "UPDATE AVAILABLE" "Update $PRODUCTNAME from '$SCRIPTVER'  to '$SERVER_VER' ")
+        fi
     if [ $RESULT = "y" ]; then 
         sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
         sudo chmod +x /usr/local/bin/$SCRIPTNAME
@@ -1547,7 +1501,6 @@ media_backup(){
     OUTFILE=$2
     local SAFETY=${3:-on}   # off lets us bypass some of the safety prompts
     INTERFACE=${4:-cli}  #CLI or gui
-    
    
     
     echo_white Starting $PRODUCTNAME $SCRIPTVER Backup...
@@ -1671,14 +1624,12 @@ media_backup(){
         echo_white Step 2 took $(get_elapsed_time $TIME2 $TIME3)
     fi
     
-    
     echo
     echo_white "Step 3 of 3 - Compressing '$OUTFILE_BASE.img' to '$OUTFILE' ... "
     date
     echo Compression set to level $COMPRESSION of 9
     echo "$(file_size $OUTFILE_BASE.img -h) to compress."
     
-   
     case $(file_ext "$OUTFILE") in
         img)
             echo Not compressing .img file ...
@@ -1916,29 +1867,23 @@ media_restore(){
     
     if [ $EXIT_CODE != 0 ]; then
         echo
+        do_beep_down  
         echo_red  "ERROR. $EXIT_CODE"
         pisafe_write_log "Restore failed $EXIT_CODE"
         return $EXIT_CODE
     else
-        echo "Ejecting the drive..."
-        sleep 2
-        umount $OUTDEV?  2> /dev/null
-        sudo eject -s $OUTDEV
-        sleep 2
-    
-        do_beep
+          
+        #do_beep
+        do_beep_up
         echo_white "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
         pisafe_write_log "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
     fi
-
-    
 }
 
 
 media_list() {
     HIDE_ROOT_DEVICE_OVERRIDE=$1    # y n or blank
     local DEVICES= 
-   # ROOT_FILTER="aspodiausdfpoiasdf"
    
     case $HIDE_ROOT_DEVICE_OVERRIDE in
         y)      ROOT_FILTER=$(env_root_device) ;;
@@ -1951,11 +1896,8 @@ media_list() {
                     ROOT_FILTER="aspodiausdfpoiasdf"
                 fi   
                 ;;
-   esac
+    esac
     
-  #  if [ -z $ROOT_FILTER ]; then
-  #     ROOT_FILTER="aspodiausdfpoiasdf"
-  #  fi     
        
     DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $ROOT_FILTER)
     EXIT_CODE=$?
@@ -1980,32 +1922,6 @@ media_details(){
     MSG="$MSG$(lsblk $MEDIA -o maj:min,fssize,fsused,fsavail,fsuse%)\n\n"
     
     ui_msg "MEDIA DETAILS" "$MSG"
-}
-
-
-
-media_partition_fs_xx() {
-	MEDIA=$1
-	PARTITION=$2
-	
-	# check that the partition can be shrunk...
-	PARTED_OUTPUT=$(sudo parted -ms $MEDIA print)
-	MEDIA_PARTITION_TABLE=$(echo "$PARTED_OUTPUT" | head -n 2 | tail -n 1 | cut -d: -f6)   # msdos, gpt, other
-	case $MEDIA_PARTITION_TABLE in
-		  msdos)
-			  MEDIA_PARTITION_FS="$(echo "$PARTED_OUTPUT" | grep ^$PARTITION: | cut -d ':' -f 5)"
-			  if [ ! "$MEDIA_PARTITION_FS" = "ext4" ]; then
-			     return 2
-			  fi
-			  ;;
-		  gpt)
-			  MEDIA_PARTITION_FS="$(echo "$PARTED_OUTPUT" | grep ^$PARTITION: | cut -d ':' -f 4)"
-			  ;;
-		  *)
-			  ;;
-	esac	
-	
-	echo "$MEDIA_PARTITION_FS"
 }
 
 
@@ -2047,8 +1963,7 @@ media_partition_info() {
       sudo losetup -d "$LOOPBACK"
       return 4
     fi
-	
-  #   echo $(cat /etc/os-release | grep "PRETTY_NAME=" | cut -d '"' -f2) hw=$(uname -m) kernel=$(uname -r)
+
   
     # look for OS name and architecture
     if [ -e $MOUNTDIR/etc/os-release ]; then
@@ -2070,7 +1985,6 @@ media_partition_info() {
     # look for windows
     if [ -e $MOUNTDIR/Windows ]; then
       OS="'Windows'"
-    
     fi
     
     
@@ -2112,12 +2026,33 @@ media_os() {
     # echo Looking for operating systems on partitions...
     for PARTITION in $MEDIA_PARTITIONS; do
         OS=$(media_partition_info $MEDIA $PARTITION)
-        #  echo "OS='$OS'"
         RC=$?
         if [ $RC = 0 ] && [ ! "xx$OS" = "xx" ] ; then
             echo " - $OS found on Partition $PARTITION"
         fi
     done
+}
+
+
+media_mount(){
+    MEDIA=$1
+    PARTED_OUTPUT=$(sudo parted -ms $MEDIA print)  # no freespace
+    MEDIA_PARTITIONS=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1)
+    
+    for PARTITION in $MEDIA_PARTITIONS; do
+        udisksctl mount -b $MEDIA$PARTITION
+        if (( $? )); then
+            echo error mounting $MEDIA$PARTITION
+        fi
+    done
+}
+
+
+media_power_off(){
+    MEDIA=$1
+    umount $MEDIA?
+    udisksctl power-off $MEDIA
+    #sudo eject -s $MEDIA
 }
 
 
@@ -2238,7 +2173,6 @@ if [[ $repair == true ]]; then
 fi
 	error $LINENO "Filesystem recoveries failed. Giving up..."
 	exit 9
-
 }
 
 
@@ -2283,7 +2217,6 @@ media_format(){
     fi
  
     echo_white "Formatting '$DEVICE' to '$FORMAT'..."
-
 
     ui_countdown 10 "" "Erasing Media '$(media_name $DEVICE)' in 10 seconds...\n\n"
     if (( $? )); then
@@ -2360,116 +2293,6 @@ media_format(){
     #sleep 5
 
     ui_msg "ERASE MEDIA" "'$NAME' ($DEVICE) has been erased. \n\nIt has been remounted."
-}
-
-
-media_format_fat32_xx(){
-    local DEVICE=$1
-    local SILENT=${2:-n}  #-y or -n
-    local ROOT="/dev/$(env_root_device)"
-    local TYPE=$(lsblk $DEVICE -dnpo TYPE)
-    local NAME=$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE)
-    local PART1=$DEVICE\1
-    
-
-    if [ -z $1 ] ; then
-        ui_msg "Error 1" "Device not specified, choose:"
-        #lsblk -dp
-        return 1
-    fi
-
-    #check that DEVICE exists
-    if [ ! -e $DEVICE ]; then
-      ui_msg  "Error 2" "$DEVICE does not exist"
-      return 2
-    fi
-
-    if [ $1 = $ROOT ] ; then
-        ui_msg  "Error 3" "Can not format root device"
-        return 3
-    fi
-    
-    if  [ $TYPE != disk ]; then
-        ui_msg  "Error 4" "$DEVICE is not a disk"
-        return 4
-    fi
-    
- 
-    if [ $SILENT != "-y" ]; then
-    MSG="WARNING \n\nAll existing data on '$NAME' ($DEVICE) will be erased.  \n\nAre you sure you want to continue? y/n?"
-        RESULT=$(ui_yesno "ERASE MEDIA" "$MSG" "--defaultno")
-        if [ $RESULT != "y" ]; then
-            echo
-            ui_msg "ERASE MEDIA" "'$DEVICE' not erased"
-            return
-        fi
-    fi
- 
- 
- 
-    do_beep
-    ui_countdown 10 "" "Erasing Media '$(media_name $OUTDEV)' in 10 seconds...\n\n"
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        ui_msg "ERASE MEDIA" "Erase Media stopped... \n\nA key was pressed. "
-        return $EXIT_CODE
-    fi    
- 
-
-    echo_white Formatting $DEVICE...
-
-    echo Unmounting $DEVICE...
-    umount $DEVICE? 2> /dev/null
-
-
-    echo Writing zeros to $DEVICE...
-    sudo dd if=/dev/zero of=$DEVICE bs=512 count=4
-    if (( $? != 0 )); then
-        echo "Error 9: writing zeros failed"
-        return 9
-    fi
-
-
-    #echo label $DEVICE msdos...
-    echo Writing new MBR partition table to $DEVICE...
-    sudo parted -s $DEVICE mklabel msdos
-    if (( $? != 0 )); then
-        ui_msg  "Error 10" "mklabel failed"
-        return 10
-    fi
-
-
-    echo Creating fat32 partition on $DEVICE...
-    sudo parted -s -a opt $DEVICE mkpart primary fat32 4M 100%
-    #sudo parted -s -a opt $DEVICE mkpart primary ext4 0% 100%
-    if (( $? != 0 )); then
-        ui_msg  "Error 11"  "mkpart failed"
-        return 11
-    fi
-
-
-    echo Formatting the partition to fat32...
-    #sudo mkfs -t vfat $PART1
-    sudo mkfs.vfat $PART1
-    #sudo mkfs.ext4 $PART1
-    #sudo mkfs.ntfs -f $PART1
-    if (( $? != 0 )); then
-        ui_msg  "Error 12" "mkfs failed"
-        return 12
-    fi
-
-
-    echo "Mounting the drive..."
-    sleep 2
-    udisksctl mount -b  $PART1
-
-
-    TEST_RESULTS=Succeeded
-
-    echo
-    ui_msg "ERASE MEDIA" "'$NAME' ($DEVICE) has been erased. \n\nIt has been remounted."
-
-    pisafe_write_log "ERASE MEDIA '$NAME' on $DEVICE...  $TEST_RESULTS"   
 }
 
 
@@ -2735,11 +2558,7 @@ media_test(){
 
 
 
-
-
-
-##############################
-
+########  MENU  FUNCTIONS ######################
 
 menu_set_compression(){
     CHOICE=$(whiptail --title "SETTINGS-COMPRESSION" --radiolist \
@@ -2869,7 +2688,8 @@ menu_settings(){
             Factory*) 
                                 ui_yesno "WARNING" "Are you sure you want to reset the settings to factory defaults?" "--defaultno" 
                                 if [ $? = 0 ] ; then
-                                    config_var_factory_reset 
+                                    config_var_set_defaults
+                                    config_var_get_settings
                                 fi ;;
             
              *)                 whiptail --msgbox "Programmer error: unrecognized option" $WT_HEIGHT  $WT_WIDTH  $WT_MENU_HEIGHT ;;
@@ -2972,28 +2792,6 @@ menu_get_outfile(){
     else
         OUTFILE=$(file_path_base "$OUTFILE").img.$(file_ext "$OUTFILE")
     fi    
-}
-
-
-menu_formatxx(){
-    local DEVICE=
-    local FORMAT=
-    
-    DEVICE=$(menu_select_sddevice "ERASE MEDIA" "y")
-    if (( $? )); then
-        return 2
-    fi
-    
-    FORMAT=$(whiptail --clear --backtitle "$BACKTITLE" --title "Select format" --ok-button "Select" --cancel-button "Exit" --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-                "fat32"     "     Most universal format" \
-                "ntfs"      "     Native Windows format" \
-                "ext4"      "     Native Linux format" \
-                3>&1 1>&2 2>&3)
-    if (( $? )); then
-        return 2
-    fi
- 
-    media_format "$DEVICE" "$FORMAT"  
 }
 
 
@@ -3142,6 +2940,22 @@ menu_restore() {
     ###################################################
  
 
+    if [ $(ui_yesno "RESTORE" "Eject the media from the operating system?") = y ]; then
+        echo "Ejecting the media..."
+        sleep 2
+        umount $OUTDEV?  2> /dev/null
+        sudo eject -s $OUTDEV
+        sleep 2
+    elif [ $(ui_yesno "RESTORE" "Mount the media in the operating system?") = y ]; then
+        echo "Mounting the media..."
+        sleep 2
+        media_mount $OUTDEV
+    echo
+    
+        
+    fi
+
+
     #display the results
     whiptail  --backtitle "$BACKTITLE" --title " RESTORE-DONE " \
         --msgbox "'$INFILE' restored to 
@@ -3280,7 +3094,7 @@ menu_gui(){
                  "ABOUT"    "   About $PRODUCTNAME"\
                 3>&1 1>&2 2>&3)
  
-                
+        whiptail_calc_wt_size        
         case $MENU_CHOICE in
             BACKUP)         menu_backup   ;;
             
