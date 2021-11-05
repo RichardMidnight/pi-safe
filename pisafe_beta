@@ -2883,7 +2883,7 @@ menu_restore() {
 
     
     # GET OUTDEV
-    menu_select_sddevice "RESTORE"       # this sets global variable OUTDEV
+    menu_select_sddevice "RESTORE"  y     # this sets global variable OUTDEV
     EXIT_CODE=$?
     if [ $EXIT_CODE != 0 ]; then
         return $EXIT_CODE
@@ -2950,9 +2950,7 @@ menu_restore() {
         echo "Mounting the media..."
         sleep 2
         media_mount $OUTDEV
-    echo
-    
-        
+        #echo
     fi
 
 
@@ -2960,9 +2958,7 @@ menu_restore() {
     whiptail  --backtitle "$BACKTITLE" --title " RESTORE-DONE " \
         --msgbox "'$INFILE' restored to 
         \n'$MEDIA_NAME'
-        \nin $(get_elapsed_time $TIME1 $TIME2)
-        \n
-        \n\n'$MEDIA_NAME' has been ejected.  You need to remove it now. " $WT_MB_HEIGHT $WT_WIDTH
+        \nin $(get_elapsed_time $TIME1 $TIME2)" $WT_MB_HEIGHT $WT_WIDTH
 }
 
 
