@@ -16,7 +16,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.1.5"   # 2021/10/18 
+SCRIPTVER="1.1.5"   # 2021/11/04 
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
