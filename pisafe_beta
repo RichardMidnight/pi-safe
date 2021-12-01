@@ -23,8 +23,7 @@ PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
 CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG=/home/$USER/.config/pisafe/pisafe.conf
-REQUIRED_TOOLS="pv bc whiptail zip unzip pigz "
-REQUIRED_TOOLS_SPECIAL_INSTALL="lua pishrink.sh xz"
+REQUIRED_TOOLS="pv bc whiptail zip unzip pigz lua pishrink.sh xz "
 INTERFACE="cli"
 INDEV=
 OUTDEV=
@@ -41,8 +40,6 @@ RED='\033[1;31m'
 NC='\033[0m' 		# No Color, standard text
 echo_white()        { (echo -e "${WHITE}$*${NC}") }
 echo_red()          { (echo -e "${RED}$*${NC}") }
-
-
 
 
 Desktop_environment_notes(){
@@ -200,7 +197,7 @@ env_terminal(){
       
     else
       echo "Failed to locate any terminal emulators!!!"
-      exit 1
+      return 1
     fi
 
     echo "$TERMINAL1"
@@ -438,9 +435,9 @@ whiptail_fselect() {
                 
     # Then add files                                
     for FILE in $(find $LOCAL_PATH -maxdepth 1 \
-                                    \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" \) \
-                                    -type f \
-                                    -printf "%f\t     %s\n" | sort  2> /dev/null)                                                                  
+        \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" \) \
+        -type f \
+        -printf "%f\t     %s\n" | sort  2> /dev/null)                                                                  
     do
         FILES+=($FILE)
     done
@@ -459,7 +456,7 @@ whiptail_fselect() {
 		arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
 		if [[ "$arrayelement" =~ $num ]] ; then  
             #FILES[$i]=$(echo "    " $(get_bytes_h $arrayelement -h))
-            FILES[$i]=$(echo "    " $(get_bytes_h $arrayelement -h) \($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h)\)) 
+            FILES[$i]=$(echo "    " $(get_bytes $arrayelement -h) \($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h)\)) 
 		else
             PREVIOUS_ELEMENT=$(echo "${FILES[$i]}")
         fi
@@ -537,14 +534,15 @@ ui_msg() {
     OK_BUTTON=${4:-"Back"}
     
     if [ $INTERFACE = "cli" ]; then
-        MSG="$PRODUCTNAME: $TITLE: \n\n$MSG"
+        #MSG="$PRODUCTNAME: $TITLE: $MSG"
+        echo -n "$PRODUCTNAME: $TITLE: "
         if [ $COLOR = "red" ]; then
             echo_red "$MSG"
         else    
             echo -e "$MSG"
         fi
     else
-        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE # $WT_MB_HEIGHT $WT_MB_WIDTH
+        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
     fi
 }
 
@@ -566,17 +564,15 @@ ui_yesno(){
                 * )     ;;
             esac
         done
-        
     else    
         whiptail --backtitle "$BACKTITLE"  --title "$TITLE" $DEFAULT --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH 3>&1 1>&2 2>&3
-        if [ $? = 0 ]; then 
-            echo y
-            return 0
-        else
+        RC=$?
+        if (( $RC )); then
             echo n
-            return 0
+        else
+            echo y
         fi
-
+        return $RC
     fi
 }
 
@@ -592,6 +588,14 @@ ui_countdown(){
     fi
 }
 
+
+ui_error() {
+    LINE=$1
+    shift
+    MSG="$@"
+
+    ui_msg "Error in line $LINE" "$MSG" red    
+}
 
 # ---------- Misc functions
 
@@ -670,43 +674,103 @@ get_ver_to_int() {
 }
 
 
-get_bytes_h(){
+get_bytes(){
+    # translates from bytes to human readable and vice-verse
     # currently shows 3 significant digits.
     local BYTES=$1
-    local LEN=${#BYTES}
-    local k_ilo=1024;
-    local m_ega=$k_ilo*$k_ilo;
-    local g_iga=$m_ega*$k_ilo;
-    local t_era=$g_iga*$k_ilo;
-    local p_eta=$t_era*$k_ilo;
+    local OUTPUT=${2:-"-h"};  #human or bytes
     
-    [ -z "$BYTES" ] && return
+    local BASE=$(echo $BYTES | tr -cd '[[:digit:]]' )
+    local SUFFIX=$(echo $BYTES | tr -cd '[[kmgtbKMGTB]]' )
+
     
     NUM='^[0-9]+$'
     if ! [[ "$BYTES" =~ $NUM ]] ; then   # not a number   
         return 1
     fi
     
-    case $LEN in
-        4) echo $(echo "scale=2; $BYTES/($k_ilo)" | bc)kb ;;
-        5) echo $(echo "scale=1; $BYTES/($k_ilo)" | bc)kb ;;
-        6) echo $(echo "scale=0; $BYTES/($k_ilo)" | bc)kb ;;
-        
-        7) echo $(echo "scale=2; $BYTES/($m_ega)" | bc)mb ;;
-        8) echo $(echo "scale=1; $BYTES/($m_ega)" | bc)mb ;;
-        9) echo $(echo "scale=0; $BYTES/($m_ega)" | bc)mb ;;
-        
-        10) echo $(echo "scale=2; $BYTES/($g_iga)" | bc)gb ;;
-        11) echo $(echo "scale=1; $BYTES/($g_iga)" | bc)gb ;;
-        12) echo $(echo "scale=0; $BYTES/($g_iga)" | bc)gb ;;
-        
-        13) echo $(echo "scale=2; $BYTES/($t_era)" | bc)tb ;;
-        14) echo $(echo "scale=1; $BYTES/($t_era)" | bc)tb ;;
-        15) echo $(echo "scale=0; $BYTES/($t_era)" | bc)tb ;;
-        *)  echo $BYTES ;;
-    esac
-}
 
+    # if no translation needed... then just echo the input and leave
+    if [ $OUTPUT != "-h" ] && [ -z $SUFFIX ] ; then
+        echo $BYTES
+        return
+    fi
+    
+    if [ $OUTPUT = "-h" ] && [ ! -z $SUFFIX ] ; then
+        echo $BYTES
+        return
+    fi
+
+
+    if [ $OUTPUT = "-h" ] ; then  # translate to human readable
+    
+        if [ -z $SUFFIX ]; then
+            local LEN=${#BYTES}
+            local k_ilo=1024;
+            local m_ega=$k_ilo*$k_ilo;
+            local g_iga=$m_ega*$k_ilo;
+            local t_era=$g_iga*$k_ilo;
+            local p_eta=$t_era*$k_ilo;
+            
+            [ -z "$BYTES" ] && return
+            
+            NUM='^[0-9]+$'
+            if ! [[ "$BYTES" =~ $NUM ]] ; then   # not a number   
+                return 1
+            fi
+            
+            case $LEN in
+                4) echo $(echo "scale=2; $BYTES/($k_ilo)" | bc)kb ;;
+                5) echo $(echo "scale=1; $BYTES/($k_ilo)" | bc)kb ;;
+                6) echo $(echo "scale=0; $BYTES/($k_ilo)" | bc)kb ;;
+                
+                7) echo $(echo "scale=2; $BYTES/($m_ega)" | bc)mb ;;
+                8) echo $(echo "scale=1; $BYTES/($m_ega)" | bc)mb ;;
+                9) echo $(echo "scale=0; $BYTES/($m_ega)" | bc)mb ;;
+                
+                10) echo $(echo "scale=2; $BYTES/($g_iga)" | bc)gb ;;
+                11) echo $(echo "scale=1; $BYTES/($g_iga)" | bc)gb ;;
+                12) echo $(echo "scale=0; $BYTES/($g_iga)" | bc)gb ;;
+                
+                13) echo $(echo "scale=2; $BYTES/($t_era)" | bc)tb ;;
+                14) echo $(echo "scale=1; $BYTES/($t_era)" | bc)tb ;;
+                15) echo $(echo "scale=0; $BYTES/($t_era)" | bc)tb ;;
+                *)  echo $BYTES ;;
+            esac
+        else
+            echo $BYTES
+        fi    
+
+    else  # translate to bytes
+    
+        case $SUFFIX in
+
+        b|B|"")
+            echo $BASE
+            ;;
+        
+        k|K|kb|KB)
+            echo $(($BASE*1024))
+            ;;
+
+        m|M|mb|MB)
+            echo $(($BASE*1024*1024))
+            ;;
+            
+        g|G|gb|GB)
+            echo $(($BASE*1024*1024*1024))
+            ;;
+            
+        t|T|tb|TB)
+            echo $(($BASE*1024*1024*1024*2014))
+            ;;
+        *)
+            ui_error $LINENO "bad byte suffix 'SUFFIX'"
+            ;;
+    
+        esac
+    fi
+}
 
 
 # ---------- file functions
@@ -734,7 +798,6 @@ file_base() {
 
 file_ext(){
 	base=$(basename "$*")
-	
 	#look for a period in the basename.  if there is one, there is an extention
 	HAS_DOT=$(echo "$base" | grep \\.)
 	if [ ! -z "$HAS_DOT" ] ; then
@@ -753,12 +816,12 @@ file_size() {
     
     if [ -f "$FILE" ] ; then
         SIZE_BYTES="$(($(ls -s "$FILE" | cut -d' ' -f1) * 1024))"
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then
-            return $EXIT_CODE
+        RC=$?
+        if (( $RC )); then
+            return $RC
         fi
         if [ $HUMAN = "-h" ]; then
-            echo $(get_bytes_h $SIZE_BYTES)
+            echo $(get_bytes $SIZE_BYTES -h)
         else
             echo $SIZE_BYTES
         fi
@@ -773,7 +836,7 @@ file_image_size() {
     local HUMAN=${2:-"no"}
     
     file_image_exists "$INFILE" > /dev/null
-    if [ $? != 0 ] ; then
+    if (( $? )) ; then
         # image file not found
         echo 0
         return 1
@@ -808,7 +871,7 @@ file_image_size() {
     fi
     
     if [ $HUMAN = "-h" ]; then
-        echo $(get_bytes_h $SIZE_BYTES)
+        echo $(get_bytes $SIZE_BYTES -h)
     else
         echo $SIZE_BYTES
     fi
@@ -823,7 +886,8 @@ file_image_exists(){
     local IMG
     
     if [ ! -f "$INFILE" ] ; then
-        echo_if_cli "ERROR '$INFILE' not found"
+        #echo_if_cli "ERROR '$INFILE' not found"
+        ui_error $LINENO "'$INFILE' not found"
         return 1
     fi
     
@@ -855,7 +919,7 @@ file_image_exists(){
         echo "$IMG" [OK]
         return 0
     else
-        echo "ERROR: No image found in '$INFILE'"
+        ui_error $LINENO "No image found in '$INFILE'"
         return 1
     fi    
 }
@@ -870,12 +934,12 @@ file_ext_ok(){
         img | zip | xz | gz | iso | "" )
             echo true
             return 0
-        ;;
+            ;;
         
         *)  
             echo ""
             return 1
-        ;;
+            ;;
     esac
 }
 
@@ -910,14 +974,14 @@ file_fs_freespace() {
     
     if [ -d "$FILENAME" ]; then
         FREESPACE=$(df "$FILENAME" $FORMAT --output=avail | grep -v Avail)
-        EXIT_CODE=$?
+        RC=$?
     else
         FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
-        EXIT_CODE=$?
+        RC=$?
     fi
 
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
+    if (( $RC )) ; then
+        return $RC
     fi
     
     echo $FREESPACE
@@ -930,9 +994,9 @@ file_folder_size() {
     
     if [ -d "$FOLDER" ] ; then
         sudo du -sh "$FOLDER" | cut -d'/' -f1 | sed 's/\s\s*/ /g'
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then
-            return $EXIT_CODE
+        RC=$?
+        if (( $RC )); then
+            return $RC
         fi
     else
         echo 0
@@ -1012,10 +1076,9 @@ file_check_infile(){
     
     # quit or warning if no img file found
     file_image_exists "$INFILE"
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
+    if (( $? )); then
         ui_msg "ERROR 3" "No image file found in '$INFILE'" "red"
-        return 1
+        return 3
     fi 
 }
 
@@ -1063,7 +1126,8 @@ do_install_lua(){
     for LUA_VER in $LUA_VERS; do
         1>/dev/null 2>/dev/null $LUA_VER -v 
         if [ $? = 0 ]; then  #  LUA_VER found
-            1>/dev/null lua -v
+            #1>/dev/null lua -v
+            lua -v 2>/dev/null
             if [ $? = 0 ]; then   # lua works, can return
               return
             else
@@ -1084,12 +1148,12 @@ do_install_lua(){
      for LUA_VER in $LUA_VERS; do
         echo Trying to install $LUA_VER ...
         sudo $INSTALL $LUA_VER
-        if [ $? = 0 ] ; then  # no error so LUA_VER installed
+        if (( $? )); then  # no error so LUA_VER installed
           # see if we need to fix lua
           1>/dev/null lua -v
-          if [ $? = 0 ]; then  # lua works, can return
-            return
-          else  # error so we need to fix it.
+          if (( $? )); then  # lua works, can return
+       #     return
+       #   else  # error so we need to fix it.
             #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
             for LUA_TEST in "lua5.4 lua5.3 lua5.2 lua5.1"; do
                 if [ -f /usr/bin/$LUA_TEST ]; then
@@ -1108,63 +1172,45 @@ do_install_lua(){
 
 pisafe_install_tools() {   
     TOOL_MISSING=false
-    TOOLS=$(echo $REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)
-    INSTALL=$(env_installer)
+    INSTALL=$(env_installer)  
     
-    for TOOL in $TOOLS ; do
-        #if [ ! $(which $TOOL) ]; then
-        if [ ! -f /usr/bin/$TOOL ]  && [ ! -f /usr/local/bin/$TOOL ] ; then
-            TOOL_MISSING=true
-        fi
-    done
+    do_install_lua
     
-    if [ $TOOL_MISSING = "true" ]; then
-        echo "Installing required tools ($REQUIRED_TOOLS $REQUIRED_TOOLS_SPECIAL_INSTALL)"
-        RESULT=y
-        if [ $RESULT != "y" ]; then
-            echo
-            echo_red   WARNING.  Not all the needed tools are installed.
-            return 1
-        fi
-
-        for TOOL in $REQUIRED_TOOLS ; do
-             if [ ! -f /usr/bin/$TOOL ]; then
+    for TOOL in $REQUIRED_TOOLS ; do
+        #if [ ! -f /usr/bin/$TOOL ]  && [ ! -f /usr/local/bin/$TOOL ] ; then
+        if [ -z $(which $TOOL) ] ; then
+            case $TOOL in
+            
+            xz)
+                echo_white Instlling xz-utils...
+                sudo $INSTALL xz-utils
+                if [ ! -f /usr/bin/xz ]; then
+                   ui_msg "Error" "xz not installed." "red" 
+                fi
+                ;;
+            
+            pishrink.sh)
+                echo_white Installing pishrink...
+                wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
+                sudo chmod +x pishrink.sh
+                sudo mv pishrink.sh /usr/local/bin
+                if [ ! -f /usr/local/bin/pishrink.sh ] ; then
+                  ui_msg "Error" "pishrink not installed." "red" 
+                else
+                  ui_msg  pishrink installed.
+                fi
+                ;;
+            
+            *)
                 echo_white Installing $TOOL ...
                 sudo $INSTALL $TOOL
-                EXIT_CODE=$?
-                if [ $EXIT_CODE != 0 ]; then
+                if (( $? )); then
                     ui_msg "Error" "$TOOL not installed." "red"
                 fi
-            fi
-        done
-        
-        # Special installs ...
-        
-        # Install PiShrink
-        if [ ! -f /usr/local/bin/pishrink.sh ]; then
-            echo_white Installing pishrink...
-            wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
-            sudo chmod +x pishrink.sh
-            sudo mv pishrink.sh /usr/local/bin
-            if [ ! -f /usr/local/bin/pishrink.sh ] ; then
-              ui_msg "Error" "pishrink not installed." "red" 
-            else
-              ui_msg  pishrink installed.
-            fi
+                ;;
+            esac    
         fi
-
-        # Install xz
-        if [ ! -f /usr/bin/xz ]; then
-            echo_white Installing xz-utils...
-            sudo $INSTALL xz-utils
-            if [ ! -f /usr/bin/xz ]; then
-               ui_msg "Error" "xz not installed." "red" 
-            fi
-        fi
-    
-        do_install_lua
-    
-    fi
+    done
 }    
 
 
@@ -1249,10 +1295,10 @@ pisafe_update() {
     local SERVER_VER=
     #rm $SCRIPTNAME.tmp
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/$SCRIPTNAME -O $SCRIPTNAME.tmp 2> /dev/null 
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ];  then
+    RC=$?
+    if (( $RC ));  then
         echo_if_cli "ERROR: Can't connect to server..."
-        return $EXIT_CODE
+        return $RC
     fi    
 
     # did we get the new version from the server?
@@ -1268,18 +1314,19 @@ pisafe_update() {
         else
             RESULT=$(ui_yesno "UPDATE AVAILABLE" "Update $PRODUCTNAME from '$SCRIPTVER'  to '$SERVER_VER' ")
         fi
-    if [ $RESULT = "y" ]; then 
-        sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
-        sudo chmod +x /usr/local/bin/$SCRIPTNAME
-        echo "$($SCRIPTNAME -v) installed. Press any key to exit... "
-        read -n 1
-        exit 0
-    fi
+        
+        if [ $RESULT = "y" ]; then 
+            sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
+            sudo chmod +x /usr/local/bin/$SCRIPTNAME
+            echo "$($SCRIPTNAME -v) installed. Press any key to exit... "
+            read -n 1
+            exit 0
+        fi
     else  
         rm $SCRIPTNAME.tmp
-       if [ $SUMMARY = yes ]; then
+        if [ $SUMMARY = yes ]; then
             ui_msg "UPDATE" "$PRODUCTNAME is up to date.  Server ver is '$SERVER_VER' "
-       fi
+        fi
     fi
 }
 
@@ -1320,10 +1367,10 @@ pisafe_uninstall(){
 
 media_name(){
    lsblk -d -n -l -o NAME,VENDOR,MODEL,SIZE $1  2> /dev/null
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
+    RC=$?
+    if (( $RC )); then
         echo 0
-        return $EXIT_CODE
+        return $RC
     fi
 }
 
@@ -1339,15 +1386,14 @@ media_size() {
     fi
    
     SIZE_BYTES=$(lsblk $DEV -d -n -b -o size  2> /dev/null)
-    EXIT_CODE=$?
-        
-    if [ $EXIT_CODE != 0 ]; then
+    RC=$?
+    if (( $RC )); then
         echo 0
-        return $EXIT_CODE       
+        return $RC       
     fi
     
     if [ $HUMAN = "-h" ]; then
-        echo $(get_bytes_h $SIZE_BYTES)
+        echo $(get_bytes $SIZE_BYTES -h)
     else
         echo $SIZE_BYTES
     fi
@@ -1428,7 +1474,7 @@ media_check_indev(){
             \n\n'$(media_name $INDEV)' is $(media_size $INDEV -h)
             \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
             \nThere is $(file_folder_size /home/$USER/.local/share/Trash) in the Trash" 
-        ui_msg "WARNING 6" "$MSG" "red"  "OK"
+        ui_msg "WARNING 6" "$MSG" "red" "OK"
     fi
 }
 
@@ -1478,7 +1524,7 @@ media_check_outdev(){
     # Warning if device is large
     if [ $(media_size $OUTDEV) -gt $LARGE_DEVICE_WRITE_WARNING ]; then
         ui_msg "RESTORE WARNING" "'$(media_name $OUTDEV)' 
-        \nis larger than $(get_bytes_h $LARGE_DEVICE_WRITE_WARNING)... 
+        \nis larger than $(get_bytes $LARGE_DEVICE_WRITE_WARNING -h)... 
         \n\nBe sure this is the right device" "red" "OK"
     fi
      
@@ -1511,16 +1557,16 @@ media_backup(){
       
     if [ $INTERFACE = "cli" ]; then
         media_check_indev
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then
-            return $EXIT_CODE
+        RC=$?
+        if (( $RC )); then
+            return $RC
         fi     
         
         file_check_outfile   
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then
-            return $EXIT_CODE
-        fi 
+        RC=$?
+        if (( $RC )); then
+            return $RC
+        fi  
     fi    
     
     # should be able to delete this...
@@ -1554,9 +1600,9 @@ media_backup(){
 	if [ $SKIP_FREESPACE = "on" ]; then
 
 		START_OF_FREESPACE=$(sudo parted -ms "$INDEV" unit B print free)
-		rc=$?
-		if (( $rc )); then
-			error $LINENO "parted failed with rc $rc"
+		RC=$?
+		if (( $RC )); then
+			error $LINENO "parted failed with rc $RC"
 			exit 15
 		fi
 		START_OF_FREESPACE=$(tail -1 <<< "$START_OF_FREESPACE" | grep free | cut -d ':' -f 2 | tr -d 'B')
@@ -1568,8 +1614,8 @@ media_backup(){
 		BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS + 1))
 
 		echo Media size=$(media_size $INDEV -h)
-		echo Skipping $(get_bytes_h $(( $(media_size $INDEV) - $START_OF_FREESPACE )) ) of freespace found at end.
-		echo Reading=$(get_bytes_h $START_OF_FREESPACE)
+		echo Skipping $(get_bytes $(( $(media_size $INDEV) - $START_OF_FREESPACE )) -h ) of freespace at end.
+		echo Reading=$(get_bytes $START_OF_FREESPACE -h)
 
 	else
 	  BYTES_TO_READ=$(media_size $INDEV)
@@ -1578,22 +1624,23 @@ media_backup(){
 	fi    
 	#end of new section    
     
+    
     #sudo dd bs=4M if=$INDEV of="$OUTFILE_BASE".img status=progress conv=fsync 
     MEDIA_SIZE=$(sudo lsblk -ndb $MEDIA -o size)
     if [ ! -z $(which pv) ]; then
 		sudo pv $INDEV -s $BYTES_TO_READ $DEVICE | dd bs=$BS of="$OUTFILE_BASE".img count="$BLOCKS_TO_READ" iflag=fullblock conv=fsync 
-		EXIT_CODE=$?
+		RC=$?
     else
       echo "Note: 'pv' is not installed so there is no progress indicator for this step. Please wait..."
       sudo dd bs=4M if=$INDEV of="$OUTFILE_BASE".img  conv=fsync 
-      EXIT_CODE=$?
+      RC=$?
+    fi
+    if (( $RC )); then
+        return $RC
     fi
     
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
-    fi
     sleep 5s
-    echo Done reading SD card
+    echo "Done reading device '$INDEV'"
     echo_white \'$(ls -s -h "$OUTFILE_BASE".img)\'
     TIME2=$(date +%s)  
     echo_white Step 1 took $(get_elapsed_time $TIME1 $TIME2)
@@ -1609,8 +1656,8 @@ media_backup(){
         fi
         if [ $SHRINK_FS != "off" ]; then
             sudo pishrink.sh $PI_SHRINK_OPTS "$OUTFILE_BASE".img
-            EXIT_CODE=$?
-            if [ $EXIT_CODE != 0 ]; then
+            RC=$?
+            if (( $RC )); then
                 echo Continuing without shrinking file system
             fi
         else
@@ -1638,16 +1685,17 @@ media_backup(){
         iso)
             echo Not compressing .iso file ...
             mv $OUTFILE_BASE.img $OUTFILE_BASE.iso
+            RC=$?
             ;;
         
         zip)
             local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
             local DOTSIZE=$(( $FILESIZE_M / 50 ))m
-            echo Each dot=$DOTSIZE MB
+            echo Each dot=$DOTSIZE 
             echo -n "                      $OUTFILE_BASE.img"
             echo "...........25...........50...........75..........100%"
             zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
-            EXIT_CODE=$?
+            RC=$?
             
             #warning, with progress bar it loses .img in the image name
             #sudo pv "$OUTFILE_BASE".img | sudo zip -$COMPRESSION  > "$OUTFILE"
@@ -1662,12 +1710,13 @@ media_backup(){
             ##sudo mv "$OUTFILE_BASE".img.xz "$OUTFILE"  
             
             # With progress bar
-            if [ ! -z $(which pv) ]; then
+          #  if [ ! -z $(which pv) ]; then
 				pv "$OUTFILE_BASE".img | xz -z -c -T0 -$COMPRESSION > "$OUTFILE"
-				EXIT_CODE=$? 
-			else
-			  sudo xz -z -v -T0 -$COMPRESSION "$OUTFILE_BASE".img
-			fi	
+				RC=$? 
+		#	else
+        #        sudo xz -z -v -T0 -$COMPRESSION "$OUTFILE_BASE".img
+        #        RC=$? 
+	#		fi	
             rm -f "$OUTFILE_BASE".img
             ;;
         
@@ -1680,19 +1729,20 @@ media_backup(){
 
             # With progress bar
             pv "$OUTFILE_BASE".img | pigz -$COMPRESSION > "$OUTFILE"
-            EXIT_CODE=$? 
+            RC=$? 
             rm -f "$OUTFILE_BASE".img
             ;;
         
         *)
             echo
-            echo_red ERROR... unsupported file extension \'$(file_ext "$OUTFILE")\'.
+            #echo_red ERROR... unsupported file extension \'$(file_ext "$OUTFILE")\'.
+            ui_error $LINENO "Unsupported file extension '$(file_ext "$OUTFILE")'"
             return 1
             ;;
     esac
     
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
+    if (( $RC )); then
+        return $RC
     fi
     
     echo "Done compressing '$OUTFILE_BASE.img' to '$OUTFILE' "
@@ -1709,11 +1759,11 @@ media_backup(){
     fi    
     
     
-    if [ $EXIT_CODE != 0 ]; then
+    if [ $RC != 0 ]; then
         echo
-        echo_red  "ERROR. $EXIT_CODE"
+        echo_red  "ERROR. $RC"
         pisafe_write_log "FAILED $PRODUCTNAME $SCRIPTVER Backup, IN-DEV='$INDEV',  OUT-FILE='$OUTFILE', Compression set to level $COMPRESSION"
-        return $EXIT_CODE
+        return $RC
     else
         do_beep
         echo_white "Backup done. '$INDEV' backed up to '$OUTFILE' in $(get_elapsed_time $TIME1 $TIME4)." 
@@ -1728,25 +1778,23 @@ media_restore(){
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
     INTERFACE=${4:-cli}  #CLI or gui
 
-    
     echo_white Starting $PRODUCTNAME $SCRIPTVER Restore...
     echo "IN-FILE='$INFILE'"
     echo "OUT-DEV='$OUTDEV'"
     echo "Safety='$SAFETY'"
     pisafe_write_log "Starting $PRODUCTNAME $SCRIPTVER Restore, '$INFILE', '$OUTDEV' '$(media_name $OUTDEV)'"
  
-    
     if [ $SILENT != "-y" ]; then
         file_check_infile
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then
-            return $EXIT_CODE
+        RC=$?
+        if (( $RC )); then
+            return $RC
         fi
     
         media_check_outdev
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then
-            return $EXIT_CODE
+        RC=$?
+        if (( $RC )); then
+            return $RC
         fi
     fi
 
@@ -1764,7 +1812,6 @@ media_restore(){
         echo_red "ERROR r2: OUT-DEV '$OUTDEV' must exist."
         return 1
     fi
-    
     
     if [ $SILENT != "-y" ]; then
         echo
@@ -1789,7 +1836,6 @@ media_restore(){
     # this section writes the data
     #################################################
 
-    
     echo_if_cli Unmounting SD-card $OUTDEV ...
     umount $OUTDEV?  2> /dev/null
     
@@ -1809,11 +1855,11 @@ media_restore(){
             if [ $INTERFACE = "cli" ]; then
                 #sudo dd if="$INFILE" of=$OUTDEV bs=4M conv=fsync status=progress
                 pv "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync
-                EXIT_CODE=$?
+                RC=$?
             else
                 (sudo pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
-                EXIT_CODE=$?
+                RC=$?
             fi
             ;;
         
@@ -1823,11 +1869,11 @@ media_restore(){
                  #unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                  #pv "$INFILE" | unzip -p | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                  unzip -p "$INFILE" | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync
-                 EXIT_CODE=$?
+                 RC=$?
             else
                 (unzip -p "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
-                 EXIT_CODE=$?
+                 RC=$?
             fi
             ;;
         
@@ -1835,11 +1881,11 @@ media_restore(){
             if [ $INTERFACE = "cli" ]; then
                  #xz -v -d -c "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                  pv "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync
-                 EXIT_CODE=$?
+                 RC=$?
             else
                 (sudo pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
-                EXIT_CODE=$?
+                RC=$?
             fi
             ;;
 
@@ -1847,11 +1893,11 @@ media_restore(){
             if [ $INTERFACE = "cli" ]; then
                 #pigz -v -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                 pv "$INFILE" | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync
-                EXIT_CODE=$?
+                RC=$?
             else
                 (pv -n "$INFILE" | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
-                EXIT_CODE=$?
+                RC=$?
             fi    
             ;;
 
@@ -1865,12 +1911,13 @@ media_restore(){
     TIME2=$(date +%s)
     echo
     
-    if [ $EXIT_CODE != 0 ]; then
+    if (( $RC )); then
         echo
         do_beep_down  
-        echo_red  "ERROR. $EXIT_CODE"
-        pisafe_write_log "Restore failed $EXIT_CODE"
-        return $EXIT_CODE
+        #echo_red  "ERROR. $RC"
+        error $LINENO "Error restoring. RC=$RC"
+        pisafe_write_log "Restore failed $RC"
+        return $RC
     else
           
         #do_beep
@@ -1900,9 +1947,9 @@ media_list() {
     
        
     DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $ROOT_FILTER)
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
+    RC=$?
+    if (( $RC )); then
+        return $RC
     fi
     
     echo "${DEVICES[@]}"
@@ -2089,27 +2136,31 @@ media_backup_estimate() {
         MEDIA_FREESPACE_AT_END=0
     fi
 
-    case $MEDIA_PARTITION_TABLE in
-        msdos)
-            MEDIA_LAST_PARTITION_TYPE=$(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | cut -d " " -f6)
-            MEDIA_LAST_PARTITION_FS=$(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | cut -d " " -f7)
-            ;;
-        gpt)
-            MEDIA_LAST_PARTITION_TYPE=
-            MEDIA_LAST_PARTITION_FS=$(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | cut -d " " -f6)
-            ;;
-        *)
-            ;;
-    esac	
 
+#PARTED_OUTPUT=$(sudo parted -ms $MEDIA print)  # no freespace
+
+ #   case $MEDIA_PARTITION_TABLE in
+ #       msdos)
+ #           MEDIA_LAST_PARTITION_TYPE=$(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | cut -d " " -f6)
+ #           MEDIA_LAST_PARTITION_FS=$(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | cut -d " " -f7)
+ #           ;;
+ #       gpt)
+ #           MEDIA_LAST_PARTITION_TYPE=$(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | cut -d " " -f7)
+ #           MEDIA_LAST_PARTITION_FS=$(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | cut -d " " -f6)
+ #           ;;
+ #       *)
+ #           ;;
+ #   esac	
+
+    MEDIA_LAST_PARTITION_FS=$(lsblk -no FSTYPE $MEDIA$MEDIA_LAST_PARTITION_NUMBER  )
 
     MSG=$MSG"\n===== MEDIA BACKUP ESTIMATES ===== \n"
-    MSG=$MSG"Media size                         =  $(get_bytes_h $MEDIA_SIZE)\n"
+    MSG=$MSG"Media size                         =  $(get_bytes $MEDIA_SIZE -h)\n"
 
 
     #1 - free space
-    MSG=$MSG$(printf '%-35.34s' "Remove '$(get_bytes_h $MEDIA_FREESPACE_AT_END)' of freespace")
-    MSG=$MSG"=> $(get_bytes_h $(($MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) ) \n"
+    MSG=$MSG$(printf '%-35.34s' "Remove '$(get_bytes $MEDIA_FREESPACE_AT_END -h)' of freespace")
+    MSG=$MSG"=> $(get_bytes $(($MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) -h ) \n"
 
 
     # 2 - is it a complex file system?
@@ -2130,25 +2181,24 @@ media_backup_estimate() {
             fi
             ;;
 
-
         *)
             MSG=$MSG"Warning: The last partition fs is '$MEDIA_LAST_PARTITION_FS'. This filesystem will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
             ;;
     esac
   
     if [ -z $SHRINK_BYTES ]; then
-      SHRINK_BYTES=0
+        SHRINK_BYTES=0
     fi
     
 
     # 4 Shrink Filesystem  
     UNCOMPRESSED_BYTES=$(( $MEDIA_SIZE - $MEDIA_FREESPACE_AT_END - $SHRINK_BYTES ))
-    MSG=$MSG$(printf '%-35.34s' "Shrink filesystem by $(get_bytes_h $SHRINK_BYTES)")
-    MSG=$MSG"=> $(get_bytes_h $UNCOMPRESSED_BYTES ) \n"
+    MSG=$MSG$(printf '%-35.34s' "Shrink filesystem by $(get_bytes $SHRINK_BYTES -h) ")
+    MSG=$MSG"=> $(get_bytes $UNCOMPRESSED_BYTES -h) \n"
 
 
     # 5 Compression
-    MSG=$MSG"Estimated compression 2:1          => $(get_bytes_h $((UNCOMPRESSED_BYTES / 2 ))) \n"
+    MSG=$MSG"Estimated compression 2:1          => $(get_bytes $((UNCOMPRESSED_BYTES / 2 )) -h) \n"
 
     echo "$MSG"
 }
@@ -2255,23 +2305,34 @@ media_format(){
         return 11
     fi
 
-    echo "Formatting the partition to '$PART_TYPE'..."
+    echo "Formatting the partition to '$FORMAT'..."
 
     case $FORMAT in
         fat32)
-            sudo mkfs.vfat $PART1
+            sudo mkfs.vfat -n FAT32 $PART1
             EC=$?
             ;;
         
         ntfs)
-            sudo mkfs.ntfs -f $PART1
+            sudo mkfs.ntfs -f -L NTFS $PART1
             EC=$?
             ;;
         
         ext4)
-            sudo mkfs.ext4 -E root_owner=$UID:$GID -F $PART1
+            sudo mkfs.ext4 -L EXT4 -E root_owner=$UID:$GID -F $PART1
             EC=$?
             ;;
+            
+        exfat)
+            #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
+            sudo apt-get install exfat-utils exfat-fuse
+            sudo modprobe fuse 
+            #run_command "sudo mkfs.exfat -n EXFAT $PART1" $LINENO
+            sudo mkfs.exfat -n EXFAT $PART1
+            EC=$?
+   
+            ;;        
+            
     esac
 
     if (( $EC != 0 )); then
@@ -2296,265 +2357,10 @@ media_format(){
 }
 
 
-media_wipe(){
-    local DEVICE=$1
-    local SILENT=${2:-n}  #-y or -n
-    local ROOT="/dev/$(env_root_device)"
-    local TYPE=$(lsblk $DEVICE -dnpo TYPE)
-    local NAME=$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE)
-    local PART1=$DEVICE\1    
-    
-    if [ -z $1 ] ; then
-        ui_msg  "Error 1"  "Device not specified, choose:"
-        return 1
-    fi
-
-    if [ ! -e $DEVICE ]; then
-        ui_msg  "Error 2" "$DEVICE does not exist"
-        return 2
-    fi
-    
-    DEVICE_SIZE=$(lsblk  $DEVICE -dno  size )
-    DEVICE_SIZE_BYTES=$(lsblk  $DEVICE -dbno  size )
-    BLOCK_SIZE_BYTES=$((1024*1024*4))
-    BLOCK_SIZE=$(( $BLOCK_SIZE_BYTES / 1024 / 1024 ))MB
-    DEVICE_BLOCK_COUNT=$(( $DEVICE_SIZE_BYTES / $BLOCK_SIZE_BYTES ))
-
-
-    if [ $1 = $ROOT ] ; then
-        ui_msg  "Error 3" "Can not wipe root device"
-        return 3
-    fi
-    
-    if  [ $TYPE != disk ]; then
-        ui_msg  "Error 4" "$DEVICE is not a disk"
-        return 4
-    fi
-
- 
-    if [ $SILENT != "-y" ]; then
-        RESULT=$(ui_yesno "WIPE MEDIA" "All existing data on '$NAME' ($DEVICE) will be erased.  Are you sure you want to continue? y/n?" "--defaultno")
-        if [ $RESULT != "y" ]; then
-            echo
-            ui_msg "WIPE MMEDIA" "'$DEVICE' not erased"
-            return
-        fi
-    fi
- 
-    #Countdown 
-    do_beep
-    ui_countdown 10 "" "Wiping Media '$(media_name $OUTDEV)' in 10 seconds...\n\n"
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        ui_msg "WIPE MEDIA" "Wipe Media stopped... \n\n a key was pressed. "
-        return $EXIT_CODE
-    fi    
-
-    echo_white Wiping $DEVICE...
-
-    echo Unmounting $DEVICE...
-    umount $DEVICE? 2> /dev/nul
-
-    MESSAGE="Wiping '$NAME' ($DEVICE)\n\nWriting zeros to $DEVICE... "  
-    if [ $INTERFACE = "cli" ]; then
-        echo_white "Writing zeros to $DEVICE... "  
-        pv -s $DEVICE_SIZE_BYTES /dev/zero | sudo dd iflag=fullblock of=$DEVICE bs=$BLOCK_SIZE_BYTES count=$DEVICE_BLOCK_COUNT
-        EXIT_CODE=$?
-    else
-        (sudo pv -n -s $DEVICE_SIZE_BYTES /dev/zero | sudo dd iflag=fullblock of=$DEVICE bs=$BLOCK_SIZE_BYTES count=$DEVICE_BLOCK_COUNT) 2>&1 \
-        | whiptail --backtitle "$BACKTITLE" --title "WIPE MEDIA" --gauge "\n$MESSAGE" $WT_HEIGHT $WT_WIDTH 0
-        EXIT_CODE=$?
-    fi
-    if [ $EXIT_CODE != 0 ]; then
-        echo_red ERROR 5
-        TEST_RESULTS=Failed
-        return 5
-    else
-        TEST_RESULTS=Succeeded
-        
-    fi
-
-    echo
-    ui_msg "WIPE MEDIA" "'$NAME' ($DEVICE) has been wiped with zeros \n\nYou can remove the SD card from the reader"   
-    
-    pisafe_write_log "WIPE MEDIA '$NAME' on $DEVICE...  $TEST_RESULTS"   
-}
 
 
 
-media_test_pattern(){
-    local DEVICE=$1
-    local PATTERN=$2   # in octal  eg '\377'
-    
-    local NAME=$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE)
-    local ROOT="/dev/$(env_root_device)"
-    local TEMP_FILE=tmpfile.img
 
-
-    if [ ! -e $DEVICE ]; then
-      ui_msg  "Error 2" "$DEVICE does not exist"
-      return 2
-    fi
-    
-    if [ $1 = $ROOT ] ; then
-        ui_msg  "Error" "Can not test root device"
-        return 1
-    fi
-    
-    DEVICE_SIZE=$(lsblk  $DEVICE -dno  size )
-    DEVICE_SIZE_BYTES=$(lsblk  $DEVICE -dbno  size )
-    
-    # block=4M
-    BLOCK_SIZE_BYTES=$((1024*1024*4))
-    BLOCK_SIZE=$(( $BLOCK_SIZE_BYTES / 1024 / 1024 ))MB
-    
-    DEVICE_BLOCK_COUNT=$(( $DEVICE_SIZE_BYTES / $BLOCK_SIZE_BYTES ))
-  
-# just do 2% for testing
-#DEVICE_BLOCK_COUNT=$(( $DEVICE_BLOCK_COUNT / 20 ))
-
-     
-    date 
-    TIME1=$(date +%s)
-    MESSAGE="$MESSAGE \nTESTING $PATTERN\nStep 1 of 3: Writing  ... "
-#    if [ $INTERFACE = "cli" ]; then
-        echo_white "Step 1 of 3: Writing '$PATTERN'..."   
-        tr '\000' $PATTERN  </dev/zero | sudo pv -s $DEVICE_SIZE_BYTES | sudo dd iflag=fullblock of=$DEVICE bs=$BLOCK_SIZE_BYTES count=$DEVICE_BLOCK_COUNT 
-        EXIT_CODE=$?
-#    else
-#        (tr '\000' $PATTERN </dev/zero | sudo pv -n -s $DEVICE_SIZE_BYTES | sudo dd iflag=fullblock of=$DEVICE bs=$BLOCK_SIZE_BYTES count=$DEVICE_BLOCK_COUNT ) 2>&1  \
-#        | whiptail --backtitle "$BACKTITLE" --title "TEST MEDIA '$NAME' $DEVICE" --gauge "$MESSAGE" $WT_HEIGHT $WT_WIDTH 0 
-#        EXIT_CODE=$?
-#    fi    
-    if [ $EXIT_CODE != 0 ]; then
-        ui_msg "ERROR 1" "Writing" "red"
-        return 1
-    fi
-    
-#######
-#sudo hexedit /dev/sdb
-
-    
-    date
-    TIME2=$(date +%s)
-    MESSAGE="$MESSAGE (DONE $(get_elapsed_time $TIME1 $TIME2))\nStep 2 of 6: Reading  ... "
-#     if [ $INTERFACE = "cli" ]; then
-        echo_white "Step 2 of 3: Reading '$PATTERN' ..."
-        sudo pv -s $DEVICE_SIZE_BYTES $DEVICE | sudo dd of=$TEMP_FILE bs=$BLOCK_SIZE_BYTES count=$DEVICE_BLOCK_COUNT iflag=fullblock 
-        EXIT_CODE=$?
-#     else
-#        (sudo pv -n -s $DEVICE_SIZE_BYTES $DEVICE | sudo dd of=$TEMP_FILE bs=$BLOCK_SIZE_BYTES count=$DEVICE_BLOCK_COUNT iflag=fullblock) 2>&1 \
-#        | whiptail --backtitle "$BACKTITLE" --title "TEST MEDIA '$NAME' $DEVICE" --gauge "$MESSAGE" $WT_HEIGHT $WT_WIDTH 0 
-#        EXIT_CODE=$?
-#     fi
-    if [ $EXIT_CODE != 0 ]; then
-        ui_msg "ERROR 2" "Reading" "red"
-        return 2
-    fi
-    
-    
-    date
-    TIME3=$(date +%s)
-    MESSAGE="$MESSAGE (DONE $(get_elapsed_time $TIME2 $TIME3))\nStep 3 of 6: Comparing... "
- #   if [ $INTERFACE = "cli" ]; then
-        echo_white "Step 3 of 3: Compare '$PATTERN'..."
-        pv -s $DEVICE_SIZE_BYTES <(tr -dc $PATTERN <$TEMP_FILE) | cmp $TEMP_FILE
-        EXIT_CODE=$?
- #   else
-  #      (pv -n -s $DEVICE_SIZE_BYTES <(tr -dc $PATTERN <$TEMP_FILE) | cmp $TEMP_FILE) 2>&1 \
-  #      | whiptail --backtitle "$BACKTITLE" --title "TEST MEDIA '$NAME' $DEVICE" --gauge "$MESSAGE" $WT_HEIGHT $WT_WIDTH 0
-  #      EXIT_CODE=$?
- #   fi
-    
-#echo ec=$ec
-#echo EC=$EXIT_CODE    
-#EXIT_CODE=$ec
-    
-    date
-    TIME4=$(date +%s)
-    MESSAGE="$MESSAGE (DONE $(get_elapsed_time $TIME3 $TIME4))"
-  
-    if [ $EXIT_CODE != 0 ]; then
-        #ui_msg "ERROR 3" "Comparing" "red"
-        MESSAGE="$MESSAGE\nFAILED "
-        return 3
-    else    
-        MESSAGE="$MESSAGE\nPASSED "
-    fi
-}
-
-
-
-media_test(){
-    local DEVICE=$1
-    local SILENT=${2:-"-n"}
-    local NAME=$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE)
-    #  local ROOT="/dev/$(env_root_device)"
-    #  local TEMP_FILE=tmpfile.img
-    MESSAGE=
-    # ones  = '/377'     = 11111111
-    # zeros = '/000'     = 00000000
-    # alt   = '/125'     = 01010101
-    
-    if [ ! -e $DEVICE ]; then
-      ui_msg  "Error 2" "$DEVICE does not exist"
-      return 2
-    fi
-    if [ $SILENT != '-y' ]; then
-        MSG="WARNING!! '$NAME' ($DEVICE) will be completely erased in testing.  Back it up first if needed.  \n\nThis will switch to a terminal screen to do the testing.  \n\nAre you sure you want to continue?"
-        RESULT=$(ui_yesno "TEST MEDIA '$NAME' $DEVICE" "$MSG" "--defaultno")
-        if [ $RESULT != 'y' ] ; then
-          return 3
-        fi
-    fi
-    
-    # countdown
-    do_beep
-    ui_countdown 10 "" "Overwriting '$(media_name $OUTDEV)' in 10 seconds...\n\n"
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        #whiptail --backtitle "$BACKTITLE" --title "TEST MEDIA" --msgbox "Test Media stopped... \n\n a key was pressed. " $WT_MB_HEIGHT $WT_MB_WIDTH
-		ui_msg	"TEST MEDIA" "Test Media stopped... \n\n a key was pressed. "
-        return $EXIT_CODE
-    fi    
-    
-    OLD_INTERFACE=$INTERFACE
-    
-    echo_white Unmounting $DEVICE...
-    umount $DEVICE? 2> /dev/null
-    
-    #test with ones \377
-    TIME1=$(date +%s)
-    media_test_pattern $1 '\377'
-    ONES_COMPARE=$?
-    if (( $ONES_COMPARE )) ; then
-      echo "error in testing ones"
-    fi
-    
-    #test with zeros \000
-    TIME2=$(date +%s)
-    media_test_pattern $1 "\000"
-    ZEROS_COMPARE=$?
-    if (( $ZEROS_COMPARE )) ; then
-      echo "error in testing zeros"
-    fi
-  
-    INTERFACE=$OLD_INTERFACE
-  
-    #summary
-    TIME3=$(date +%s)
-    if [ $ZEROS_COMPARE = 0 ] && [ $ONES_COMPARE = 0 ]; then
-       TEST_RESULTS="PASSED"
-    else
-        TEST_RESULTS="FAILED"
-    fi  
-    
-    
-    MESSAGE="$MESSAGE\n\nMedia Test $TEST_RESULTS ($(get_elapsed_time $TIME1 $TIME3))"
-    ui_msg "TEST MEDIA '$NAME' $DEVICE"  "$MESSAGE"
-    
-    pisafe_write_log "TEST MEDIA '$NAME' on $DEVICE...  $TEST_RESULTS"   
-}
 
 
 
@@ -2585,9 +2391,9 @@ menu_settings_default_path(){
     TEMP_PATH="$DEFAULT_PATH"
     while true; do
         NEWPATH=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --inputbox "$MSG" $WT_HEIGHT $WT_WIDTH "$TEMP_PATH" 3>&1 1>&2 2>&3)
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then 
-            return $EXIT_CODE
+        RC=$?
+        if (( $RC )); then
+            return $RC
         fi
         
         if [ ! -z $NEWPATH ]; then
@@ -2672,9 +2478,9 @@ menu_settings(){
         "Factory defaults    " "Reset settings to factory defaults" \
         3>&1 1>&2 2>&3)
         
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then
-            return $EXIT_CODE
+        RC=$?
+        if (( $RC )); then
+            return $RC
         else
             case "$SELECTION" in
             "Default d"*)       menu_settings_default_path ;;
@@ -2720,22 +2526,21 @@ menu_select_sddevice(){
     DEVICE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE"\
    --menu "Select media (Hide root = $HIDE_ROOT_DEVICE)" $WT_MB_HEIGHT $WT_MB_WIDTH 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
  
-    EXIT_CODE=$?
+    RC=$?
     unset IFS   
-     
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
+
+    if (( $RC )); then
+        return $RC
     fi
     
-    OUTDEV=$DEVICE_SELECTED
-    INDEV=$DEVICE_SELECTED
+   # OUTDEV=$DEVICE_SELECTED
+   # INDEV=$DEVICE_SELECTED
     echo $DEVICE_SELECTED
-    return 0
 }
 
 
 menu_get_outfile(){
-    OUTFILEDEFAULT="$DEFAULT_PATH/$(date +%Y-%m-%d-newimage)"
+    OUTFILEDEFAULT="$DEFAULT_PATH/$(date +%Y-%m-%d-pisafe)"
     EXT=$DEFAULT_EXTENSION
     OUTFILE=
            
@@ -2757,9 +2562,9 @@ menu_get_outfile(){
         \n\nRecommended to have NO SPACES in the name \
         \n\nEnter the image filename (eg: 2020-12-15-buster32)"
         NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP '$(media_name $INDEV)'" --inputbox "$MSG" $WT_HEIGHT_TALL $WT_WIDTH_WIDE "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then 
-            return $EXIT_CODE
+        RC=$?
+        if (( $RC )); then
+            return $RC
         fi
     
     
@@ -2773,9 +2578,10 @@ menu_get_outfile(){
         fi
  
         file_check_outfile
-        EXIT_CODE=$?
-        if [ $EXIT_CODE = 0 ]; then
-            break
+        RC=$?
+        if ! (( $RC )); then
+            #return $RC
+            break  # break out of the while loop
         fi
     done
         
@@ -2804,24 +2610,23 @@ menu_backup(){
     
     # get INDEV
     # Set global variables INDEV and OUTDEV
-    menu_select_sddevice "BACKUP" 
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ] ; then 
-        return $EXIT_CODE
-    fi   
+    INDEV=$(menu_select_sddevice "BACKUP")
+    RC=$?
+    if (( $RC )); then
+        return $RC
+    fi 
     
     media_check_indev
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
+    RC=$?
+    if (( $RC )); then
+        return $RC
     fi
-    
     
     # get OUTFILE
     menu_get_outfile
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
+    RC=$?
+    if (( $RC )); then
+        return $RC
     fi
     
 
@@ -2833,25 +2638,20 @@ menu_backup(){
         \nThis will switch to the terminal screen to watch the progress ...
         \n\nCreate backup image-file now?"
     ui_yesno "BACKUP : Create Image-file"  "$MSG"  --defaultno
-    EXIT_CODE=$?       
-    if [ $EXIT_CODE != 0 ] ; then
-        return $EXIT_CODE
+    RC=$?       
+    if (( $RC )) ; then
+        return $RC
     fi
 
 
     ###########################################################
     # this next line actually does the work!!
     media_backup $INDEV "$OUTFILE" "off" "gui"
-    EXIT_CODE=$?
     
-    if [ $EXIT_CODE != 0 ] || [ $DEBUG_MODE = "on" ]; then
-        echo Debug_mode=$DEBUG_MODE
-        echo Exit_code=$EXIT_CODE
-        read -n 1 -p "Press any key to continue..." 
-        if [ $EXIT_CODE != 0 ] ; then   
-            ui_msg "ERROR" "There was an error $ERROR_CODE" "red"
-            return $EXIT_CODE
-        fi   
+    RC=$?
+    if (( $RC )); then
+        ui_error $LINENO "Error '$RC' in media_backup"
+        return $RC
     fi 
     ###########################################################
 
@@ -2875,25 +2675,25 @@ menu_restore() {
     fi
 
     file_check_infile
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
-    fi  
+    RC=$?
+    if (( $RC )); then
+        return $RC
+    fi
 
 
     
     # GET OUTDEV
-    menu_select_sddevice "RESTORE"  y     # this sets global variable OUTDEV
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
-    fi    
+    OUTDEV=$(menu_select_sddevice "RESTORE"  y )    # this sets global variable OUTDEV
+    RC=$?
+    if (( $RC )); then
+        return $RC
+    fi 
 
     media_check_outdev
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
-        return $EXIT_CODE
-    fi  
+    RC=$?
+    if (( $RC )); then
+        return $RC
+    fi
     
     
 
@@ -2914,10 +2714,10 @@ menu_restore() {
     #Countdown 
     do_beep
     ui_countdown 10 "" "Overwriting '$(media_name $OUTDEV)' in 10 seconds...\n\n"
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ]; then
+    RC=$?
+    if (( $RC )); then
         whiptail --backtitle "$BACKTITLE" --title "RESTORE" --msgbox "Restore stopped... \n\n a key was pressed. " $WT_MB_HEIGHT $WT_MB_WIDTH
-        return $EXIT_CODE
+        return $RC
     fi    
               
     MEDIA_NAME=$(media_name $OUTDEV)          
@@ -2928,13 +2728,13 @@ menu_restore() {
     # the third parameter turns "SILENT" to "-y".  this is because we already checked with the GUI.
     
     media_restore "$INFILE" $OUTDEV -y gui
-    EXIT_CODE=$?
-    if [ $EXIT_CODE != 0 ] || [ $DEBUG_MODE = "on" ]; then
-        echo Debug_mode=$DEBUG_MODE
-        echo Exit_code=$EXIT_CODE
+    RC=$?
+    if [ $RC != 0 ] || [ $DEBUG_MODE = "on" ]; then
+        echo Debug_mode=$RC
+        echo Exit_code=$RC
         read -n 1 -p "Press any key to continue..." 
-        if [ $EXIT_CODE != 0 ] ; then
-            return $EXIT_CODE
+        if (( $RC )) ; then
+            return $RC
         fi   
     fi 
     ###################################################
@@ -2975,16 +2775,14 @@ menu_tools(){
           "  "              "=== MEDIA TOOLS ===" \
         "DETAILS"          "Media details" \
         "ERASE"             "Quick format media" \
-        "WIPE"              "Destructively wipe media with zeros " \
-        "TEST"              "Destructively test media with zeros and ones (slow)" \
         "  "               "  " \
         "TERMINAL"          "View the terminal (for debugging)" \
         "LOG"               "View the log file" \
         3>&1 1>&2 2>&3)
         
-        EXIT_CODE=$?
-        if [ $EXIT_CODE != 0 ]; then
-            return $EXIT_CODE
+        RC=$?
+        if (( $RC )); then
+            return $RC
         else
             case "$SELECTION" in
             INSTALL)    pisafe_install  ;;
@@ -2992,9 +2790,10 @@ menu_tools(){
             UNINSTALL)  pisafe_uninstall ;;
             DETAILS)    
                 DEVICE=$(menu_select_sddevice "MEDIA DETAILS")
-                if ! (( $? )); then
-                  media_details $DEVICE
+                if (( $? )); then
+                    return 1
                 fi  
+                media_details $DEVICE
                 ;;
                 
             ERASE)                  
@@ -3006,41 +2805,47 @@ menu_tools(){
                 FORMAT=$(whiptail --clear --backtitle "$BACKTITLE" --title "Select format" --ok-button "Select" --cancel-button "Exit" --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
                             "fat32"     "     Most universal format" \
                             "ntfs"      "     Native Windows format" \
-                            "ext4"      "     Native Linux format" 3>&1 1>&2 2>&3)
+                            "ext4"      "     Native Linux format" \
+                            "exfat"     "     Newer universal format rec for media over 32GB" 3>&1 1>&2 2>&3)
                 if (( $? )); then
                     return 2
                 fi
-             
                 media_format "$DEVICE" "$FORMAT"  
                 ;;
                 
             WIPE) 
                 DEVICE=$(menu_select_sddevice "WIPE MEDIA" "y")
-                if ! (( $? )); then
-                  media_wipe $DEVICE
+                if (( $? )); then
+                    return 1
                 fi  
+                media_wipe $DEVICE
                 ;;
                 
             TEST) 
                 DEVICE=$(menu_select_sddevice "TEST MEDIA" "y")
-                if ! (( $? )); then
-                  media_test $DEVICE
+                if (( $? )); then
+                    RETURN 1
                 fi  
+                media_test $DEVICE
                 ;;
         
 
             TERMINAL)   read -n 1 -p "Press any key to return"  ;;
+            
             LOG)        $TEXT_EDITOR $LOG_FILE ;;
             
             HELP)
                 HELP_INFO="$(pisafe_help)"
                 whiptail --backtitle "$BACKTITLE"  --title "HELP" --scrolltext --msgbox "$HELP_INFO" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
                 ;;
+                
             ABOUT)
                 ABOUT_INFO="$(pisafe_about)"
                 whiptail --backtitle "$BACKTITLE"  --title "ABOUT" --scrolltext --msgbox "$ABOUT_INFO" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
                 ;;  
+                
             "  ")  ;;     
+            
             *)     whiptail --msgbox "Programmer error: unrecognized option" $WT_HEIGHT  $WT_WIDTH  $WT_MENU_HEIGHT ;;
             esac 
         fi
@@ -3186,6 +2991,13 @@ config_var_init_configfile
 config_var_get_settings
 
 whiptail_calc_wt_size
+
+#test
+#INTERFACE=c
+#ui_error $LINENO "test of an error msg"
+#exit
+
+
 
 ## check for updates if not uninstalling
 if [ ! ~$1 = ~uninstall ]; then
