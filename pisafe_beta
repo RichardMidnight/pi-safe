@@ -2118,6 +2118,7 @@ media_backup_estimate() {
     MEDIA_PARTITION_COUNT=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1 | wc -l)
     MEDIA_PARTITION_LIST=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1)
     MEDIA_LAST_PARTITION_NUMBER=$(echo "$PARTED_OUTPUT" | tail -1 | cut -d: -f1)
+    MEDIA_LAST_PARTITION_FS=$(echo "$PARTED_OUTPUT" | tail -1 | cut -d: -f5)
 
     case $MEDIA in
         /dev/sd*)
@@ -2156,9 +2157,9 @@ media_backup_estimate() {
         MEDIA_LAST_PARTITION_TYPE=primary
     fi
 
-    MEDIA_LAST_PARTITION_FS=$(lsblk -no FSTYPE $MEDIA$MEDIA_LAST_PARTITION_NUMBER  )
+  #  MEDIA_LAST_PARTITION_FS=$(lsblk -no FSTYPE $MEDIA$MEDIA_LAST_PARTITION_NUMBER  )
 
-    MSG=$MSG"\n===== MEDIA BACKUP ESTIMATES ===== \n"
+    MSG=$MSG"\n===== $PRODUCTNAME BACKUP ESTIMATES ===== \n"
     MSG=$MSG"Media size                         =  $(get_bytes $MEDIA_SIZE -h)\n"
 
 
@@ -2177,11 +2178,8 @@ media_backup_estimate() {
     SHRINK_BYTES=0
     UNCOMPRESSED_BYTES=0
     case $MEDIA_LAST_PARTITION_FS in
+    
         ext4|ext3|ext2)
-        
-#ui_msg note "'$MEDIA_PARTITION_TABLE'"
-#ui_msg note "'$MEDIA_LAST_PARTITION_TYPE'"  
-        
             if [ "$MEDIA_PARTITION_TABLE" = "gpt" ] || ( [ "$MEDIA_PARTITION_TABLE" = "msdos" ] && [ "$MEDIA_LAST_PARTITION_TYPE" = "primary"  ] ) ; then
                 SHRINK_BYTES=$(sudo lsblk $MEDIA -lpbo name,fsavail | grep $MEDIA_LAST_PARTITION_NAME | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
             else
@@ -2238,7 +2236,6 @@ media_format(){
     local DEVICE=$1
     local FORMAT=${2:-"fat32"}    # fat32, ntfs, ext4
     local SILENT=${3:-"-n"}
-    
     local ROOT="/dev/$(env_root_device)"
     local TYPE=$(lsblk $DEVICE -dnpo TYPE)
     local NAME="$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE) ($DEVICE)"
@@ -2340,7 +2337,6 @@ media_format(){
             EC=$?
    
             ;;        
-            
     esac
 
     if (( $EC != 0 )); then
@@ -2363,9 +2359,6 @@ media_format(){
 
     ui_msg "ERASE MEDIA" "'$NAME' ($DEVICE) has been erased. \n\nIt has been remounted."
 }
-
-
-
 
 
 
