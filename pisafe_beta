@@ -2137,8 +2137,6 @@ media_backup_estimate() {
     fi
 
 
-#PARTED_OUTPUT=$(sudo parted -ms $MEDIA print)  # no freespace
-
  #   case $MEDIA_PARTITION_TABLE in
  #       msdos)
  #           MEDIA_LAST_PARTITION_TYPE=$(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | cut -d " " -f6)
@@ -2151,6 +2149,12 @@ media_backup_estimate() {
  #       *)
  #           ;;
  #   esac	
+
+    if [ -z "$(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | grep primary)" ]; then
+        MEDIA_LAST_PARTITION_TYPE=logical
+    else
+        MEDIA_LAST_PARTITION_TYPE=primary
+    fi
 
     MEDIA_LAST_PARTITION_FS=$(lsblk -no FSTYPE $MEDIA$MEDIA_LAST_PARTITION_NUMBER  )
 
@@ -2181,7 +2185,7 @@ media_backup_estimate() {
             if [ "$MEDIA_PARTITION_TABLE" = "gpt" ] || ( [ "$MEDIA_PARTITION_TABLE" = "msdos" ] && [ "$MEDIA_LAST_PARTITION_TYPE" = "primary"  ] ) ; then
                 SHRINK_BYTES=$(sudo lsblk $MEDIA -lpbo name,fsavail | grep $MEDIA_LAST_PARTITION_NAME | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
             else
-                MSG=$MSG"Warning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This filesystem will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
+                MSG=$MSG"Warning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This partition-type will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
             fi
             ;;
 
