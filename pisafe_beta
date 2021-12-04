@@ -1130,15 +1130,19 @@ do_install_lua(){
     # see if a versioned copy of lua is installed, fix if needed 
     LUA_VERS="lua lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
     for LUA_VER in $LUA_VERS; do
+echo looking for $LUA_VER        
         $LUA_VER -v 2>/dev/null
         if [ $? = 0 ]; then  #  LUA_VER found
             lua -v 2>/dev/null
             if [ $? = 0 ]; then   # lua works, can return
+echo lua $LUA_VER found              
                 return
             else
                 #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
+echo copying $LUA_VER to lua			
                 sudo cp /usr/bin/$LUA_VER /usr/bin/lua
                 return
+            fi    
         fi
      done 
      
@@ -1154,13 +1158,14 @@ do_install_lua(){
                return
             else  # error so we need to fix it.
                #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
+echo copying $LUA_VER to lua               
                sudo cp /usr/bin/$LUA_VER /usr/bin/lua
                return
             fi
         fi
     done
     
-    lua -v
+   # lua -v
 }
 
 
@@ -1188,6 +1193,7 @@ pisafe_install_tools() {
                 wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
                 sudo chmod +x pishrink.sh
                 sudo mv pishrink.sh /usr/local/bin
+                
                 if [ ! -f /usr/local/bin/pishrink.sh ] ; then
                   ui_msg "Error" "pishrink not installed." "red" 
                 else
