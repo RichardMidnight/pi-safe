@@ -1121,25 +1121,35 @@ do_install_lua(){
     # try to find a version of lua that will install
     # lua.org
     
-    # see if lua is installed, fix if needed 
+    # return if lua is installed
+    lua -v 2>/dev/null
+    if [ $? = 0 ]; then  # lua works
+        return
+    fi
+    
+    
+    # see if a versioned copy of lua is installed, fix if needed 
     LUA_VERS="lua lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
     for LUA_VER in $LUA_VERS; do
-        1>/dev/null 2>/dev/null $LUA_VER -v 
+       # 1>/dev/null 2>/dev/null $LUA_VER -v 
+        $LUA_VER -v 2>/dev/null
         if [ $? = 0 ]; then  #  LUA_VER found
             #1>/dev/null lua -v
-            lua -v 2>/dev/null
-            if [ $? = 0 ]; then   # lua works, can return
-              return
-            else
+            #lua -v 2>/dev/null
+            #if [ $? = 0 ]; then   # lua works, can return
+            #  return
+            #else
                 #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
-                for LUA_TEST in "lua5.4 lua5.3 lua5.2 lua5.1"; do
-                    if [ -f /usr/bin/$LUA_TEST ]; then
-                        # this should probably should be an alias...
-                        sudo cp /usr/bin/$LUA_TEST /usr/bin/lua
-                        return
-                    fi
-                done
-            fi
+                sudo cp /usr/bin/$LUA_VER /usr/bin/lua
+                return
+                #for LUA_TEST in "lua5.4 lua5.3 lua5.2 lua5.1"; do
+                #    if [ -f /usr/bin/$LUA_TEST ]; then
+                #        # this should probably should be an alias...
+                #        sudo cp /usr/bin/$LUA_TEST /usr/bin/lua
+                #        return
+                #    fi
+                #done
+            #fi
         fi
      done 
      
@@ -1148,11 +1158,11 @@ do_install_lua(){
      for LUA_VER in $LUA_VERS; do
         echo Trying to install $LUA_VER ...
         sudo $INSTALL $LUA_VER
-        if (( $? )); then  # no error so LUA_VER installed
+        if [ $? = 0 ]; then  # no error so LUA_VER installed
           # see if we need to fix lua
           1>/dev/null lua -v
           if (( $? )); then  # lua works, can return
-       #     return
+        #     return
        #   else  # error so we need to fix it.
             #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
             for LUA_TEST in "lua5.4 lua5.3 lua5.2 lua5.1"; do
