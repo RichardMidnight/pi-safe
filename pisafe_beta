@@ -102,9 +102,9 @@ pisafe_help() {
     echo "  backup [device] [file]       - backup media to image-file"
     echo "  restore [file] [device] [-y] - restore image-file to media"
     echo "  details [device]             - show media details"
-    echo "  erase [device] [-y]          - format media as FAT32"
-    echo "  wipe [device] [-y]           - wipe media.  Fill with zeros"
-    echo "  test [device] [-y]           - test media.  Write and read ones and zeros"
+    echo "  erase [device] [-y]          - format media as FAT32 exfat ntfs or ext4"
+ #   echo "  wipe [device] [-y]           - wipe media.  Fill with zeros"
+ #   echo "  test [device] [-y]           - test media.  Write and read ones and zeros"
     echo "  install [-y]                 - install this script"
     echo "  update [-y]                  - update script from website"
     echo "  uninstall [-y]               - uninstall this script"
@@ -1130,16 +1130,16 @@ do_install_lua(){
     # see if a versioned copy of lua is installed, fix if needed 
     LUA_VERS="lua lua5.4 lua5.3 lua5.2 lua5.1 lua54 lua53 lua52 lua51"
     for LUA_VER in $LUA_VERS; do
-echo looking for $LUA_VER        
+#echo looking for $LUA_VER        
         $LUA_VER -v 2>/dev/null
         if [ $? = 0 ]; then  #  LUA_VER found
             lua -v 2>/dev/null
             if [ $? = 0 ]; then   # lua works, can return
-echo lua $LUA_VER found              
+#echo lua $LUA_VER found              
                 return
             else
                 #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
-echo copying $LUA_VER to lua			
+#echo copying $LUA_VER to lua			
                 sudo cp /usr/bin/$LUA_VER /usr/bin/lua
                 return
             fi    
@@ -1158,7 +1158,7 @@ echo copying $LUA_VER to lua
                return
             else  # error so we need to fix it.
                #crude patch for arch/manjaro  install is lua54 but goes to /usr/bin/lua5.4
-echo copying $LUA_VER to lua               
+#echo copying $LUA_VER to lua               
                sudo cp /usr/bin/$LUA_VER /usr/bin/lua
                return
             fi
@@ -1173,15 +1173,12 @@ pisafe_install_tools() {
     TOOL_MISSING=false
     INSTALL=$(env_installer)  
     
-    do_install_lua
-    
     for TOOL in $REQUIRED_TOOLS ; do
-        #if [ ! -f /usr/bin/$TOOL ]  && [ ! -f /usr/local/bin/$TOOL ] ; then
         if [ -z $(which $TOOL) ] ; then
             case $TOOL in
             
             xz)
-                echo_white Instlling xz-utils...
+                echo_white Installing xz-utils...
                 sudo $INSTALL xz-utils
                 if [ ! -f /usr/bin/xz ]; then
                    ui_msg "Error" "xz not installed." "red" 
@@ -1195,10 +1192,15 @@ pisafe_install_tools() {
                 sudo mv pishrink.sh /usr/local/bin
                 
                 if [ ! -f /usr/local/bin/pishrink.sh ] ; then
-                  ui_msg "Error" "pishrink not installed." "red" 
+                    ui_msg "Error" "pishrink not installed." "red" 
                 else
-                  ui_msg  pishrink installed.
+                    ui_msg  pishrink installed.
                 fi
+                ;;
+            
+            lua)
+                echo_white Installing lua...
+                do_install_lua
                 ;;
             
             *)
@@ -2240,7 +2242,6 @@ media_format(){
     local TYPE=$(lsblk $DEVICE -dnpo TYPE)
     local NAME="$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE) ($DEVICE)"
     local PART1=$DEVICE\1
-    
 
     if [ -z $1 ] ; then
         echo "Error 1: Device not specified, choose:"
@@ -2335,7 +2336,6 @@ media_format(){
             #run_command "sudo mkfs.exfat -n EXFAT $PART1" $LINENO
             sudo mkfs.exfat -n EXFAT $PART1
             EC=$?
-   
             ;;        
     esac
 
@@ -2548,9 +2548,7 @@ menu_get_outfile(){
     MEDIA_OS="$(media_os  $INDEV)"       
            
   #  echo "Calculating backup estimates..."
-    ESTIMATES=$(media_backup_estimate $INDEV)     
-  #  echo "$ESTIMATES"     
-  #  echo       
+    ESTIMATES=$(media_backup_estimate $INDEV)         
            
      while true; do   
     
@@ -2992,12 +2990,6 @@ config_var_init_configfile
 config_var_get_settings
 
 whiptail_calc_wt_size
-
-#test
-#INTERFACE=c
-#ui_error $LINENO "test of an error msg"
-#exit
-
 
 
 ## check for updates if not uninstalling
