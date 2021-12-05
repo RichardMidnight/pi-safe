@@ -208,7 +208,7 @@ env_texteditor(){
     TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
     
     for TEXT_EDITOR in $TEXT_EDITORS ; do
-        if [ -f /usr/bin/$TEXT_EDITOR ]; then
+        if [[ -f /usr/bin/$TEXT_EDITOR ]]; then
             echo $TEXT_EDITOR
             return
         fi
@@ -231,11 +231,11 @@ env_root_device() {
 # ---------- Config_var functions
 
 config_var_init_configfile(){
-    if [ ! -d $(file_path $CONFIG) ]; then
+    if [[ ! -d $(file_path $CONFIG) ]]; then
         mkdir -p $(file_path $CONFIG)
     fi
     
-    if [ ! -f $CONFIG ]; then
+    if [[ ! -f $CONFIG ]]; then
         touch $CONFIG
         echo "# $CONFIG" > $CONFIG
         config_var_set_defaults
@@ -378,10 +378,10 @@ whiptail_calc_wt_size() {
     WT_HEIGHT_TALL=$(($(tput lines)-10))
     WT_WIDTH_WIDE=$(($(tput cols)-7))
 
-    if [ -z "$WT_WIDTH" ] || [ "$WT_WIDTH" -lt 60 ]; then
+    if [[ -z $WT_WIDTH ]] || [[ $WT_WIDTH -lt 60 ]]; then
         WT_WIDTH=80
     fi
-    if [ "$WT_WIDTH" -gt 178 ]; then
+    if [[ $WT_WIDTH -gt 178 ]]; then
         WT_WIDTH=80
     fi
 
@@ -394,7 +394,6 @@ whiptail_calc_wt_size() {
 
 
 whiptail_fselect() {
-
 #
 #  Arguments
 #     1  Dialog title
@@ -421,7 +420,7 @@ whiptail_fselect() {
     local ALLOW_BACK=${4:-no}
     local FILES=()
 
-    [ "$ALLOW_BACK" != "no" ] && FILES+=(".." "..")
+    [[ $ALLOW_BACK != "no" ]] && FILES+=(".." "..")
 
     IFS=$'\t\n'
 
@@ -448,13 +447,13 @@ whiptail_fselect() {
     num='^[0-9]+$'
     arraylength=${#FILES[@]}
     
-    if [ $arraylength = 0 ]; then
+    if [[ $arraylength = 0 ]]; then
         FILES=(no files)
     fi
     
     for (( i=0; i<${arraylength}; i++ )); do
 		arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
-		if [[ "$arrayelement" =~ $num ]] ; then  
+		if [[ $arrayelement =~ $num ]] ; then  
             #FILES[$i]=$(echo "    " $(get_bytes_h $arrayelement -h))
             FILES[$i]=$(echo "    " $(get_bytes $arrayelement -h) \($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h)\)) 
 		else
@@ -472,28 +471,28 @@ whiptail_fselect() {
         #exit if bad whiptail statement
         FSX=${FILE_SELECTED:0:3}
        # if [ ! -z $FSX ] && [ $FSX = "Box" ]; then
-        if [ ~$FSX = "~Box" ]; then
+        if [[ ~$FSX = "~Box" ]]; then
             echo "ERROR in whiptail in whiptail_fselect.  Maybe a space in a filename?"
 			echo "${FILES[@]}"
             exit 1
         fi
         
-        if [ -z "$FILE_SELECTED" ]; then
+        if [[ -z $FILE_SELECTED ]]; then
             return 1
         else
-            if [ "$FILE_SELECTED" = ".." ] && [ "$ALLOW_BACK" != "no" ]; then
+            if [[ $FILE_SELECTED = ".." ]] && [[ $ALLOW_BACK != "no" ]]; then
                 return 0
 
-            elif [ -d "$LOCAL_PATH/$FILE_SELECTED" ] ; then
+            elif [[ -d $LOCAL_PATH/$FILE_SELECTED ]] ; then
                 if whiptail_fselect "$TITLE" "$LOCAL_PATH/$FILE_SELECTED" "$FILE_MASK" "yes" ; then
-                    if [ "$FILE_SELECTED" != ".." ]; then
+                    if [[ $FILE_SELECTED != ".." ]]; then
                         return 0
                     fi
                 else
                     return 1
                 fi
 
-            elif [ -f "$LOCAL_PATH/$FILE_SELECTED" ] ; then
+            elif [[ -f $LOCAL_PATH/$FILE_SELECTED ]] ; then
                 FILE_SELECTED="$LOCAL_PATH/$FILE_SELECTED"
                 return 0
             fi
@@ -510,8 +509,8 @@ whiptail_countdown(){
     for ((i=$MAX; i>=0; i--)) ; do
 		TERM=vt220 whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --infobox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
         read -t 1 -N 1 INPUT
-        if [ ! -z $INPUT ]; then
-            if [ $INPUT = "y" ]; then
+        if [[ ! -z $INPUT ]]; then
+            if [[ $INPUT = y ]]; then
                 echo Continuing...
                 return 0
             else
@@ -533,10 +532,10 @@ ui_msg() {
     COLOR=${3:-"white"}
     OK_BUTTON=${4:-"Back"}
     
-    if [ $INTERFACE = "cli" ]; then
+    if [[ $INTERFACE = "cli" ]]; then
         #MSG="$PRODUCTNAME: $TITLE: $MSG"
         echo -n "$PRODUCTNAME: $TITLE: "
-        if [ $COLOR = "red" ]; then
+        if [[ $COLOR = "red" ]]; then
             echo_red "$MSG"
         else    
             echo -e "$MSG"
@@ -553,7 +552,7 @@ ui_yesno(){
     DEFAULT=${3:-""}   # defaults to Yes.  can specify --defaultno
     COLOR=${4:-"white"}
     
-    if [ $INTERFACE = "cli" ]; then
+    if [[ $INTERFACE = "cli" ]]; then
         MSG="$PRODUCTNAME: $TITLE: $MSG  [y/n]?"
         while true; do
             read -n1 -p "$MSG" yn
@@ -581,7 +580,7 @@ ui_countdown(){
     local SECONDS=${1:-10}
     local TITLE=$2
     local MESSAGE=${3:-"Counting down..."}
-    if [ "$INTERFACE" = "cli" ]; then
+    if [[ $INTERFACE = "cli" ]]; then
         do_countdown $1
     else
         whiptail_countdown "$SECONDS" "$TITLE" "$MESSAGE"
@@ -593,7 +592,6 @@ ui_error() {
     LINE=$1
     shift
     MSG="$@"
-
     ui_msg "Error in line $LINE" "$MSG" red    
 }
 
@@ -602,7 +600,7 @@ ui_error() {
 echo_if_cli (){
     local MSG=$1
     local COLOR=$2
-    if [ "$INTERFACE" = "cli" ]; then
+    if [[ $INTERFACE = "cli" ]]; then
         case $COLOR in
             white) echo_white $MSG ;;
             red)    echo_red $MSG ;;
@@ -621,10 +619,10 @@ do_countdown(){
     for number in $(seq 1 $MAX) ; do
 		echo -n ".$(($MAX-$number))"
         read -t 1 -N 1 INPUT
-        if [ ! -z "$INPUT" ]; then
-            if [ "$INPUT" = "y" ]; then
+        if [[ ! -z $INPUT ]]; then
+            if [[ $INPUT = "y" ]]; then
                 echo continuing...
-                return 0
+                return
             else
                 echo $INPUT
                 return 2
@@ -637,22 +635,22 @@ do_countdown(){
 
 
 do_beep(){
-    FREQ=${1:-700}
+    FREQ=${1:-600}
     TIME=${2:-.5}
-    if [ "$SOUND" = on ] ; then
-        (speaker-test -t sign -f $FREQ > /dev/null  & sleep $TIME && kill -9 $! ) > /dev/null
+    if [[ $SOUND = on ]] ; then
+        (speaker-test -t sign -f $FREQ > /dev/null & sleep $TIME && kill -9 $! ) > /dev/null
       #  sleep .5  # to allow the beep to end
     fi
 }
 
 do_beep_up(){
-    do_beep 700 .4
-    do_beep 900 .6
+    do_beep 500 .3
+    do_beep 600 .6
 }
 
 do_beep_down(){
-   do_beep 900 .5
-   do_beep 700 .5
+   do_beep 600 .3
+   do_beep 500 .6
 }
 
 
@@ -685,26 +683,26 @@ get_bytes(){
 
     
     NUM='^[0-9]+$'
-    if ! [[ "$BYTES" =~ $NUM ]] ; then   # not a number   
+    if ! [[ $BYTES =~ $NUM ]] ; then   # not a number   
         return 1
     fi
     
 
     # if no translation needed... then just echo the input and leave
-    if [ $OUTPUT != "-h" ] && [ -z $SUFFIX ] ; then
+    if [[ $OUTPUT != "-h" ]] && [[ -z $SUFFIX ]] ; then
         echo $BYTES
         return
     fi
     
-    if [ $OUTPUT = "-h" ] && [ ! -z $SUFFIX ] ; then
+    if [[ $OUTPUT = "-h" ]] && [[ ! -z $SUFFIX ]] ; then
         echo $BYTES
         return
     fi
 
 
-    if [ $OUTPUT = "-h" ] ; then  # translate to human readable
+    if [[ $OUTPUT = "-h" ]] ; then  # translate to human readable
     
-        if [ -z $SUFFIX ]; then
+        if [[ -z $SUFFIX ]]; then
             local LEN=${#BYTES}
             local k_ilo=1024;
             local m_ega=$k_ilo*$k_ilo;
@@ -712,10 +710,10 @@ get_bytes(){
             local t_era=$g_iga*$k_ilo;
             local p_eta=$t_era*$k_ilo;
             
-            [ -z "$BYTES" ] && return
+            [[ -z $BYTES ]] && return
             
             NUM='^[0-9]+$'
-            if ! [[ "$BYTES" =~ $NUM ]] ; then   # not a number   
+            if ! [[ $BYTES =~ $NUM ]] ; then   # not a number   
                 return 1
             fi
             
@@ -800,7 +798,7 @@ file_ext(){
 	base=$(basename "$*")
 	#look for a period in the basename.  if there is one, there is an extention
 	HAS_DOT=$(echo "$base" | grep \\.)
-	if [ ! -z "$HAS_DOT" ] ; then
+	if [[ ! -z $HAS_DOT ]] ; then
 		echo $base | sed 's#.*\.##g'
 	else  
 		echo ""
@@ -814,13 +812,13 @@ file_size() {
     local HUMAN=${2:-"no"}
     # $2 can be -h
     
-    if [ -f "$FILE" ] ; then
+    if [[ -f $FILE ]] ; then
         SIZE_BYTES="$(($(ls -s "$FILE" | cut -d' ' -f1) * 1024))"
         RC=$?
         if (( $RC )); then
             return $RC
         fi
-        if [ $HUMAN = "-h" ]; then
+        if [[ $HUMAN = "-h" ]]; then
             echo $(get_bytes $SIZE_BYTES -h)
         else
             echo $SIZE_BYTES
@@ -865,12 +863,12 @@ file_image_size() {
         ;;
     esac
     
-    if [ -z $SIZE_BYTES ] ; then
+    if [[ -z $SIZE_BYTES ]] ; then
         echo 0 
         return 0
     fi
     
-    if [ $HUMAN = "-h" ]; then
+    if [[ $HUMAN = "-h" ]]; then
         echo $(get_bytes $SIZE_BYTES -h)
     else
         echo $SIZE_BYTES
@@ -885,7 +883,7 @@ file_image_exists(){
     local INFILE="$*"
     local IMG
     
-    if [ ! -f "$INFILE" ] ; then
+    if [[ ! -f $INFILE ]] ; then
         #echo_if_cli "ERROR '$INFILE' not found"
         ui_error $LINENO "'$INFILE' not found"
         return 1
@@ -915,7 +913,7 @@ file_image_exists(){
         ;;
     esac
     
-    if [ ! -z "$IMG" ] ; then
+    if [[ ! -z $IMG ]] ; then
         echo "$IMG" [OK]
         return 0
     else
@@ -972,7 +970,7 @@ file_fs_freespace() {
     local FORMAT=${2:-"-B1"}   # -B1 for bytes    -h for humanreadable
     local FREESPACE
     
-    if [ -d "$FILENAME" ]; then
+    if [[ -d $FILENAME ]]; then
         FREESPACE=$(df "$FILENAME" $FORMAT --output=avail | grep -v Avail)
         RC=$?
     else
@@ -992,7 +990,7 @@ file_folder_size() {
     local FOLDER=$*
     # returns human readable
     
-    if [ -d "$FOLDER" ] ; then
+    if [[ -d $FOLDER ]] ; then
         sudo du -sh "$FOLDER" | cut -d'/' -f1 | sed 's/\s\s*/ /g'
         RC=$?
         if (( $RC )); then
@@ -1009,19 +1007,19 @@ file_check_outfile(){
     # returns 0 if good
     
     #Quit if outfile is blank
-    if [ -z "$OUTFILE" ] ; then
+    if [[ -z $OUTFILE ]] ; then
         ui_msg "ERROR 1" "File '$OUTFILE' can't be blank" "red"
         return 1
     fi  
     
     # Quit if path does not exist
-    if [ ! -d  "$(file_path $OUTFILE)" ] ; then     
+    if [[ ! -d  $(file_path $OUTFILE) ]] ; then     
         ui_msg "Error 2" "Directory does not exist '$(file_path $OUTFILE)'" "red"
         return 2
     fi
     
     # add ext if missing
-    if [ -z $(file_ext "$OUTFILE") ]; then
+    if [[ -z $(file_ext "$OUTFILE") ]]; then
         echo "No extension specified.  Adding '.img.$DEFAULT_EXTENSION'"
         OUTFILE=$OUTFILE.img.$DEFAULT_EXTENSION
         #OUTFILE_EXT=$(file_ext $OUTFILE)
@@ -1029,32 +1027,32 @@ file_check_outfile(){
     fi
 
     # insert .img if missing
-    if [ "$(echo "$OUTFILE" | grep img)" = "" ] && [ "$(echo "$OUTFILE" | grep iso)" = "" ]; then
+    if [[ $(echo "$OUTFILE" | grep img) = "" ]] && [[ $(echo "$OUTFILE" | grep iso) = "" ]]; then
         echo "inserting .img"
         OUTFILE=$(file_path_base "$OUTFILE").img.$(file_ext "$OUTFILE")
         echo "OUT-FILE='$OUTFILE'" 
     fi
 
     # quit if unsupported extension
-    if [ -z $(file_ext_ok "$OUTFILE") ]; then
+    if [[ -z $(file_ext_ok "$OUTFILE") ]]; then
         ui_msg "ERROR 3" "Unsupported file extension '$(file_ext $OUTFILE)'" "red"
         return 3 
     fi
 
     # Quit if outfile exists
-    if  [ -f "$OUTFILE" ]  ; then
+    if  [[ -f $OUTFILE ]]  ; then
         ui_msg "ERROR 4" "File '$OUTFILE' already exists" "red"
         return 4
     fi 
 
     # Quit if OUTFILE_BASE.img exists
-    if  [ -f "$(file_path_base $OUTFILE)".img ]  ; then
+    if  [[ -f $(file_path_base $OUTFILE).img ]]  ; then
         ui_msg "ERROR 5" "File '$(file_path_base $OUTFILE).img' already exists" "red"
         return 5
     fi 
     
     # Quit if OUTFILE_BASE.img.ext exists
-    if  [ -f "$(file_path_base $OUTFILE)".img.$(file_ext "$OUTFILE") ]  ; then
+    if  [[ -f $(file_path_base $OUTFILE).img.$(file_ext "$OUTFILE") ]]  ; then
         ui_msg "ERROR 6" "File '$(file_path_base $OUTFILE).img.$(file_ext "$OUTFILE")' already exists" "red"
         return 6
     fi 
@@ -1063,13 +1061,13 @@ file_check_outfile(){
 
 file_check_infile(){
     # quit if infile is blank
-    if [ -z "$INFILE" ] ; then
+    if [[ -z $INFILE ]] ; then
         ui_msg "ERROR 1" "File '$INFILE' cannot be blank" "red"
         return 1
     fi 
     
     # quit if infile not found
-    if  [ ! -f "$INFILE" ]  ; then
+    if  [[ ! -f $INFILE ]]  ; then
         ui_msg "ERROR 2" "File '$INFILE' not found" "red"
         return 2
     fi 
@@ -1174,13 +1172,13 @@ pisafe_install_tools() {
     INSTALL=$(env_installer)  
     
     for TOOL in $REQUIRED_TOOLS ; do
-        if [ -z $(which $TOOL) ] ; then
+        if [[ -z $(which $TOOL) ]] ; then
             case $TOOL in
             
             xz)
                 echo_white Installing xz-utils...
                 sudo $INSTALL xz-utils
-                if [ ! -f /usr/bin/xz ]; then
+                if [[ ! -f /usr/bin/xz ]]; then
                    ui_msg "Error" "xz not installed." "red" 
                 fi
                 ;;
@@ -1191,7 +1189,7 @@ pisafe_install_tools() {
                 sudo chmod +x pishrink.sh
                 sudo mv pishrink.sh /usr/local/bin
                 
-                if [ ! -f /usr/local/bin/pishrink.sh ] ; then
+                if [[ ! -f /usr/local/bin/pishrink.sh ]] ; then
                     ui_msg "Error" "pishrink not installed." "red" 
                 else
                     ui_msg  pishrink installed.
@@ -1218,7 +1216,7 @@ pisafe_install_tools() {
 
 pisafe_write_log(){
     INFO=$*
-    if [ $LOG = "on" ]; then
+    if [[ $LOG = "on" ]]; then
         touch $LOG_FILE
         echo "$(date "+%Y-%m-%d %H:%M"), $INFO" >> $LOG_FILE
     fi
@@ -1228,9 +1226,9 @@ pisafe_write_log(){
 pisafe_install(){
     SILENT=${1:-"-n"}
     
-    if [ $SILENT != "-y" ]; then
+    if [[ $SILENT != "-y" ]]; then
         RESULT=$(ui_yesno "INSTALL" "Install $PRODUCTNAME $SCRIPTVER?")
-        if [ $RESULT != "y" ]; then
+        if [[ $RESULT != "y" ]]; then
             #echo
             ui_msg "NOTICE" "$PRODUCTNAME not installed"
             return
@@ -1272,12 +1270,12 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
     # for just this user, put it in $HOME/.local/share/applications/
     #mv "$PRODUCTNAME.desktop" "$HOME/.local/share/applications/"
 
-    if [ -f "/usr/local/bin/$SCRIPTNAME" ]; then 
+    if [[ -f /usr/local/bin/$SCRIPTNAME ]]; then 
         MSG="$PRODUCTNAME $SCRIPTVER installed.            
         \nSelect it from the 'Accessories' menu.
         \n\nOr you can execute it from any directory by typing '$SCRIPTNAME'."
         
-        if [ $INTERFACE = "cli" ]; then
+        if [[ $INTERFACE = "cli" ]]; then
             MSG="$PRODUCTNAME $SCRIPTVER installed.  Select it from the 'Accessories' menu or you can execute it in a terminal window by typing '$SCRIPTNAME'."
         fi
         
@@ -1304,20 +1302,20 @@ pisafe_update() {
     fi    
 
     # did we get the new version from the server?
-    if [ -f $SCRIPTNAME.tmp ]; then
+    if [[ -f $SCRIPTNAME.tmp ]]; then
         SERVER_VER=$(bash $SCRIPTNAME.tmp -v)
     else
         return 1
     fi
 
-    if [ $(get_ver_to_int $SERVER_VER) -gt $(get_ver_to_int $SCRIPTVER) ]; then
-        if [ $YES = "-y" ]; then
+    if [[ $(get_ver_to_int $SERVER_VER) -gt $(get_ver_to_int $SCRIPTVER) ]]; then
+        if [[ $YES = "-y" ]]; then
             RESULT="y"
         else
             RESULT=$(ui_yesno "UPDATE AVAILABLE" "Update $PRODUCTNAME from '$SCRIPTVER'  to '$SERVER_VER' ")
         fi
         
-        if [ $RESULT = "y" ]; then 
+        if [[ $RESULT = "y" ]]; then 
             sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
             sudo chmod +x /usr/local/bin/$SCRIPTNAME
             echo "$($SCRIPTNAME -v) installed. Press any key to exit... "
@@ -1326,7 +1324,7 @@ pisafe_update() {
         fi
     else  
         rm $SCRIPTNAME.tmp
-        if [ $SUMMARY = yes ]; then
+        if [[ $SUMMARY = yes ]]; then
             ui_msg "UPDATE" "$PRODUCTNAME is up to date.  Server ver is '$SERVER_VER' "
         fi
     fi
@@ -1336,7 +1334,7 @@ pisafe_update() {
 pisafe_uninstall(){
     SILENT=${1:-"-n"}
     
-    if [ $SILENT != "-y" ]; then
+    if [[ $SILENT != "-y" ]]; then
         RESULT=$(ui_yesno "UNINSTALL" "Uninstall $PRODUCTNAME")
         if [ $RESULT != "y" ]; then
             ui_msg "UNINSTALL" "$PRODUCTNAME not uninstalled"
@@ -1355,7 +1353,7 @@ pisafe_uninstall(){
     sudo rm -f "/usr/local/bin/$SCRIPTNAME"
     rm -f $CONFIG
     
-    if [ ! -z "/usr/local/bin/$SCRIPTNAME" ]; then
+    if [[ ! -z /usr/local/bin/$SCRIPTNAME ]]; then
         echo $PRODUCTNAME uninstalled
     fi
     
@@ -1382,7 +1380,7 @@ media_size() {
     local HUMAN=${2:-"no"}
    
      # add '/dev/' if missing
-    if [ "${DEV:0:5}" != "/dev/" ]; then
+    if [[ ${DEV:0:5} != "/dev/" ]]; then
         #echo "Device prefix not specified.  Adding '/dev/'"
         DEV="/dev/"$DEV
     fi
@@ -1394,7 +1392,7 @@ media_size() {
         return $RC       
     fi
     
-    if [ $HUMAN = "-h" ]; then
+    if [[ $HUMAN = "-h" ]]; then
         echo $(get_bytes $SIZE_BYTES -h)
     else
         echo $SIZE_BYTES
@@ -1419,40 +1417,40 @@ media_check_indev(){
     # check INDEV
     
     # stop if indev is blank
-    if [ -z $INDEV ] ; then
+    if [[ -z $INDEV ]] ; then
         ui_msg "ERROR 1" "IN-DEV '$INDEV' can't be blank" "red" "OK"
         return 1
     fi 
     
     # add '/dev/' if missing
-    if [ "${INDEV:0:5}" != "/dev/" ]; then
+    if [[ ${INDEV:0:5} != "/dev/" ]]; then
         echo "Device prefix not specified.  Adding '/dev/'"
         INDEV="/dev/"$INDEV
         echo "IN-DEV='$INDEV'"
     fi
     
     # Stop if INDEV does not exists
-    if  [ ! -e $INDEV ]  ; then
+    if  [[ ! -e $INDEV ]]  ; then
         ui_msg "ERROR 2" "IN-DEV '$INDEV' not found" "red" "OK"
         return 2
     fi 
     
     # Warning if INDEV is root device
-    if [ $INDEV = /dev/$(env_root_device) ]; then
+    if [[ $INDEV = /dev/$(env_root_device) ]]; then
         ui_msg "WARNING 3" "SD-card '$(media_name $INDEV)' is root device '/dev/$(env_root_device)'." "red" "OK"
     fi  
     
     # Warning if device filesystem has an overlay
     OVERLAY=$(media_os $INDEV | grep OVERLAY)
-    if [ ! -z "$OVERLAY" ] && [ $AUTO_EXPAND_FS = on ]; then
-        if [ $(ui_yesno "WARNING 4" "'$(media_name $INDEV)' filesystem has an overlay and cannot auto-expand. Turn off auto-expand?" ) = "y" ]; then
+    if [[ ! -z $OVERLAY ]] && [[ $AUTO_EXPAND_FS = on ]]; then
+        if [[ $(ui_yesno "WARNING 4" "'$(media_name $INDEV)' filesystem has an overlay and cannot auto-expand. Turn off auto-expand?" ) = "y" ]]; then
 			AUTO_EXPAND_FS=off
 			ui_msg "WARNING 4" "Auto-expand turned off" "red" "OK"
 		fi
     fi
     
     # Warning if SD-card is bigger than 16GB
-    if [ $(media_size $INDEV) -gt 16000000000 ]; then
+    if [[ $(media_size $INDEV) -gt 16000000000 ]]; then
         MESG=" '$(media_name $INDEV)' is larger than 16GB.  \
          \n\nUse a smaller SD card if you can.  \
          \nIt will be faster because the entire SD card must be read before it can be compressed.\
@@ -1460,18 +1458,19 @@ media_check_indev(){
          ui_msg "WARNING 4" "$MESG" "red" "OK"
     fi
     
-    # Warning if SD-card is bigger than freespace
-    if [ $(media_size $INDEV) -gt $(file_fs_freespace "$DEFAULT_PATH") ]; then
+    # Stop if SD-card is bigger than freespace
+    if [[ $(media_size $INDEV) -gt $(file_fs_freespace "$DEFAULT_PATH") ]]; then
         MSG="Not enough free space on '$DEFAULT_PATH' 
          \n\n'$(media_name  $INDEV)' is $(media_size $INDEV -h)
          \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
          \n\nBe sure to specify a different drive" 
          ui_msg "ERROR 5" "$MSG" "red" "OK"
+         return 2
     fi
     
     # Warning if one and a half times the SD-card is bigger than freespace
     SPACENEEDED=$(( $(media_size $INDEV) + $(( $(media_size $INDEV) / 2 )) ))
-    if [ $SPACENEEDED -gt $(file_fs_freespace "$DEFAULT_PATH") ]; then
+    if [[ $SPACENEEDED -gt $(file_fs_freespace "$DEFAULT_PATH") ]]; then
         MSG="Might not be enough free space on '$DEFAULT_PATH'
             \n\n'$(media_name $INDEV)' is $(media_size $INDEV -h)
             \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
@@ -1483,20 +1482,20 @@ media_check_indev(){
 
 media_check_outdev(){
     # quit if outdev is blank
-    if [ -z $OUTDEV ]; then
+    if [[ -z $OUTDEV ]]; then
         ui_msg "ERROR 1" "Device '$OUTDEV' cannot be blank" "red"
         return 1
     fi
     
     # Add '/dev/' if missing
-    if [ ${OUTDEV:0:5} != "/dev/" ]; then
+    if [[ ${OUTDEV:0:5} != "/dev/" ]]; then
         echo_if_cli "Device prefix not specified.  Adding '/dev/'"
         OUTDEV="/dev/"$OUTDEV
         echo_if_cli "OUT-DEV='$OUTDEV'"
     fi
     
     # Quit if OUTDEV is not found
-    if  [ ! -e $OUTDEV ]  ; then
+    if  [[ ! -e $OUTDEV ]]  ; then
         ui_msg "ERROR 2" "Device '$OUTDEV' not found" "red"
         return 2
     fi 
@@ -1506,32 +1505,32 @@ media_check_outdev(){
     SERIAL=$(lsblk -n -d --output serial /dev/sda)
     
     #stop if outdev is piSave-locked
-    if [ $(config_var_get device_lock_$(media_serialno $OUTDEV) $CONFIG) = "on" ]; then
+    if [[ $(config_var_get device_lock_$(media_serialno $OUTDEV) $CONFIG) = "on" ]]; then
         ui_msg "RESTORE ERROR " "Device '$(media_serialno $OUTDEV)' is locked by PiSafe in the config file" "red"
         return 1
     fi
     
     # Stop if outdev is the root device
-    if [ $OUTDEV = /dev/$(env_root_device) ]; then
+    if [[ $OUTDEV = /dev/$(env_root_device) ]]; then
         ui_msg "RESTORE ERROR" "Restore to root device not allowed" "red"
         return 1
     fi
     
     #stop if INFILE is on OUTDEV
-    if [ "$(file_device "$INFILE")" = $OUTDEV ]; then
+    if [[ $(file_device "$INFILE") = $OUTDEV ]]; then
         ui_msg "RESTORE ERROR" "Restore to same device as '$INFILE' not allowed" "red"
         return 1
     fi
     
     # Warning if device is large
-    if [ $(media_size $OUTDEV) -gt $LARGE_DEVICE_WRITE_WARNING ]; then
+    if [[ $(media_size $OUTDEV) -gt $LARGE_DEVICE_WRITE_WARNING ]]; then
         ui_msg "RESTORE WARNING" "'$(media_name $OUTDEV)' 
         \nis larger than $(get_bytes $LARGE_DEVICE_WRITE_WARNING -h)... 
         \n\nBe sure this is the right device" "red" "OK"
     fi
      
     # Stop if imagefile is larger than device
-    if [ $(file_image_size "$INFILE") -gt $(media_size $OUTDEV) ]; then
+    if [[ $(file_image_size "$INFILE") -gt $(media_size $OUTDEV) ]]; then
         ui_msg "RESTORE ERROR" "Not enough room
         \nThe image in '$INFILE' is ' $(file_image_size "$INFILE" -h)' 
         \nand '$OUTDEV' is only '$(media_size $OUTDEV -h)'" "red"
@@ -1557,31 +1556,34 @@ media_backup(){
     echo  "Compression set to level $COMPRESSION of 9"
     pisafe_write_log "Starting $PRODUCTNAME $SCRIPTVER Backup, '$INDEV' '$(media_name $INDEV)', '$OUTFILE', Compression=$COMPRESSION"
       
-    if [ $INTERFACE = "cli" ]; then
+    if [[ $INTERFACE = "cli" ]]; then
         media_check_indev
         RC=$?
         if (( $RC )); then
+            do_beep_down
             return $RC
         fi     
         
         file_check_outfile   
         RC=$?
         if (( $RC )); then
+            do_beep_down
             return $RC
         fi  
     fi    
     
     # should be able to delete this...
     # Final check before writing data
-    if [ -z $INDEV ] || [ ! -e $INDEV ] ; then
+    if [[ -z $INDEV ]] || [[ ! -e $INDEV ]] ; then
         echo
         echo_red "ERROR b1: IN-DEV '$INDEV' must exist. "
         return 1
     fi 
     
-    if [ -z "$OUTFILE" ] || [ -f "$OUTFILE" ] ; then
+    if [[ -z $OUTFILE ]] || [[ -f $OUTFILE ]] ; then
         echo
         echo_red "ERROR b2: OUT-FILE '$OUTFILE' can't exist. "
+        do_beep_down
         return 2
     fi  
 
@@ -1599,12 +1601,13 @@ media_backup(){
     
     
 	# new section #######  
-	if [ $SKIP_FREESPACE = "on" ]; then
+	if [[ $SKIP_FREESPACE = "on" ]]; then
 
 		START_OF_FREESPACE=$(sudo parted -ms "$INDEV" unit B print free)
 		RC=$?
 		if (( $RC )); then
 			error $LINENO "parted failed with rc $RC"
+            do_beep_down
 			exit 15
 		fi
 		START_OF_FREESPACE=$(tail -1 <<< "$START_OF_FREESPACE" | grep free | cut -d ':' -f 2 | tr -d 'B')
@@ -1629,7 +1632,7 @@ media_backup(){
     
     #sudo dd bs=4M if=$INDEV of="$OUTFILE_BASE".img status=progress conv=fsync 
     MEDIA_SIZE=$(sudo lsblk -ndb $MEDIA -o size)
-    if [ ! -z $(which pv) ]; then
+    if [[ ! -z $(which pv) ]]; then
 		sudo pv $INDEV -s $BYTES_TO_READ $DEVICE | dd bs=$BS of="$OUTFILE_BASE".img count="$BLOCKS_TO_READ" iflag=fullblock conv=fsync 
 		RC=$?
     else
@@ -1638,6 +1641,7 @@ media_backup(){
       RC=$?
     fi
     if (( $RC )); then
+        do_beep_down
         return $RC
     fi
     
@@ -1649,14 +1653,14 @@ media_backup(){
     echo
    
    
-    if [ ! $(file_ext "$OUTFILE") = "iso" ]; then 
+    if [[ ! $(file_ext "$OUTFILE") = "iso" ]]; then 
         echo_white "Step 2 of 3 - Shrinking filesystem ..."
         PI_SHRINK_OPTS=
 
-        if [ $AUTO_EXPAND_FS = "off" ] ; then 
+        if [[ $AUTO_EXPAND_FS = "off" ]] ; then 
             PI_SHRINK_OPTS="-s"
         fi
-        if [ $SHRINK_FS != "off" ]; then
+        if [[ $SHRINK_FS != "off" ]]; then
             sudo pishrink.sh $PI_SHRINK_OPTS "$OUTFILE_BASE".img
             RC=$?
             if (( $RC )); then
@@ -1739,11 +1743,13 @@ media_backup(){
             echo
             #echo_red ERROR... unsupported file extension \'$(file_ext "$OUTFILE")\'.
             ui_error $LINENO "Unsupported file extension '$(file_ext "$OUTFILE")'"
+            do_beep_down
             return 1
             ;;
     esac
     
     if (( $RC )); then
+        do_beep_down
         return $RC
     fi
     
@@ -1754,23 +1760,24 @@ media_backup(){
     
     
     # check if "$OUTFILE" was created
-    if [ ! -f "$OUTFILE" ]; then
+    if [[ ! -f $OUTFILE ]]; then
+        do_beep_down
         echo
         echo_red "ERROR: creating '$OUTFILE'"
         return 1
     fi    
     
     
-    if [ $RC != 0 ]; then
-        echo
-        echo_red  "ERROR. $RC"
-        pisafe_write_log "FAILED $PRODUCTNAME $SCRIPTVER Backup, IN-DEV='$INDEV',  OUT-FILE='$OUTFILE', Compression set to level $COMPRESSION"
-        return $RC
-    else
-        do_beep
+  #  if [ $RC != 0 ]; then
+  #      echo
+  #      echo_red  "ERROR. $RC"
+  #      pisafe_write_log "FAILED $PRODUCTNAME $SCRIPTVER Backup, IN-DEV='$INDEV',  OUT-FILE='$OUTFILE', Compression set to level $COMPRESSION"
+  #      return $RC
+  #  else
+        do_beep_up
         echo_white "Backup done. '$INDEV' backed up to '$OUTFILE' in $(get_elapsed_time $TIME1 $TIME4)." 
         pisafe_write_log "Finished $PRODUCTNAME $SCRIPTVER Backup,  $(media_size $INDEV -h) to  $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4) " 
-    fi
+  #  fi
 }
 
 
@@ -1786,36 +1793,40 @@ media_restore(){
     echo "Safety='$SAFETY'"
     pisafe_write_log "Starting $PRODUCTNAME $SCRIPTVER Restore, '$INFILE', '$OUTDEV' '$(media_name $OUTDEV)'"
  
-    if [ $SILENT != "-y" ]; then
+    if [[ $SILENT != "-y" ]]; then
         file_check_infile
         RC=$?
         if (( $RC )); then
+            do_beep_down
             return $RC
         fi
     
         media_check_outdev
         RC=$?
         if (( $RC )); then
+            do_beep_down
             return $RC
         fi
     fi
 
     # Final check before writing data
     # quit if INFILE is not a file
-    if [ -z "$INFILE" ] || [ ! -e "$INFILE" ]; then
+    if [[ -z $INFILE ]] || [[ ! -e $INFILE ]]; then
         echo
         echo_red "ERROR r1: IN-FILE '$INFILE' must exist."
+        do_beep_down
         return 1
     fi 
     
     #quit if OUTDEV is not a device
-    if [ -z $OUTDEV ] || [ ! -e $OUTDEV ]; then
+    if [[ -z $OUTDEV ]] || [[ ! -e $OUTDEV ]]; then
         echo
         echo_red "ERROR r2: OUT-DEV '$OUTDEV' must exist."
+        do_beep_down
         return 1
     fi
     
-    if [ $SILENT != "-y" ]; then
+    if [[ $SILENT != "-y" ]]; then
         echo
         echo "Write '$INFILE' to '$OUTDEV' '$(media_name $OUTDEV)' ?"
         echo_red WARNING... All existing data on \'$OUTDEV\' - will be erased!
@@ -1823,8 +1834,9 @@ media_restore(){
         read  -p "You must type 'YES' to continue:" -r RESULT
         echo
     
-        if [ -z $RESULT ] || [ $RESULT != "YES" ]; then
+        if [[ -z $RESULT ]] || [[ $RESULT != "YES" ]]; then
             echo "You did not answer 'YES'"
+            do_beep_down
             return 1
         fi
         
@@ -1854,7 +1866,7 @@ media_restore(){
     
     case $INFILEEXT in
         img | iso)
-            if [ $INTERFACE = "cli" ]; then
+            if [[ $INTERFACE = "cli" ]]; then
                 #sudo dd if="$INFILE" of=$OUTDEV bs=4M conv=fsync status=progress
                 pv "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync
                 RC=$?
@@ -1867,7 +1879,7 @@ media_restore(){
         
         zip)
             RESTORE_BYTES=$(file_image_size "$INFILE")
-             if [ $INTERFACE = "cli" ]; then
+             if [[ $INTERFACE = "cli" ]]; then
                  #unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                  #pv "$INFILE" | unzip -p | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                  unzip -p "$INFILE" | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync
@@ -1880,7 +1892,7 @@ media_restore(){
             ;;
         
         xz)
-            if [ $INTERFACE = "cli" ]; then
+            if [[ $INTERFACE = "cli" ]]; then
                  #xz -v -d -c "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                  pv "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync
                  RC=$?
@@ -1892,7 +1904,7 @@ media_restore(){
             ;;
 
         gz)
-            if [ $INTERFACE = "cli" ]; then
+            if [[ $INTERFACE = "cli" ]]; then
                 #pigz -v -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                 pv "$INFILE" | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync
                 RC=$?
@@ -1939,7 +1951,7 @@ media_list() {
         
         n)      ROOT_FILTER="aspodiausdfpoiasdf" ;;
         
-        *)     if [ $(config_var_get hide_root_device $CONFIG) = "on" ]; then
+        *)     if [[ $(config_var_get hide_root_device $CONFIG) = "on" ]]; then
                     ROOT_FILTER=$(env_root_device)
                 else    
                     ROOT_FILTER="aspodiausdfpoiasdf"
@@ -1961,7 +1973,8 @@ media_list() {
 media_details(){
     local MEDIA=$1
     local MSG=
-    MSG="Media: '$(media_name $MEDIA)' \n"
+    MSG="==== Media details ===="
+    MSG="$MSG\nMedia: '$(media_name $MEDIA)' \n"
     echo "Serching for OSs..."
     MSG=$MSG"$(media_os $MEDIA)"
     echo "Calculating backup estimates..."
@@ -1988,7 +2001,6 @@ media_partition_info() {
 	local BITS=
 	local READONLY=
 	local OVERLAY=
- 
   
     PARTED_OUTPUT=$(sudo parted -ms "$MEDIA" unit B print)
     if (( $? )); then
@@ -2015,16 +2027,16 @@ media_partition_info() {
 
   
     # look for OS name and architecture
-    if [ -e $MOUNTDIR/etc/os-release ]; then
+    if [[ -e $MOUNTDIR/etc/os-release ]]; then
       OS="$(cat $MOUNTDIR/etc/os-release | grep PRETTY_NAME | cut -d= -f2)"
       ARCH="$(file $MOUNTDIR/bin/bash | cut -d, -f2)"
       BITS="$(file $MOUNTDIR/bin/bash | cut -d, -f1)"
-      if  [ !  -z "$(echo "$BITS" | grep 32 )" ]; then
+      if  [[ !  -z $(echo "$BITS" | grep 32 ) ]]; then
         BITS=32
-      elif [ !  -z "$(echo "$BITS" | grep 64 )" ]; then
+      elif [[ !  -z $(echo "$BITS" | grep 64 ) ]]; then
         BITS=64
       fi
-      if [[ ! "$ARCH" =~  "$BITS" ]]; then
+      if [[ ! $ARCH =~  $BITS ]]; then
         ARCH=$ARCH"-"$BITS
       fi  
       OS="$OS '$ARCH'" 
@@ -2032,34 +2044,37 @@ media_partition_info() {
     
     
     # look for windows
-    if [ -e $MOUNTDIR/Windows ]; then
+    if [[ -e $MOUNTDIR/Windows ]]; then
       OS="'Windows'"
     fi
     
     
 	# look for read-only partition (may not be needed)
-	if [ -e $MOUNTDIR/etc/fstab ]; then
+	if [[ -e $MOUNTDIR/etc/fstab ]]; then
       ROOTREADONLY="$(cat $MOUNTDIR/etc/fstab | grep /boot | grep ,ro )"
-      if [ ! -z "$ROOTREADONLY" ] ; then
+      if [[ ! -z $ROOTREADONLY ]]; then
 		ROOTREADONLY="(READONLY)"
       fi
     fi
   
 
 	# look for overlay file system
-	if [ -e $MOUNTDIR/cmdline.txt ]; then
-		# OVERLAY="$(cat $mountdir/config.txt | grep ^dtoverlay=vc4-fkms )"
-		OVERLAY="$(cat $MOUNTDIR/cmdline.txt | grep boot=overlay )"
-		if [ ! -z "$OVERLAY" ]; then
-		    OVERLAY="(OVERLAY)"
-		fi
-	fi	
+    if [[ -e $MOUNTDIR/cmdline.txt ]]; then
+        OVERLAY="$(cat $MOUNTDIR/cmdline.txt | grep boot=overlay )"
+    	if [[ ! -z $OVERLAY ]]; then
+            OVERLAY="(OVERLAY file system)"
+    	fi
+    fi	
+
+
+
 
 	# unmount fs and cleanup
 	sudo umount "$MOUNTDIR"	
 	sudo losetup -d "$LOOPBACK"
 
 	echo "$OS$OVERLAY$ROOTREADONLY"
+    
 }
 
 
@@ -2076,8 +2091,9 @@ media_os() {
     for PARTITION in $MEDIA_PARTITIONS; do
         OS=$(media_partition_info $MEDIA $PARTITION)
         RC=$?
-        if [ $RC = 0 ] && [ ! "xx$OS" = "xx" ] ; then
-            echo " - $OS found on Partition $PARTITION"
+    #    if [ $RC = 0 ] && [ ! "xx$OS" = "xx" ] ; then
+        if ! (( $RC )); then
+            echo " - '$OS' found on Partition $PARTITION"
         fi
     done
 }
@@ -2109,7 +2125,7 @@ media_backup_estimate() {
     local MEDIA=$1
     local MSG=
 
-    if [ ! -e $MEDIA ]; then
+    if [[ ! -e $MEDIA ]]; then
         MSG="Error: Media '$MEDIA' does not exist"
         return 1
     fi
@@ -2135,7 +2151,7 @@ media_backup_estimate() {
     PARTED_OUTPUT=$(sudo parted $MEDIA unit B print free )
 
     MEDIA_FREESPACE_AT_END=$(echo "$PARTED_OUTPUT" | tail -1 | grep Free | sed 's/[ ]\+/ /g' | cut -d " " -f 4 | tr -d 'B' )
-    if [ -z $MEDIA_FREESPACE_AT_END ]; then
+    if [[ -z $MEDIA_FREESPACE_AT_END ]]; then
         MEDIA_FREESPACE_AT_END=0
     fi
 
@@ -2153,7 +2169,7 @@ media_backup_estimate() {
  #           ;;
  #   esac	
 
-    if [ -z "$(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | grep primary)" ]; then
+    if [[ -z $(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | grep primary) ]]; then
         MEDIA_LAST_PARTITION_TYPE=logical
     else
         MEDIA_LAST_PARTITION_TYPE=primary
@@ -2171,7 +2187,7 @@ media_backup_estimate() {
 
 
     # 2 - is it a complex file system?
-    if [ $MEDIA_PARTITION_COUNT -gt 3 ]; then
+    if [[ $MEDIA_PARTITION_COUNT -gt 3 ]]; then
         MSG=$MSG"Warning: Partitions=$MEDIA_PARTITION_COUNT.  This looks like a complex partition structure and may not shrink. Pisafe will still work.\n"
     fi
 
@@ -2182,7 +2198,7 @@ media_backup_estimate() {
     case $MEDIA_LAST_PARTITION_FS in
     
         ext4|ext3|ext2)
-            if [ "$MEDIA_PARTITION_TABLE" = "gpt" ] || ( [ "$MEDIA_PARTITION_TABLE" = "msdos" ] && [ "$MEDIA_LAST_PARTITION_TYPE" = "primary"  ] ) ; then
+            if [[ $MEDIA_PARTITION_TABLE = "gpt" ]] || ( [[ $MEDIA_PARTITION_TABLE = "msdos" ]] && [[ $MEDIA_LAST_PARTITION_TYPE = "primary"  ]] ) ; then
                 SHRINK_BYTES=$(sudo lsblk $MEDIA -lpbo name,fsavail | grep $MEDIA_LAST_PARTITION_NAME | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
             else
                 MSG=$MSG"Warning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This partition-type will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
@@ -2190,11 +2206,11 @@ media_backup_estimate() {
             ;;
 
         *)
-            MSG=$MSG"Warning: The last partition fs is '$MEDIA_LAST_PARTITION_FS'. This filesystem will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
+            MSG=$MSG"Warning: The filesystem on the last partition is '$MEDIA_LAST_PARTITION_FS'. This filesystem will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
             ;;
     esac
   
-    if [ -z $SHRINK_BYTES ]; then
+    if [[ -z $SHRINK_BYTES ]]; then
         SHRINK_BYTES=0
     fi
     
@@ -2243,37 +2259,38 @@ media_format(){
     local NAME="$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE) ($DEVICE)"
     local PART1=$DEVICE\1
 
-    if [ -z $1 ] ; then
+    if [[ -z $1 ]] ; then
         echo "Error 1: Device not specified, choose:"
         lsblk -dp
         return 1
     fi
 
-    if [ ! -e $DEVICE ]; then
+    if [[ ! -e $DEVICE ]]; then
       echo "Error 2: $DEVICE does not exist"
       return 2
     fi
 
-    if [ $1 = $ROOT ] ; then
+    if [[ $1 = $ROOT ]] ; then
         echo "Error 3: Can not format root device"
         return 3
     fi
     
-    if  [ $TYPE != disk ]; then
+    if  [[ $TYPE != disk ]]; then
         echo "Error 4: $DEVICE is not a disk"
         return 4
     fi
     
-    if [ $SILENT != "-y" ]; then
+    if [[ $SILENT != "-y" ]]; then
         RESULT=$(ui_yesno "ERASE" "WARNING!!  \n\nFormat '$DEVICE' to '$FORMAT' \n\nAll existing data on '$NAME' will be erased.  \n\nAre you sure you want to continue? y/n?" "--defaultno")
-        if [ $RESULT != "y" ]; then
+        if [[ $RESULT != "y" ]]; then
             ui_msg "ERASE" "$DEVICE not erased"
             return
         fi
     fi
  
     echo_white "Formatting '$DEVICE' to '$FORMAT'..."
-
+    do_beep
+    do_beep
     ui_countdown 10 "" "Erasing Media '$(media_name $DEVICE)' in 10 seconds...\n\n"
     if (( $? )); then
         return 2
@@ -2292,7 +2309,7 @@ media_format(){
         return 9
     fi
 
-    if [ $FORMAT = "fat32" ]; then
+    if [[ $FORMAT = "fat32" ]]; then
         PART_TABLE=msdos
     else
         PART_TABLE=gpt
@@ -2341,6 +2358,7 @@ media_format(){
 
     if (( $EC != 0 )); then
         echo "Error 12: mkfs failed"
+        do_beep_down
         return 12
     fi
 
@@ -2349,6 +2367,7 @@ media_format(){
     udisksctl mount -b  "$DEVICE"1
     if (( $? != 0 )); then
         echo "Error 13: mount failed"
+        do_beep_down
         return 13
     fi
     echo
@@ -2356,7 +2375,8 @@ media_format(){
     #echo Partition Table ...
     #sudo parted "$DEVICE" print
     #sleep 5
-
+    
+    do_beep_up
     ui_msg "ERASE MEDIA" "'$NAME' ($DEVICE) has been erased. \n\nIt has been remounted."
 }
 
@@ -2380,7 +2400,7 @@ menu_set_compression(){
     "8" "" off \
     "9" "Smallest file (MUCH slower)" off   3>&1 1>&2 2>&3 )
    
-    if [ ! -z $CHOICE ]; then
+    if [[ ! -z $CHOICE ]]; then
         COMPRESSION=$CHOICE
         config_var_set compression_level $CHOICE $CONFIG
     fi
@@ -2397,9 +2417,9 @@ menu_settings_default_path(){
             return $RC
         fi
         
-        if [ ! -z $NEWPATH ]; then
+        if [[ ! -z $NEWPATH ]]; then
         
-            if [ -d $NEWPATH ]; then
+            if [[ -d $NEWPATH ]]; then
                 DEFAULT_PATH=$(echo "$NEWPATH" | sed 's/[/\t]*$//')
                 config_var_set default_path $DEFAULT_PATH $CONFIG
                 return 0
@@ -2423,7 +2443,7 @@ menu_settings_default_extension(){
             "img" "Twice the size, half the time (No compression)" off 3>&1 1>&2 2>&3 )
     
     echo $CHOICE
-    if [ ! -z $CHOICE ]; then
+    if [[ ! -z $CHOICE ]]; then
         DEFAULT_EXTENSION=$CHOICE
         config_var_set default_extension $CHOICE $CONFIG  
     fi
@@ -2444,7 +2464,8 @@ menu_settings_options(){
 "debug_mode" " " "$DEBUG_MODE" \
  3>&1 1>&2 2>&3) 
     
-    if [ $? != 0 ] ; then
+  #  if [ $? != 0 ] ; then
+    if (( $? )); then
         return
     fi
     
@@ -2494,7 +2515,8 @@ menu_settings(){
             Edit*)              $TEXT_EDITOR $CONFIG; config_var_get_settings ;;
             Factory*) 
                                 ui_yesno "WARNING" "Are you sure you want to reset the settings to factory defaults?" "--defaultno" 
-                                if [ $? = 0 ] ; then
+                      #          if [ $? = 0 ] ; then
+                                if ! (( $? )); then
                                     config_var_set_defaults
                                     config_var_get_settings
                                 fi ;;
@@ -2517,7 +2539,7 @@ menu_select_sddevice(){
     unset IFS
     
     arraylength=${#options[@]}
-    if [ $arraylength = 0 ]; then
+    if [[ $arraylength = 0 ]]; then
         #whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "No media found." $WT_MB_HEIGHT  $WT_MB_WIDTH
         ui_msg ERROR "No media found." 
         return 1
@@ -2570,7 +2592,7 @@ menu_get_outfile(){
         #fill out variables based on selected filename
         OUTFILEDEFAULT="$NEWFILE"
         OUTFILE="$NEWFILE"
-        if [ ! -z $(file_ext "$OUTFILE") ]; then
+        if [[ ! -z $(file_ext "$OUTFILE") ]]; then
             EXT=$(file_ext "$OUTFILE")
         else    
             EXT=$DEFAULT_EXTENSION
@@ -2585,14 +2607,14 @@ menu_get_outfile(){
     done
         
     # add .img.zip if no extension
-    if [ ! -z "$OUTFILE" ] && [ -z "$(file_ext $OUTFILE)" ] ; then 
+    if [[ ! -z $OUTFILE ]] && [[ -z $(file_ext $OUTFILE) ]] ; then 
          echo "Adding '.img.$DEFAULT_EXTENSION'"
          OUTFILE=$OUTFILE.img.$DEFAULT_EXTENSION
          #echo "added ext '$OUTFILE'"
     fi
     
     # check and fix outfile name.....
-    if [ $(file_ext "$OUTFILE") = "img" ] ; then
+    if [[ $(file_ext "$OUTFILE") = "img" ]] ; then
         OUTFILE=$(file_path_base "$OUTFILE").$(file_ext "$OUTFILE")
     else
         OUTFILE=$(file_path_base "$OUTFILE").img.$(file_ext "$OUTFILE")
@@ -2712,6 +2734,7 @@ menu_restore() {
 
     #Countdown 
     do_beep
+    do_beep
     ui_countdown 10 "" "Overwriting '$(media_name $OUTDEV)' in 10 seconds...\n\n"
     RC=$?
     if (( $RC )); then
@@ -2728,7 +2751,7 @@ menu_restore() {
     
     media_restore "$INFILE" $OUTDEV -y gui
     RC=$?
-    if [ $RC != 0 ] || [ $DEBUG_MODE = "on" ]; then
+    if [[ $RC != 0 ]] || [[ $DEBUG_MODE = "on" ]]; then
         echo Debug_mode=$RC
         echo Exit_code=$RC
         read -n 1 -p "Press any key to continue..." 
@@ -2739,13 +2762,13 @@ menu_restore() {
     ###################################################
  
 
-    if [ $(ui_yesno "RESTORE" "Eject the media from the operating system?") = y ]; then
+    if [[ $(ui_yesno "RESTORE" "Eject the media from the operating system?") = y ]]; then
         echo "Ejecting the media..."
         sleep 2
         umount $OUTDEV?  2> /dev/null
         sudo eject -s $OUTDEV
         sleep 2
-    elif [ $(ui_yesno "RESTORE" "Mount the media in the operating system?") = y ]; then
+    elif [[ $(ui_yesno "RESTORE" "Mount the media in the operating system?") = y ]]; then
         echo "Mounting the media..."
         sleep 2
         media_mount $OUTDEV
@@ -2856,12 +2879,12 @@ menu_splashscreen(){
     INTERFACE="gui"
     
     # install
-    if [ -z $(which $SCRIPTNAME) ]; then
+    if [[ -z $(which $SCRIPTNAME) ]]; then
         pisafe_install
     fi    
     
     # load factory defaults
-    if [ $(get_ver_to_int $SETTINGS_SCRIPT_VER) -lt $(get_ver_to_int $SCRIPTVER) ]; then
+    if [[ $(get_ver_to_int $SETTINGS_SCRIPT_VER) -lt $(get_ver_to_int $SCRIPTVER) ]]; then
     
         whiptail --backtitle "$BACKTITLE" --title "WELCOME" --yes-button "Load Factory Defaults"\
         --yesno "Welcome to $PRODUCTNAME
@@ -2870,7 +2893,8 @@ menu_splashscreen(){
         \nWhile best attempts have been made to make $PRODUCTNAME reliable... use at your own risk. " \
         $WT_MB_HEIGHT $WT_MB_WIDTH
     
-        if [ $? = 0 ] ; then
+      #  if [ $? = 0 ] ; then
+        if ! (( $? )); then
             config_var_factory_reset 
         fi 
     fi
@@ -2951,13 +2975,16 @@ case $1 in
     
     
     install)
+        echo_white Installing PiSafe...
         pisafe_install $2 ;;
         
     update)
+        echo_white Updating PiSafe...
         pisafe_update cli yes $2
         ;;
     
     uninstall)
+        echo_white Uninstalling PiSafe...
         pisafe_uninstall $2 ;;
     
     help|-h|--h)
@@ -2979,7 +3006,7 @@ esac
 ##########################################################
 
 # if -v, show version and exit
-if  [ ~$1 = ~-v ]; then
+if  [[ ~$1 = ~-v ]]; then
     echo $SCRIPTVER
     exit
 fi
@@ -2993,8 +3020,8 @@ whiptail_calc_wt_size
 
 
 ## check for updates if not uninstalling
-if [ ! ~$1 = ~uninstall ]; then
-    if  [ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]; then
+if [[ ! ~$1 = ~uninstall ]]; then
+    if  [[ $CHECK_FOR_UPDATES_ON_STARTUP = "on" ]]; then
         pisafe_update gui no
     fi
 fi
