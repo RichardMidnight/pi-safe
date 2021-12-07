@@ -2041,7 +2041,7 @@ media_partition_info() {
       if [[ ! $ARCH =~  $BITS ]]; then
         ARCH=$ARCH"-"$BITS
       fi  
-      OS="$OS '$ARCH'" 
+      OS="$OS $ARCH" 
     fi
     
     
@@ -2089,8 +2089,7 @@ media_os() {
     for PARTITION in $MEDIA_PARTITIONS; do
         OS=$(media_partition_info $MEDIA $PARTITION)
         RC=$?
-    #    if [ $RC = 0 ] && [ ! "xx$OS" = "xx" ] ; then
-        if ! (( $RC )); then
+        if [ $RC = 0 ] && [[ ! -z $OS ]] ; then
             echo " - '$OS' found on Partition $PARTITION"
         fi
     done
@@ -2830,9 +2829,9 @@ menu_tools(){
                 
                 FORMAT=$(whiptail --clear --backtitle "$BACKTITLE" --title "Select format" --ok-button "Select" --cancel-button "Exit" --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
                             "fat32"     "     Most universal format for media under 32GB" \
+                            "exfat"     "     Newer universal format for media over 32GB" \
                             "ntfs"      "     Native Windows format" \
-                            "ext4"      "     Native Linux format" \
-                            "exfat"     "     Newer universal format for media over 32GB" 3>&1 1>&2 2>&3)
+                            "ext4"      "     Native Linux format" 3>&1 1>&2 2>&3)
                 #if (( $? )); then
                 #    return 2
                 #fi
