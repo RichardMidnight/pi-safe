@@ -528,7 +528,8 @@ whiptail_countdown(){
 
 ui_msg() {
     TITLE="$1"
-    MSG="$2"
+    #MSG="$2"
+    MSG=${2:-" no message "}
     COLOR=${3:-"white"}
     OK_BUTTON=${4:-"Back"}
     
@@ -541,7 +542,7 @@ ui_msg() {
             echo -e "$MSG"
         fi
     else
-        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
+        whiptail --backtitle "$BACKTITLE" --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
     fi
 }
 
@@ -556,7 +557,7 @@ ui_yesno(){
         MSG="$PRODUCTNAME: $TITLE: $MSG  [y/n]?"
         while true; do
             read -n1 -p "$MSG" yn
-            echo
+           # echo
             case $yn in
                 [Yy]* ) echo y; return 0;;
                 [Nn]* ) echo n; return 0;;
@@ -1229,7 +1230,6 @@ pisafe_install(){
     if [[ $SILENT != "-y" ]]; then
         RESULT=$(ui_yesno "INSTALL" "Install $PRODUCTNAME $SCRIPTVER?")
         if [[ $RESULT != "y" ]]; then
-            #echo
             ui_msg "NOTICE" "$PRODUCTNAME not installed"
             return
         fi
@@ -1430,7 +1430,7 @@ media_check_indev(){
     fi
     
     # Stop if INDEV does not exists
-    if  [[ ! -e $INDEV ]]  ; then
+    if  [ ! -e $INDEV ]  ; then
         ui_msg "ERROR 2" "IN-DEV '$INDEV' not found" "red" "OK"
         return 2
     fi 
@@ -1495,7 +1495,7 @@ media_check_outdev(){
     fi
     
     # Quit if OUTDEV is not found
-    if  [[ ! -e $OUTDEV ]]  ; then
+    if  [ ! -e $OUTDEV ]  ; then
         ui_msg "ERROR 2" "Device '$OUTDEV' not found" "red"
         return 2
     fi 
@@ -1574,7 +1574,7 @@ media_backup(){
     
     # should be able to delete this...
     # Final check before writing data
-    if [[ -z $INDEV ]] || [[ ! -e $INDEV ]] ; then
+    if [[ -z $INDEV ]] || [ ! -e $INDEV ] ; then
         echo
         echo_red "ERROR b1: IN-DEV '$INDEV' must exist. "
         return 1
@@ -1811,7 +1811,7 @@ media_restore(){
 
     # Final check before writing data
     # quit if INFILE is not a file
-    if [[ -z $INFILE ]] || [[ ! -e $INFILE ]]; then
+    if [[ -z $INFILE ]] || [ ! -e $INFILE ]; then
         echo
         echo_red "ERROR r1: IN-FILE '$INFILE' must exist."
         do_beep_down
@@ -1819,7 +1819,7 @@ media_restore(){
     fi 
     
     #quit if OUTDEV is not a device
-    if [[ -z $OUTDEV ]] || [[ ! -e $OUTDEV ]]; then
+    if [[ -z $OUTDEV ]] || [ ! -e $OUTDEV ]; then
         echo
         echo_red "ERROR r2: OUT-DEV '$OUTDEV' must exist."
         do_beep_down
@@ -1959,12 +1959,12 @@ media_list() {
                 ;;
     esac
     
-       
-    DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2> /dev/null | grep -v $ROOT_FILTER)
+    #DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2>/dev/null | grep -v $ROOT_FILTER)
+    DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
     RC=$?
     if (( $RC )); then
         return $RC
-    fi
+    fi 
     
     echo "${DEVICES[@]}"
 }
@@ -1975,8 +1975,10 @@ media_details(){
     local MSG=
     MSG="==== Media details ===="
     MSG="$MSG\nMedia: '$(media_name $MEDIA)' \n"
+
     echo "Serching for OSs..."
     MSG=$MSG"$(media_os $MEDIA)"
+
     echo "Calculating backup estimates..."
    # MSG="$(media_backup_estimate  $INDEV)"
     MSG="$MSG\n\n$(media_backup_estimate  $MEDIA)"
@@ -2066,15 +2068,11 @@ media_partition_info() {
     	fi
     fi	
 
-
-
-
 	# unmount fs and cleanup
 	sudo umount "$MOUNTDIR"	
 	sudo losetup -d "$LOOPBACK"
 
 	echo "$OS$OVERLAY$ROOTREADONLY"
-    
 }
 
 
@@ -2125,7 +2123,7 @@ media_backup_estimate() {
     local MEDIA=$1
     local MSG=
 
-    if [[ ! -e $MEDIA ]]; then
+    if [ ! -e $MEDIA ]; then
         MSG="Error: Media '$MEDIA' does not exist"
         return 1
     fi
@@ -2251,21 +2249,23 @@ fi
 
 
 media_format(){
-    local DEVICE=$1
+    local DEVICE="$1"
     local FORMAT=${2:-"fat32"}    # fat32, ntfs, ext4
     local SILENT=${3:-"-n"}
+    
+    
     local ROOT="/dev/$(env_root_device)"
     local TYPE=$(lsblk $DEVICE -dnpo TYPE)
     local NAME="$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE) ($DEVICE)"
     local PART1=$DEVICE\1
 
-    if [[ -z $1 ]] ; then
-        echo "Error 1: Device not specified, choose:"
-        lsblk -dp
+    if [[ -z $DEVICE ]] ; then
+        echo "Error 1: Device not specified. "
+       # lsblk -dp
         return 1
     fi
 
-    if [[ ! -e $DEVICE ]]; then
+    if [ ! -e $DEVICE ]; then
       echo "Error 2: $DEVICE does not exist"
       return 2
     fi
@@ -2528,37 +2528,37 @@ menu_settings(){
 }
 
 
-menu_select_sddevice(){
+ menu_select_sddevice(){
     TITLE=$1
     HIDE_ROOT_DEVICE_OVERRIDE=$2    # y n or blank
     FIELD_SEPERATOR="|"
 
-    #get this list of sd devices and add a field seperator |    
+    #get list of sd devices and add a field seperator |    
     IFS=$'\n'
     options=($(media_list $2 | sed 's/ / '$FIELD_SEPERATOR' /'))
+    RC=$?
     unset IFS
     
-    arraylength=${#options[@]}
+    arraylength=${#options[@]} 
     if [[ $arraylength = 0 ]]; then
-        #whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "No media found." $WT_MB_HEIGHT  $WT_MB_WIDTH
-        ui_msg ERROR "No media found." 
+       # whiptail --backtitle "$BACKTITLE" --title ERROR --msgbox "No media found." $WT_MB_HEIGHT  $WT_MB_WIDTH
+       # ui_msg "ERROR" "No media found."
         return 1
     fi
 
     IFS=$FIELD_SEPERATOR
     DEVICE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE"\
-   --menu "Select media (Hide root = $HIDE_ROOT_DEVICE)" $WT_MB_HEIGHT $WT_MB_WIDTH 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
- 
+        --menu "Select media (Hide root = $HIDE_ROOT_DEVICE)" \
+        $WT_MB_HEIGHT $WT_MB_WIDTH 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
     RC=$?
     unset IFS   
-
     if (( $RC )); then
         return $RC
     fi
     
-   # OUTDEV=$DEVICE_SELECTED
-   # INDEV=$DEVICE_SELECTED
-    echo $DEVICE_SELECTED
+  #  OUTDEV=$DEVICE_SELECTED
+  #  INDEV=$DEVICE_SELECTED
+    echo "$DEVICE_SELECTED"
 }
 
 
@@ -2634,6 +2634,7 @@ menu_backup(){
     INDEV=$(menu_select_sddevice "BACKUP")
     RC=$?
     if (( $RC )); then
+        ui_msg "ERROR" "No media found."
         return $RC
     fi 
     
@@ -2707,6 +2708,7 @@ menu_restore() {
     OUTDEV=$(menu_select_sddevice "RESTORE"  y )    # this sets global variable OUTDEV
     RC=$?
     if (( $RC )); then
+        ui_msg "ERROR" "No media found."
         return $RC
     fi 
 
@@ -2813,42 +2815,47 @@ menu_tools(){
             DETAILS)    
                 DEVICE=$(menu_select_sddevice "MEDIA DETAILS")
                 if (( $? )); then
+                    ui_msg "ERROR" "No media found."
                     return 1
                 fi  
-                media_details $DEVICE
+                media_details "$DEVICE"
                 ;;
                 
             ERASE)                  
                 DEVICE=$(menu_select_sddevice "ERASE MEDIA" "y")
                 if (( $? )); then
+                    ui_msg "ERROR" "No media found."
                     return 2
                 fi
                 
                 FORMAT=$(whiptail --clear --backtitle "$BACKTITLE" --title "Select format" --ok-button "Select" --cancel-button "Exit" --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-                            "fat32"     "     Most universal format" \
+                            "fat32"     "     Most universal format for media under 32GB" \
                             "ntfs"      "     Native Windows format" \
                             "ext4"      "     Native Linux format" \
-                            "exfat"     "     Newer universal format rec for media over 32GB" 3>&1 1>&2 2>&3)
-                if (( $? )); then
-                    return 2
-                fi
+                            "exfat"     "     Newer universal format for media over 32GB" 3>&1 1>&2 2>&3)
+                #if (( $? )); then
+                #    return 2
+                #fi
+                #echo $FORMAT
                 media_format "$DEVICE" "$FORMAT"  
                 ;;
                 
             WIPE) 
                 DEVICE=$(menu_select_sddevice "WIPE MEDIA" "y")
                 if (( $? )); then
+                    ui_msg "ERROR" "No media found."
                     return 1
                 fi  
-                media_wipe $DEVICE
+                media_wipe "$DEVICE"
                 ;;
                 
             TEST) 
                 DEVICE=$(menu_select_sddevice "TEST MEDIA" "y")
                 if (( $? )); then
+                    ui_msg "ERROR" "No media found."
                     RETURN 1
                 fi  
-                media_test $DEVICE
+                media_test "$DEVICE"
                 ;;
         
 
@@ -2961,7 +2968,7 @@ case $1 in
         do_list_info  ;;
 
 
-    analyze)
+    details)
         media_details $2  ;;
 
     erase|format)
