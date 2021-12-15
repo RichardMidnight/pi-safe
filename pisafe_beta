@@ -42,7 +42,7 @@ echo_white()        { (echo -e "${WHITE}$*${NC}") }
 echo_red()          { (echo -e "${RED}$*${NC}") }
 
 
-Desktop_environment_notes(){
+desktop_environment_notes(){
     # this is just a reference of tested OSs from 2021
 
     DISTRO                      TERMINAL            TEXT EDITOR         
@@ -85,6 +85,140 @@ Desktop_environment_notes(){
     LMDE 4                        good
     ubuntu                        good
     lubuntu                       good
+}
+
+
+# ---------- Config_var functions
+
+config_var_clear() {
+    lua - "$1" "$2" <<EOF > "$2.bak"
+local key=assert(arg[1])
+local fn=assert(arg[2])
+local file=assert(io.open(fn))
+for line in file:lines() do
+  if line:match("^%s*"..key.."=.*$") then
+    line="#"..line
+  end
+  print(line)
+end
+EOF
+mv "$2.bak" "$2"
+}
+
+
+config_var_get() {
+    lua - "$1" "$2" <<EOF
+local key=assert(arg[1])
+local fn=assert(arg[2])
+local file=assert(io.open(fn))
+local found=false
+for line in file:lines() do
+  local val = line:match("^%s*"..key.."=(.*)$")
+  if (val ~= nil) then
+    print(val)
+    found=true
+    break
+  end
+end
+if not found then
+   print(0)
+end
+EOF
+}
+
+
+config_var_init_configfile(){
+    if [[ ! -d $(file_path $CONFIG) ]]; then
+        mkdir -p $(file_path $CONFIG)
+    fi
+    
+    if [[ ! -f $CONFIG ]]; then
+        touch $CONFIG
+        echo "# $CONFIG" > $CONFIG
+        config_var_set_defaults
+    fi
+}
+
+
+config_var_set_defaults(){
+    config_var_set settings_script_ver $SCRIPTVER $CONFIG
+    config_var_set default_path $HOME/Downloads $CONFIG
+    config_var_set hide_root_device on $CONFIG
+    config_var_set check_for_updates_on_startup on $CONFIG
+
+#backup settings
+    config_var_set shrink_fs on $CONFIG
+    config_var_set auto_expand_fs on $CONFIG
+    config_var_set default_extension zip $CONFIG
+    config_var_set compression_level 1 $CONFIG
+    config_var_set parallel_compression on $CONFIG
+    config_var_set large_device_read_warning 17179869184 $CONFIG
+    config_var_set skip_freespace on $CONFIG
+    
+#restore settings
+    config_var_set large_device_write_warning 17179869184 $CONFIG
+    config_var_set safety on $CONFIG    
+
+#other    
+    config_var_set debug_mode off $CONFIG
+    config_var_set sound on $CONFIG
+    config_var_set log on $CONFIG
+    config_var_set log_file /home/$USER/.config/pisafe/PiSafe.log $CONFIG
+    
+    config_var_set text_editor $(env_texteditor) $CONFIG
+}
+
+
+config_var_get_settings(){
+    SETTINGS_SCRIPT_VER=$(config_var_get settings_script_ver $CONFIG)
+    DEFAULT_PATH=$(config_var_get default_path $CONFIG)
+    HIDE_ROOT_DEVICE=$(config_var_get hide_root_device $CONFIG)
+    CHECK_FOR_UPDATES_ON_STARTUP=$(config_var_get check_for_updates_on_startup $CONFIG)
+ 
+    # backup settings
+    SHRINK_FS=$(config_var_get shrink_fs $CONFIG)
+    AUTO_EXPAND_FS=$(config_var_get auto_expand_fs $CONFIG)
+    DEFAULT_EXTENSION=$(config_var_get default_extension $CONFIG)
+    COMPRESSION=$(config_var_get compression_level $CONFIG)
+    LARGE_DEVICE_READ_WARNING=$(config_var_get large_device_read_warning $CONFIG) 
+    SKIP_FREESPACE=$(config_var_get skip_freespace $CONFIG)
+    
+    # restore settings
+    LARGE_DEVICE_WRITE_WARNING=$(config_var_get large_device_write_warning $CONFIG) 
+    SAFETY=$(config_var_get safety $CONFIG)  
+
+    # other    
+    DEBUG_MODE=$(config_var_get debug_mode $CONFIG)
+    SOUND=$(config_var_get sound $CONFIG)
+    LOG=$(config_var_get log $CONFIG)
+    LOG_FILE=$(config_var_get log_file $CONFIG)
+    VERIFY=off
+    TEXT_EDITOR=$(config_var_get text_editor $CONFIG)
+    
+    mkdir -p "$DEFAULT_PATH"
+}
+
+
+config_var_set() {
+    lua - "$1" "$2" "$3" <<EOF > "$3.bak"
+local key=assert(arg[1])
+local value=assert(arg[2])
+local fn=assert(arg[3])
+local file=assert(io.open(fn))
+local made_change=false
+for line in file:lines() do
+  if line:match("^#?%s*"..key.."=.*$") then
+    line=key.."="..value
+    made_change=true
+  end
+  print(line)
+end
+
+if not made_change then
+  print(key.."="..value)
+end
+EOF
+mv "$3.bak" "$3"
 }
 
 
@@ -221,393 +355,49 @@ env_root_device() {
     local ROOT_DRIVE
     
     # new simpler way
-    ROOT_PARTITION=$(findmnt -no source /)
+ #   ROOT_PARTITION=$(findmnt -no source /)
     ROOT_MAJ=$(findmnt  -n -e  -o MAJ:MIN / | cut -d: -f1)
-    ROOT_DEV=$(lsblk | grep $ROOT_MAJ:0 | cut -d" " -f1)
+    ROOT_DEV=$(lsblk -p | grep $ROOT_MAJ:0 | cut -d" " -f1)
     echo $ROOT_DEV
 }
 
 
-# ---------- Config_var functions
-
-config_var_init_configfile(){
-    if [[ ! -d $(file_path $CONFIG) ]]; then
-        mkdir -p $(file_path $CONFIG)
-    fi
-    
-    if [[ ! -f $CONFIG ]]; then
-        touch $CONFIG
-        echo "# $CONFIG" > $CONFIG
-        config_var_set_defaults
-    fi
-}
 
 
-config_var_set_defaults(){
-    config_var_set settings_script_ver $SCRIPTVER $CONFIG
-    config_var_set default_path $HOME/Downloads $CONFIG
-    config_var_set hide_root_device on $CONFIG
-    config_var_set check_for_updates_on_startup on $CONFIG
-
-#backup settings
-    config_var_set shrink_fs on $CONFIG
-    config_var_set auto_expand_fs on $CONFIG
-    config_var_set default_extension zip $CONFIG
-    config_var_set compression_level 1 $CONFIG
-    config_var_set parallel_compression on $CONFIG
-    config_var_set large_device_read_warning 17179869184 $CONFIG
-    config_var_set skip_freespace on $CONFIG
-    
-#restore settings
-    config_var_set large_device_write_warning 17179869184 $CONFIG
-    config_var_set safety on $CONFIG    
-
-#other    
-    config_var_set debug_mode off $CONFIG
-    config_var_set sound on $CONFIG
-    config_var_set log on $CONFIG
-    config_var_set log_file /home/$USER/.config/pisafe/PiSafe.log $CONFIG
-    
-    config_var_set text_editor $(env_texteditor) $CONFIG
-}
-
-
-config_var_get_settings(){
-    SETTINGS_SCRIPT_VER=$(config_var_get settings_script_ver $CONFIG)
-    DEFAULT_PATH=$(config_var_get default_path $CONFIG)
-    HIDE_ROOT_DEVICE=$(config_var_get hide_root_device $CONFIG)
-    CHECK_FOR_UPDATES_ON_STARTUP=$(config_var_get check_for_updates_on_startup $CONFIG)
- 
-    # backup settings
-    SHRINK_FS=$(config_var_get shrink_fs $CONFIG)
-    AUTO_EXPAND_FS=$(config_var_get auto_expand_fs $CONFIG)
-    DEFAULT_EXTENSION=$(config_var_get default_extension $CONFIG)
-    COMPRESSION=$(config_var_get compression_level $CONFIG)
-    LARGE_DEVICE_READ_WARNING=$(config_var_get large_device_read_warning $CONFIG) 
-    SKIP_FREESPACE=$(config_var_get skip_freespace $CONFIG)
-    
-    # restore settings
-    LARGE_DEVICE_WRITE_WARNING=$(config_var_get large_device_write_warning $CONFIG) 
-    SAFETY=$(config_var_get safety $CONFIG)  
-
-    # other    
-    DEBUG_MODE=$(config_var_get debug_mode $CONFIG)
-    SOUND=$(config_var_get sound $CONFIG)
-    LOG=$(config_var_get log $CONFIG)
-    LOG_FILE=$(config_var_get log_file $CONFIG)
-    VERIFY=off
-    TEXT_EDITOR=$(config_var_get text_editor $CONFIG)
-    
-    mkdir -p "$DEFAULT_PATH"
-}
-
-
-config_var_set() {
-    lua - "$1" "$2" "$3" <<EOF > "$3.bak"
-local key=assert(arg[1])
-local value=assert(arg[2])
-local fn=assert(arg[3])
-local file=assert(io.open(fn))
-local made_change=false
-for line in file:lines() do
-  if line:match("^#?%s*"..key.."=.*$") then
-    line=key.."="..value
-    made_change=true
-  end
-  print(line)
-end
-
-if not made_change then
-  print(key.."="..value)
-end
-EOF
-mv "$3.bak" "$3"
-}
-
-
-config_var_clear() {
-    lua - "$1" "$2" <<EOF > "$2.bak"
-local key=assert(arg[1])
-local fn=assert(arg[2])
-local file=assert(io.open(fn))
-for line in file:lines() do
-  if line:match("^%s*"..key.."=.*$") then
-    line="#"..line
-  end
-  print(line)
-end
-EOF
-mv "$2.bak" "$2"
-}
-
-
-config_var_get() {
-    lua - "$1" "$2" <<EOF
-local key=assert(arg[1])
-local fn=assert(arg[2])
-local file=assert(io.open(fn))
-local found=false
-for line in file:lines() do
-  local val = line:match("^%s*"..key.."=(.*)$")
-  if (val ~= nil) then
-    print(val)
-    found=true
-    break
-  end
-end
-if not found then
-   print(0)
-end
-EOF
-}
-
-
-
-########################################
-###  WHIPTAIL GUI FUNCTIONS ##############
-########################################
-
-
-whiptail_calc_wt_size() {
-    # NOTE: it's tempting to redirect stderr to /dev/null, so supress error 
-    # output from tput. However in this case, tput detects neither stdout or 
-    # stderr is a tty and so only gives default 80, 24 values
-
-    WT_HEIGHT=20
-    WT_WIDTH=80
-    WT_HEIGHT_TALL=$(($(tput lines)-10))
-    WT_WIDTH_WIDE=$(($(tput cols)-7))
-
-    if [[ -z $WT_WIDTH ]] || [[ $WT_WIDTH -lt 60 ]]; then
-        WT_WIDTH=80
-    fi
-    if [[ $WT_WIDTH -gt 178 ]]; then
-        WT_WIDTH=80
-    fi
-
-    WT_MENU_HEIGHT=$(($WT_HEIGHT-7))
-    WT_MENU_HEIGHT_TALL=$(($WT_HEIGHT_TALL-7))
-
-    WT_MB_HEIGHT=$WT_HEIGHT
-    WT_MB_WIDTH=$WT_WIDTH
-}
-
-
-whiptail_fselect() {
-#
-#  Arguments
-#     1  Dialog title
-#     2  Source path to list files and directories
-#     3  File mask (by default *)
-#     4  "yes" to allow go back in the file system.
-#
-#  Returns
-#     0  if a file was selected and loads the FILE_SELECTED variable 
-#        with the selected file.
-#     1  if the user cancels.
-#
-#if whiptail_fselect "Please, select a file" /home/user ; then
-#        echo "File Selected: \"$FILE_SELECTED\"."
-#else
-#        echo "Cancelled!"
-#fi
-# ----------------------------------------------------------------------
-
-    local TITLE=${1:-$MSG_INFO_TITLE}
-    local LOCAL_PATH=${2:-$(pwd)}
-    local FILE_MASK=${3:-"*"}
-    #local FILE_MASK='( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" )'
-    local ALLOW_BACK=${4:-no}
-    local FILES=()
-
-    [[ $ALLOW_BACK != "no" ]] && FILES+=(".." "..")
-
-    IFS=$'\t\n'
-
-    FILES=("FILENAME" "     SIZE   (IMAGESIZE)")
-
-    # First add folders      
-    for DIR in $(find $LOCAL_PATH -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f\t" | sort 2> /dev/null)
-    do
-        FILES+=($DIR  "     folder")
-    done              
-                
-    # Then add files                                
-    for FILE in $(find $LOCAL_PATH -maxdepth 1 \
-        \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" \) \
-        -type f \
-        -printf "%f\t     %s\n" | sort  2> /dev/null)                                                                  
-    do
-        FILES+=($FILE)
-    done
-	unset IFS
-
-
-    # convert filesizes to human readable and add image size
-    num='^[0-9]+$'
-    arraylength=${#FILES[@]}
-    
-    if [[ $arraylength = 0 ]]; then
-        FILES=(no files)
-    fi
-    
-    for (( i=0; i<${arraylength}; i++ )); do
-		arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
-		if [[ $arrayelement =~ $num ]] ; then  
-            #FILES[$i]=$(echo "    " $(get_bytes_h $arrayelement -h))
-            FILES[$i]=$(echo "    " $(get_bytes $arrayelement -h) \($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h)\)) 
-		else
-            PREVIOUS_ELEMENT=$(echo "${FILES[$i]}")
-        fi
-    done
- 
- 
-    # let user select file
-    while true
-    do
-        FILE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$LOCAL_PATH" \
-                                --menu "Choose a file" $WT_HEIGHT_TALL $WT_WIDTH_WIDE $WT_MENU_HEIGHT_TALL "${FILES[@]}"  3>&1 1>&2 2>&3)
-
-        #exit if bad whiptail statement
-        FSX=${FILE_SELECTED:0:3}
-       # if [ ! -z $FSX ] && [ $FSX = "Box" ]; then
-        if [[ ~$FSX = "~Box" ]]; then
-            echo "ERROR in whiptail in whiptail_fselect.  Maybe a space in a filename?"
-			echo "${FILES[@]}"
-            exit 1
-        fi
-        
-        if [[ -z $FILE_SELECTED ]]; then
-            return 1
-        else
-            if [[ $FILE_SELECTED = ".." ]] && [[ $ALLOW_BACK != "no" ]]; then
-                return 0
-
-            elif [[ -d $LOCAL_PATH/$FILE_SELECTED ]] ; then
-                if whiptail_fselect "$TITLE" "$LOCAL_PATH/$FILE_SELECTED" "$FILE_MASK" "yes" ; then
-                    if [[ $FILE_SELECTED != ".." ]]; then
-                        return 0
-                    fi
-                else
-                    return 1
-                fi
-
-            elif [[ -f $LOCAL_PATH/$FILE_SELECTED ]] ; then
-                FILE_SELECTED="$LOCAL_PATH/$FILE_SELECTED"
-                return 0
-            fi
-        fi
-    done
-}
-
-
-whiptail_countdown(){  
-    local MAX=${1:-10}
-    local TITLE=${2:-"COUNTDOWN... press any key to stop or 'y' to continue now"}
-    MSG=${3:-"Countdown for $MAX seconds.\n\n"}
-
-    for ((i=$MAX; i>=0; i--)) ; do
-		TERM=vt220 whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --infobox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
-        read -t 1 -N 1 INPUT
-        if [[ ! -z $INPUT ]]; then
-            if [[ $INPUT = y ]]; then
-                echo Continuing...
-                return 0
-            else
-              echo $INPUT
-              return 2
-            fi
-        fi 
-        MSG=$(echo "$MSG.$i")
-    done 
-}
-
-
-
-# ---------- UI functions
-
-ui_msg() {
-    TITLE="$1"
-    #MSG="$2"
-    MSG=${2:-" no message "}
-    COLOR=${3:-"white"}
-    OK_BUTTON=${4:-"Back"}
-    
-    if [[ $INTERFACE = "cli" ]]; then
-        #MSG="$PRODUCTNAME: $TITLE: $MSG"
-        echo -n "$PRODUCTNAME: $TITLE: "
-        if [[ $COLOR = "red" ]]; then
-            echo_red "$MSG"
-        else    
-            echo -e "$MSG"
-        fi
-    else
-        whiptail --backtitle "$BACKTITLE" --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
-    fi
-}
-
-
-ui_yesno(){
-    TITLE="$1"
-    MSG="$2"
-    DEFAULT=${3:-""}   # defaults to Yes.  can specify --defaultno
-    COLOR=${4:-"white"}
-    
-    if [[ $INTERFACE = "cli" ]]; then
-        MSG="$PRODUCTNAME: $TITLE: $MSG  [y/n]?"
-        while true; do
-            read -n1 -p "$MSG" yn
-           # echo
-            case $yn in
-                [Yy]* ) echo y; return 0;;
-                [Nn]* ) echo n; return 0;;
-                * )     ;;
-            esac
-        done
-    else    
-        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" $DEFAULT --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH 3>&1 1>&2 2>&3
-        RC=$?
-        if (( $RC )); then
-            echo n
-        else
-            echo y
-        fi
-        return $RC
-    fi
-}
-
-
-ui_countdown(){
-    local SECONDS=${1:-10}
-    local TITLE=$2
-    local MESSAGE=${3:-"Counting down..."}
-    if [[ $INTERFACE = "cli" ]]; then
-        do_countdown $1
-    else
-        whiptail_countdown "$SECONDS" "$TITLE" "$MESSAGE"
-    fi
-}
-
-
-ui_error() {
-    LINE=$1
-    shift
-    MSG="$@"
-    ui_msg "Error in line $LINE" "$MSG" red    
-}
 
 # ---------- Misc functions
 
-echo_if_cli (){
-    local MSG=$1
-    local COLOR=$2
-    if [[ $INTERFACE = "cli" ]]; then
-        case $COLOR in
-            white) echo_white $MSG ;;
-            red)    echo_red $MSG ;;
-            *) echo $MSG ;;
-        esac
+
+
+
+do_beep(){
+    FREQ=${1:-600}
+    TIME=${2:-.5}
+    if [[ $SOUND = on ]] ; then
+        (speaker-test -t sign -f $FREQ > /dev/null & sleep $TIME && kill -9 $! ) > /dev/null
+      #  sleep .5  # to allow the beep to end
     fi
+}
+
+
+do_beep_up(){
+    do_beep 500 .3
+    do_beep 600 .6
+}
+
+
+do_beep_down(){
+   do_beep 600 .3
+   do_beep 500 .6
+}
+
+
+get_elapsed_time() {
+    # paramaters are in seconds
+    local BEG=$1
+    local END=$2
+    
+    echo $(( $(( $END-$BEG ))/60)) min $(( $(( $END-$BEG ))%60 )) sec 
 }
 
 
@@ -635,32 +425,16 @@ do_countdown(){
 }
 
 
-do_beep(){
-    FREQ=${1:-600}
-    TIME=${2:-.5}
-    if [[ $SOUND = on ]] ; then
-        (speaker-test -t sign -f $FREQ > /dev/null & sleep $TIME && kill -9 $! ) > /dev/null
-      #  sleep .5  # to allow the beep to end
+echo_if_cli (){
+    local MSG=$1
+    local COLOR=$2
+    if [[ $INTERFACE = "cli" ]]; then
+        case $COLOR in
+            white) echo_white $MSG ;;
+            red)    echo_red $MSG ;;
+            *) echo $MSG ;;
+        esac
     fi
-}
-
-do_beep_up(){
-    do_beep 500 .3
-    do_beep 600 .6
-}
-
-do_beep_down(){
-   do_beep 600 .3
-   do_beep 500 .6
-}
-
-
-get_elapsed_time() {
-    # paramaters are in seconds
-    local BEG=$1
-    local END=$2
-    
-    echo $(( $(( $END-$BEG ))/60)) min $(( $(( $END-$BEG ))%60 )) sec 
 }
 
 
@@ -1090,8 +864,8 @@ do_list_info() {
     echo "~~~ CURRENT SYSTEM ~~~"
     echo $PRODUCTNAME ver $SCRIPTVER
     echo $(cat /etc/os-release | grep "PRETTY_NAME=" | cut -d '"' -f2) hw=$(uname -m) kernel=$(uname -r)
-    echo "Root device = /dev/$(env_root_device)"
-    echo "Size      = $(media_size /dev/$(env_root_device) -h )"
+    echo "Root device = $(env_root_device)"
+    echo "Size      = $(media_size $(env_root_device) -h )"
     echo "FreeSpace = $(file_fs_freespace . -h)"
     echo "TrashSize = $(file_folder_size /home/$USER/.local/share/Trash)"
     echo "RootTrash = $(file_folder_size /root/.local/share/Trash)"
@@ -1316,6 +1090,7 @@ pisafe_update() {
         fi
         
         if [[ $RESULT = "y" ]]; then 
+            pisafe_write_log "Updating $PRODUCTNAME to v $SERVER_VER"
             sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
             sudo chmod +x /usr/local/bin/$SCRIPTNAME
             echo "$($SCRIPTNAME -v) installed. Press any key to exit... "
@@ -1366,12 +1141,16 @@ pisafe_uninstall(){
 # ---------- Media functions
 
 media_name(){
-   lsblk -d -n -l -o NAME,VENDOR,MODEL,SIZE $1  2> /dev/null
+    #lsblk -dpnlo NAME,VENDOR,MODEL,SIZE $1  2> /dev/null
+    local VEN_MOD=$(lsblk -dpnlo VENDOR,MODEL $1  2> /dev/null | sed 's/  */ /g')
     RC=$?
     if (( $RC )); then
-        echo 0
         return $RC
     fi
+    local SIZE=$(lsblk -dpnlo SIZE $1  2> /dev/null | sed 's/[ ]\+//g')
+    local DEVICE=$(lsblk -dpnlo NAME $1  2> /dev/null)
+    
+    echo "$VEN_MOD - $SIZE ($DEVICE)"
 }
 
 
@@ -1385,7 +1164,7 @@ media_size() {
         DEV="/dev/"$DEV
     fi
    
-    SIZE_BYTES=$(lsblk $DEV -d -n -b -o size  2> /dev/null)
+    SIZE_BYTES=$(lsblk $DEV -dnbo size  2> /dev/null)
     RC=$?
     if (( $RC )); then
         echo 0
@@ -1436,8 +1215,8 @@ media_check_indev(){
     fi 
     
     # Warning if INDEV is root device
-    if [[ $INDEV = /dev/$(env_root_device) ]]; then
-        ui_msg "WARNING 3" "SD-card '$(media_name $INDEV)' is root device '/dev/$(env_root_device)'." "red" "OK"
+    if [[ $INDEV = $(env_root_device) ]]; then
+        ui_msg "WARNING 3" "SD-card '$(media_name $INDEV)' is root device '$(env_root_device)'." "red" "OK"
     fi  
     
     # Warning if device filesystem has an overlay
@@ -1511,7 +1290,7 @@ media_check_outdev(){
     fi
     
     # Stop if outdev is the root device
-    if [[ $OUTDEV = /dev/$(env_root_device) ]]; then
+    if [[ $OUTDEV = $(env_root_device) ]]; then
         ui_msg "RESTORE ERROR" "Restore to root device not allowed" "red"
         return 1
     fi
@@ -1554,7 +1333,7 @@ media_backup(){
     echo "IN-DEV='$INDEV'"
     echo "OUT-FILE='$OUTFILE'"
     echo  "Compression set to level $COMPRESSION of 9"
-    pisafe_write_log "Starting $PRODUCTNAME $SCRIPTVER Backup, '$INDEV' '$(media_name $INDEV)', '$OUTFILE', Compression=$COMPRESSION"
+    pisafe_write_log "$PRODUCTNAME $SCRIPTVER Backup, '$(media_name $INDEV)', '$OUTFILE', Compression=$COMPRESSION"
       
     if [[ $INTERFACE = "cli" ]]; then
         media_check_indev
@@ -1647,7 +1426,7 @@ media_backup(){
     
     sleep 5s
     echo "Done reading device '$INDEV'"
-    echo_white \'$(ls -s -h "$OUTFILE_BASE".img)\'
+    echo_white "'$(ls -s -h "$OUTFILE_BASE".img)'"
     TIME2=$(date +%s)  
     echo_white Step 1 took $(get_elapsed_time $TIME1 $TIME2)
     echo
@@ -1664,7 +1443,7 @@ media_backup(){
             sudo pishrink.sh $PI_SHRINK_OPTS "$OUTFILE_BASE".img
             RC=$?
             if (( $RC )); then
-                echo Continuing without shrinking file system
+                echo Continuing without shrinking file system...
             fi
         else
             echo "Filesystem not shrunk.  Setting is 'off'."
@@ -1672,7 +1451,7 @@ media_backup(){
         # sleep to allow the file size to register with the OS
         sleep 5
         echo Done shrinking filesystem.
-        echo_white \'$(ls -s -h "$OUTFILE_BASE".img)\'
+        echo_white "'$(ls -s -h "$OUTFILE_BASE".img)'"
         TIME3=$(date +%s)
         echo_white Step 2 took $(get_elapsed_time $TIME2 $TIME3)
     fi
@@ -1710,29 +1489,13 @@ media_backup(){
             ;;
         
         xz)
-            #sudo xz -z -v -T0 -$COMPRESSION "$OUTFILE_BASE".img
-            #EXIT_CODE=$?     
-            ##OUTFILE="$OUTFILE_BASE".img.xz
-            ##sudo mv "$OUTFILE_BASE".img.xz "$OUTFILE"  
-            
             # With progress bar
-          #  if [ ! -z $(which pv) ]; then
-				pv "$OUTFILE_BASE".img | xz -z -c -T0 -$COMPRESSION > "$OUTFILE"
-				RC=$? 
-		#	else
-        #        sudo xz -z -v -T0 -$COMPRESSION "$OUTFILE_BASE".img
-        #        RC=$? 
-	#		fi	
+            pv "$OUTFILE_BASE".img | xz -z -c -T0 -$COMPRESSION > "$OUTFILE"
+            RC=$? 
             rm -f "$OUTFILE_BASE".img
             ;;
         
         gz)
-            #echo $(file_size "$OUTFILE_BASE".img -h) to compress.  Sorry, gz has no progress bar.   Please wait...
-            #sudo pigz -v -$COMPRESSION "$OUTFILE_BASE".img
-            #EXIT_CODE=$?        
-            #sudo mv "$OUTFILE_BASE".img.gz "$OUTFILE"
-            #OUTFILE="$OUTFILE_BASE".img.gz
-
             # With progress bar
             pv "$OUTFILE_BASE".img | pigz -$COMPRESSION > "$OUTFILE"
             RC=$? 
@@ -1758,7 +1521,6 @@ media_backup(){
     TIME4=$(date +%s)
     echo_white  Step 3 took $(get_elapsed_time $TIME3 $TIME4)
     
-    
     # check if "$OUTFILE" was created
     if [[ ! -f $OUTFILE ]]; then
         do_beep_down
@@ -1767,17 +1529,10 @@ media_backup(){
         return 1
     fi    
     
-    
-  #  if [ $RC != 0 ]; then
-  #      echo
-  #      echo_red  "ERROR. $RC"
-  #      pisafe_write_log "FAILED $PRODUCTNAME $SCRIPTVER Backup, IN-DEV='$INDEV',  OUT-FILE='$OUTFILE', Compression set to level $COMPRESSION"
-  #      return $RC
-  #  else
-        do_beep_up
-        echo_white "Backup done. '$INDEV' backed up to '$OUTFILE' in $(get_elapsed_time $TIME1 $TIME4)." 
-        pisafe_write_log "Finished $PRODUCTNAME $SCRIPTVER Backup,  $(media_size $INDEV -h) to  $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4) " 
-  #  fi
+    do_beep_up
+    echo_white "Backup done. '$INDEV' backed up to '$OUTFILE' in $(get_elapsed_time $TIME1 $TIME4)." 
+    pisafe_write_log "$PRODUCTNAME $SCRIPTVER Backup compressed $(media_size $INDEV -h) to $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4) " 
+
 }
 
 
@@ -1791,7 +1546,7 @@ media_restore(){
     echo "IN-FILE='$INFILE'"
     echo "OUT-DEV='$OUTDEV'"
     echo "Safety='$SAFETY'"
-    pisafe_write_log "Starting $PRODUCTNAME $SCRIPTVER Restore, '$INFILE', '$OUTDEV' '$(media_name $OUTDEV)'"
+    pisafe_write_log "$PRODUCTNAME $SCRIPTVER Restore, '$INFILE', '$(media_name $OUTDEV)'"
  
     if [[ $SILENT != "-y" ]]; then
         file_check_infile
@@ -1829,7 +1584,7 @@ media_restore(){
     if [[ $SILENT != "-y" ]]; then
         echo
         echo "Write '$INFILE' to '$OUTDEV' '$(media_name $OUTDEV)' ?"
-        echo_red WARNING... All existing data on \'$OUTDEV\' - will be erased!
+        echo_red "WARNING... All existing data on '$OUTDEV' - will be erased!"
         do_beep
         read  -p "You must type 'YES' to continue:" -r RESULT
         echo
@@ -1933,11 +1688,10 @@ media_restore(){
         pisafe_write_log "Restore failed $RC"
         return $RC
     else
-          
-        #do_beep
         do_beep_up
         echo_white "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
-        pisafe_write_log "Restore done. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)."
+        # pisafe_write_log "Finished Restore done. '$INFILE' written to '$(media_name $OUTDEV)' in $(get_elapsed_time $TIME1 $TIME2)."
+        pisafe_write_log "$PRODUCTNAME $SCRIPTVER Restored $(file_size $INFILE -h) in $(get_elapsed_time $TIME1 $TIME2) " 
     fi
 }
 
@@ -1959,7 +1713,6 @@ media_list() {
                 ;;
     esac
     
-    #DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE 2>/dev/null | grep -v $ROOT_FILTER)
     DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
     RC=$?
     if (( $RC )); then
@@ -2114,7 +1867,6 @@ media_power_off(){
     MEDIA=$1
     umount $MEDIA?
     udisksctl power-off $MEDIA
-    #sudo eject -s $MEDIA
 }
 
 
@@ -2127,7 +1879,7 @@ media_backup_estimate() {
         return 1
     fi
 
-    MEDIA_SIZE=$(sudo lsblk -ndb $MEDIA -o size)
+    MEDIA_SIZE=$(media_size $MEDIA)
     PARTED_OUTPUT=$(sudo parted -ms $MEDIA print)  # no freespace
     MEDIA_PARTITION_TABLE=$(echo "$PARTED_OUTPUT" | head -n 2 | tail -n 1 | cut -d: -f6)   # msdos, gpt, other
     MEDIA_PARTITION_COUNT=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1 | wc -l)
@@ -2253,9 +2005,8 @@ media_format(){
     local SILENT=${3:-"-n"}
     
     
-    local ROOT="/dev/$(env_root_device)"
+    local ROOT="$(env_root_device)"
     local TYPE=$(lsblk $DEVICE -dnpo TYPE)
-    local NAME="$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE) ($DEVICE)"
     local PART1=$DEVICE\1
 
     if [[ -z $DEVICE ]] ; then
@@ -2280,9 +2031,9 @@ media_format(){
     fi
     
     if [[ $SILENT != "-y" ]]; then
-        RESULT=$(ui_yesno "ERASE" "WARNING!!  \n\nFormat '$DEVICE' to '$FORMAT' \n\nAll existing data on '$NAME' will be erased.  \n\nAre you sure you want to continue? y/n?" "--defaultno")
+        RESULT=$(ui_yesno "ERASE" "WARNING!!  \n\nFormat '$(media_name $DEVICE)' to '$FORMAT' \n\nAll existing data on '$(media_name $DEVICE)' will be erased.  \n\nAre you sure you want to continue? y/n?" "--defaultno")
         if [[ $RESULT != "y" ]]; then
-            ui_msg "ERASE" "$DEVICE not erased"
+            ui_msg "ERASE" "$(medianame $DEVICE) not erased"
             return
         fi
     fi
@@ -2294,11 +2045,11 @@ media_format(){
     if (( $? )); then
         return 2
     fi
+    
+    pisafe_write_log "Starting $PRODUCTNAME $SCRIPTVER Format, $(media_name $DEVICE) to $FORMAT " 
+    
 
     echo "Unmounting '$DEVICE'..."
-    #udisksctl unmount -b "$DEVICE"1
-    #udisksctl unmount -b "$DEVICE"2
-    #udisksctl unmount -b "$DEVICE"3
     umount $DEVICE? 2> /dev/null
 
     echo "Writing zeros to '$DEVICE'..."
@@ -2349,7 +2100,6 @@ media_format(){
             #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
             sudo apt-get install exfat-utils exfat-fuse
             sudo modprobe fuse 
-            #run_command "sudo mkfs.exfat -n EXFAT $PART1" $LINENO
             sudo mkfs.exfat -n EXFAT $PART1
             EC=$?
             ;;        
@@ -2364,7 +2114,7 @@ media_format(){
     echo "Mounting the drive..."
     sleep 2
     udisksctl mount -b  "$DEVICE"1
-    if (( $? != 0 )); then
+    if (( $? )); then
         echo "Error 13: mount failed"
         do_beep_down
         return 13
@@ -2375,12 +2125,244 @@ media_format(){
     #sudo parted "$DEVICE" print
     #sleep 5
     
+    pisafe_write_log "Finished $PRODUCTNAME $SCRIPTVER Format, $(media_name $DEVICE) to $FORMAT " 
     do_beep_up
     ui_msg "ERASE MEDIA" "'$NAME' ($DEVICE) has been erased. \n\nIt has been remounted."
 }
 
 
 
+# ---------- UI functions
+
+ui_msg() {
+    TITLE="$1"
+    #MSG="$2"
+    MSG=${2:-" no message "}
+    COLOR=${3:-"white"}
+    OK_BUTTON=${4:-"Back"}
+    
+    if [[ $INTERFACE = "cli" ]]; then
+        #MSG="$PRODUCTNAME: $TITLE: $MSG"
+        echo -n "$PRODUCTNAME: $TITLE: "
+        if [[ $COLOR = "red" ]]; then
+            echo_red "$MSG"
+        else    
+            echo -e "$MSG"
+        fi
+    else
+        whiptail --backtitle "$BACKTITLE" --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
+    fi
+}
+
+
+ui_yesno(){
+    TITLE="$1"
+    MSG="$2"
+    DEFAULT=${3:-""}   # defaults to Yes.  can specify --defaultno
+    COLOR=${4:-"white"}
+    
+    if [[ $INTERFACE = "cli" ]]; then
+        MSG="$PRODUCTNAME: $TITLE: $MSG  [y/n]?"
+        while true; do
+            read -n1 -p "$MSG" yn
+           # echo
+            case $yn in
+                [Yy]* ) echo y; return 0;;
+                [Nn]* ) echo n; return 0;;
+                * )     ;;
+            esac
+        done
+    else    
+        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" $DEFAULT --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH 3>&1 1>&2 2>&3
+        RC=$?
+        if (( $RC )); then
+            echo n
+        else
+            echo y
+        fi
+        return $RC
+    fi
+}
+
+
+ui_countdown(){
+    local SECONDS=${1:-10}
+    local TITLE=$2
+    local MESSAGE=${3:-"Counting down..."}
+    if [[ $INTERFACE = "cli" ]]; then
+        do_countdown $1
+    else
+        whiptail_countdown "$SECONDS" "$TITLE" "$MESSAGE"
+    fi
+}
+
+
+ui_error() {
+    LINE=$1
+    shift
+    MSG="$@"
+    ui_msg "Error in line $LINE" "$MSG" red    
+}
+
+
+########################################
+###  WHIPTAIL GUI FUNCTIONS ##############
+########################################
+
+
+whiptail_calc_wt_size() {
+    # NOTE: it's tempting to redirect stderr to /dev/null, so supress error 
+    # output from tput. However in this case, tput detects neither stdout or 
+    # stderr is a tty and so only gives default 80, 24 values
+
+    WT_HEIGHT=20
+    WT_WIDTH=80
+    WT_HEIGHT_TALL=$(($(tput lines)-10))
+    WT_WIDTH_WIDE=$(($(tput cols)-7))
+
+    if [[ -z $WT_WIDTH ]] || [[ $WT_WIDTH -lt 60 ]]; then
+        WT_WIDTH=80
+    fi
+    if [[ $WT_WIDTH -gt 178 ]]; then
+        WT_WIDTH=80
+    fi
+
+    WT_MENU_HEIGHT=$(($WT_HEIGHT-7))
+    WT_MENU_HEIGHT_TALL=$(($WT_HEIGHT_TALL-7))
+
+    WT_MB_HEIGHT=$WT_HEIGHT
+    WT_MB_WIDTH=$WT_WIDTH
+}
+
+
+whiptail_fselect() {
+#
+#  Arguments
+#     1  Dialog title
+#     2  Source path to list files and directories
+#     3  File mask (by default *)
+#     4  "yes" to allow go back in the file system.
+#
+#  Returns
+#     0  if a file was selected and loads the FILE_SELECTED variable 
+#        with the selected file.
+#     1  if the user cancels.
+#
+#if whiptail_fselect "Please, select a file" /home/user ; then
+#        echo "File Selected: \"$FILE_SELECTED\"."
+#else
+#        echo "Cancelled!"
+#fi
+# ----------------------------------------------------------------------
+
+    local TITLE=${1:-$MSG_INFO_TITLE}
+    local LOCAL_PATH=${2:-$(pwd)}
+    local FILE_MASK=${3:-"*"}
+    #local FILE_MASK='( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" )'
+    local ALLOW_BACK=${4:-no}
+    local FILES=()
+
+    [[ $ALLOW_BACK != "no" ]] && FILES+=(".." "..")
+
+    IFS=$'\t\n'
+
+    FILES=("FILENAME" "     SIZE   (IMAGESIZE)")
+
+    # First add folders      
+    for DIR in $(find $LOCAL_PATH -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f\t" | sort 2> /dev/null)
+    do
+        FILES+=($DIR  "     folder")
+    done              
+                
+    # Then add files                                
+    for FILE in $(find $LOCAL_PATH -maxdepth 1 \
+        \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" \) \
+        -type f \
+        -printf "%f\t     %s\n" | sort  2> /dev/null)                                                                  
+    do
+        FILES+=($FILE)
+    done
+	unset IFS
+
+
+    # convert filesizes to human readable and add image size
+    num='^[0-9]+$'
+    arraylength=${#FILES[@]}
+    
+    if [[ $arraylength = 0 ]]; then
+        FILES=(no files)
+    fi
+    
+    for (( i=0; i<${arraylength}; i++ )); do
+		arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
+		if [[ $arrayelement =~ $num ]] ; then  
+            #FILES[$i]=$(echo "    " $(get_bytes_h $arrayelement -h))
+            FILES[$i]=$(echo "    " $(get_bytes $arrayelement -h) \($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h)\)) 
+		else
+            PREVIOUS_ELEMENT=$(echo "${FILES[$i]}")
+        fi
+    done
+ 
+ 
+    # let user select file
+    while true
+    do
+        FILE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$LOCAL_PATH" \
+                                --menu "Choose a file" $WT_HEIGHT_TALL $WT_WIDTH_WIDE $WT_MENU_HEIGHT_TALL "${FILES[@]}"  3>&1 1>&2 2>&3)
+
+        #exit if bad whiptail statement
+        FSX=${FILE_SELECTED:0:3}
+       # if [ ! -z $FSX ] && [ $FSX = "Box" ]; then
+        if [[ ~$FSX = "~Box" ]]; then
+            echo "ERROR in whiptail in whiptail_fselect.  Maybe a space in a filename?"
+			echo "${FILES[@]}"
+            exit 1
+        fi
+        
+        if [[ -z $FILE_SELECTED ]]; then
+            return 1
+        else
+            if [[ $FILE_SELECTED = ".." ]] && [[ $ALLOW_BACK != "no" ]]; then
+                return 0
+
+            elif [[ -d $LOCAL_PATH/$FILE_SELECTED ]] ; then
+                if whiptail_fselect "$TITLE" "$LOCAL_PATH/$FILE_SELECTED" "$FILE_MASK" "yes" ; then
+                    if [[ $FILE_SELECTED != ".." ]]; then
+                        return 0
+                    fi
+                else
+                    return 1
+                fi
+
+            elif [[ -f $LOCAL_PATH/$FILE_SELECTED ]] ; then
+                FILE_SELECTED="$LOCAL_PATH/$FILE_SELECTED"
+                return 0
+            fi
+        fi
+    done
+}
+
+
+whiptail_countdown(){  
+    local MAX=${1:-10}
+    local TITLE=${2:-"COUNTDOWN... press any key to stop or 'y' to continue now"}
+    MSG=${3:-"Countdown for $MAX seconds.\n\n"}
+
+    for ((i=$MAX; i>=0; i--)) ; do
+		TERM=vt220 whiptail --backtitle "$BACKTITLE"  --title "$TITLE" --infobox "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH
+        read -t 1 -N 1 INPUT
+        if [[ ! -z $INPUT ]]; then
+            if [[ $INPUT = y ]]; then
+                echo Continuing...
+                return 0
+            else
+              echo $INPUT
+              return 2
+            fi
+        fi 
+        MSG=$(echo "$MSG.$i")
+    done 
+}
 
 
 
@@ -2516,6 +2498,7 @@ menu_settings(){
                                 ui_yesno "WARNING" "Are you sure you want to reset the settings to factory defaults?" "--defaultno" 
                       #          if [ $? = 0 ] ; then
                                 if ! (( $? )); then
+                                    pisafe_write_log "Setting $PRODUCTNAME $SCRIPTVER to Factory Defaults"
                                     config_var_set_defaults
                                     config_var_get_settings
                                 fi ;;
@@ -2652,7 +2635,7 @@ menu_backup(){
     
 
     #confirm to continue
-    MSG="Backup '$(media_name $INDEV)' on '$INDEV' 
+    MSG="Backup '$(media_name $INDEV)' 
         \nto '$OUTFILE'.
         \n\nA good 8GB card with RaspiOS on a Pi4 takes about 10 minutes with zip
         \nand about 7 minutes with gz.
@@ -2722,7 +2705,7 @@ menu_restore() {
     # Confirm to continue
     if (whiptail  --backtitle "$BACKTITLE" --title "RESTORE WARNING" --defaultno \
         --yesno "Restore '$INFILE' 
-        \nto '$(media_name $OUTDEV)' on '$OUTDEV' 
+        \nto '$(media_name $OUTDEV)' 
         \n\nALL existing data on '$(media_name $OUTDEV)' - WILL BE ERASED!  
         \nRestore now?" $WT_HEIGHT $WT_WIDTH) then
         #echo "User selected Yes, exit status was $?."
