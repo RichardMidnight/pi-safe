@@ -110,7 +110,7 @@ V1.1.0 Added support for Manjaro and probably other Arch-based distros.
   - Shrinking the filesystem on backup  
     - Shrinking the filesystem is VERY VALUABLE because it creates a smaller image file, and allows you to restore the image to a different size media.
     - PiSafe will shrink your filesystem if your main partition is ext4 (and maybe ext3 and ext2) and is the last partition on the media.
-    - If your install does not default to this partitioning setup you should be able to custom partition the media during your OS installation and put the main ext4 partition at the end.  This is needed with standard debian installations including RPD and Linux Mint.
+    - If your install does not default to this partitioning setup you should be able to custom partition the media during your OS installation and put the main ext4 partition at the end.  This is needed with standard debian installations including RPD and Linux Mint because they put a swap partition at then end of the media which blocks PiSafe from shrinking the filesystem.
     - Alternatively if your main partition is the second to last one and the last one is a swap partition, you may be able to simply delete the swap partition.
     - Alternatively you can zero-out your deleted files with bleachbit to optimize compression and then shrink your partitions with gparted.
     
