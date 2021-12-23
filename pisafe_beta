@@ -769,15 +769,21 @@ file_fs_freespace() {
     local FREESPACE
     
     if [[ -d $FILENAME ]]; then
-        FREESPACE=$(df "$FILENAME" $FORMAT --output=avail | grep -v Avail)
+        #FREESPACE=$(df "$FILENAME" $FORMAT --output=avail | grep -v Avail)
+        FREESPACE=$(df "$FILENAME" -B1 --output=avail | grep -v Avail)
         RC=$?
     else
-        FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
+        #FREESPACE=$(df $(dirname "$FILENAME") $FORMAT --output=avail | grep -v Avail)
+        FREESPACE=$(df $(dirname "$FILENAME") -B1 --output=avail | grep -v Avail)
         RC=$?
     fi
 
     if (( $RC )) ; then
         return $RC
+    fi
+    
+    if [[ $FORMAT = "-h" ]]; then
+        FREESPACE=$(get_bytes $FREESPACE -h)
     fi
     
     echo $FREESPACE
@@ -1259,21 +1265,26 @@ media_check_indev(){
          ui_msg "WARNING 4" "$MESG" "red" "OK"
     fi
     
-    # Stop if SD-card is bigger than freespace
-    if [[ $(media_size $INDEV) -gt $(file_fs_freespace "$DEFAULT_PATH") ]]; then
+    # Stop if SD-card is bigger than freespace  
+    PARTED_OUTPUT=$(sudo parted $INDEV unit B print free )
+    MEDIA_FREESPACE_AT_END=$(echo "$PARTED_OUTPUT" | tail -1 | grep Free | sed 's/[ ]\+/ /g' | cut -d " " -f 4 | tr -d 'B' )
+    if [[ -z $MEDIA_FREESPACE_AT_END ]]; then
+        MEDIA_FREESPACE_AT_END=0
+    fi
+    MEDIA_SIZE=$(( $(media_size $INDEV) - $MEDIA_FREESPACE_AT_END ))
+    if [[ $MEDIA_SIZE -gt $(file_fs_freespace "$DEFAULT_PATH") ]]; then
         MSG="Not enough free space on '$DEFAULT_PATH' 
-         \n\n'$(media_name  $INDEV)' is $(media_size $INDEV -h)
-         \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
-         \n\nBe sure to specify a different drive" 
+         \n'$(media_name  $INDEV)' is $(get_bytes $MEDIA_SIZE -h)
+         \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h) "
          ui_msg "ERROR 5 line $LINENO" "$MSG" "red" "OK"
          return 2
     fi
     
     # Warning if one and a half times the SD-card is bigger than freespace
-    SPACENEEDED=$(( $(media_size $INDEV) + $(( $(media_size $INDEV) / 2 )) ))
+    SPACENEEDED=$(( $MEDIA_SIZE + $(( $MEDIA_SIZE / 2 )) ))
     if [[ $SPACENEEDED -gt $(file_fs_freespace "$DEFAULT_PATH") ]]; then
         MSG="Might not be enough free space on '$DEFAULT_PATH'
-            \n\n'$(media_name $INDEV)' is $(media_size $INDEV -h)
+            \n'$(media_name $INDEV)' is $(get_bytes $MEDIA_SIZE -h)
             \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
             \nThere is $(file_folder_size /home/$USER/.local/share/Trash) in the Trash" 
         ui_msg "WARNING 6" "$MSG" "red" "OK"
@@ -3008,6 +3019,7 @@ case $1 in
         echo $SCRIPTVER  ;;
     
     "")
+        config_var_get_settings
         menu_gui  ;;
     
     *)   
@@ -3034,7 +3046,7 @@ fi
 pisafe_install_tools
 
 config_var_init_configfile
-config_var_get_settings
+#config_var_get_settings
 
 whiptail_calc_wt_size
 
