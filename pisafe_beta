@@ -1431,7 +1431,7 @@ media_backup(){
 		BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS + 1))
 
 		echo Media size=$(media_size $INDEV -h)
-		echo Skipping $(get_bytes $(( $(media_size $INDEV) - $START_OF_FREESPACE )) -h ) of freespace at end.
+		echo Skipping $(get_bytes $(( $(media_size $INDEV) - $START_OF_FREESPACE )) -h ) of freespace at end of media.
 		echo Reading=$(get_bytes $START_OF_FREESPACE -h)
 
 	else
@@ -2127,6 +2127,12 @@ media_format(){
             ;;
         
         ntfs)
+            if [[ -z $(which mkfs.ntfs) ]] ; then
+                #sudo apt-get install fuse ntfs-3g
+                sudo $INSTALL fuse ntfs-3g
+                sudo modprobe fuse 
+                echo "fuse" | sudo tee -a /etc/modules
+            fi  
             run_command "sudo mkfs.ntfs -f -L NTFS $PARTITION" $LINENO
             rc=$?
             ;;
@@ -2148,9 +2154,11 @@ media_format(){
  
         exfat)
             #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
-            sudo apt-get install exfat-utils exfat-fuse
-            sudo modprobe fuse 
-            echo "fuse" | sudo tee -a /etc/modules
+            if [[ -z $(which mkfs.exfat) ]] ; then
+                sudo $INSTALL exfat-utils exfat-fuse
+                sudo modprobe fuse 
+                echo "fuse" | sudo tee -a /etc/modules
+            fi    
             run_command "sudo mkfs.exfat -n EXFAT $PARTITION" $LINENO
             rc=$?
             ;;   
@@ -2855,6 +2863,10 @@ menu_tools(){
                             "exfat"     "     Newer universal format for media over 32GB" \
                             "ntfs"      "     Native Windows format" \
                             "ext4"      "     Native Linux format" 3>&1 1>&2 2>&3)
+                RC=$?
+                if (( $RC )); then
+                    return  $RC               
+                fi            
                 media_format "$DEVICE" "$FORMAT"  
                 ;;
                 
