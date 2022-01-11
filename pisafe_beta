@@ -2112,7 +2112,7 @@ media_format(){
         PARTITION=$DEVICE\1    
     fi    
 
-
+    sleep 2
     echo "Formatting the partition to '$FORMAT'..."
 
     case $FORMAT in
@@ -2129,6 +2129,7 @@ media_format(){
         ntfs)
             if [[ -z $(which mkfs.ntfs) ]] ; then
                 #sudo apt-get install fuse ntfs-3g
+                echo Installing ntfs support...
                 sudo $INSTALL fuse ntfs-3g
                 sudo modprobe fuse 
                 echo "fuse" | sudo tee -a /etc/modules
@@ -2155,6 +2156,7 @@ media_format(){
         exfat)
             #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
             if [[ -z $(which mkfs.exfat) ]] ; then
+                echo Installing exfat support ...
                 sudo $INSTALL exfat-utils exfat-fuse
                 sudo modprobe fuse 
                 echo "fuse" | sudo tee -a /etc/modules
@@ -2860,7 +2862,7 @@ menu_tools(){
                 
                 FORMAT=$(whiptail --clear --backtitle "$BACKTITLE" --title "Select format" --ok-button "Select" --cancel-button "Exit" --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
                             "fat32"     "     Most universal format for media under 32GB" \
-                            "exfat"     "     Newer universal format for media over 32GB" \
+                            "exfat"     "     Most universal format for media over 32GB and files over 4GB" \
                             "ntfs"      "     Native Windows format" \
                             "ext4"      "     Native Linux format" 3>&1 1>&2 2>&3)
                 RC=$?
