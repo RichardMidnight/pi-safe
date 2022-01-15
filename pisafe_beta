@@ -2042,6 +2042,23 @@ media_format(){
     local NAME="$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE,TYPE) ($DEVICE)"
     local PARTITION=$DEVICE
 
+	if [[ $FORMAT = fat32 ]] ; then 
+		PART_TABLE=msdos
+		PART_TYPE=primary
+		PART_NAME=
+	else
+		PART_TABLE=gpt
+		PART_TYPE=
+		PART_NAME=$FORMAT
+	fi
+
+	if [[ $FORMAT = exfat ]]; then
+		FS_TYPE=ntfs
+	else
+		FS_TYPE=$FORMAT
+	fi
+	
+
     if [[ -z $1 ]] ; then
         error $LINENO "Device not specified."
         lsblk -dp
@@ -2090,11 +2107,6 @@ media_format(){
             return 9
         fi
 
-        if [[ $FORMAT = "fat32" ]] ; then 
-            PART_TABLE=msdos
-        else
-            PART_TABLE=gpt
-        fi
         echo "Writing new '$PART_TABLE' partition table to '$DEVICE'..."
         run_command "sudo parted -s $DEVICE mklabel $PART_TABLE" $LINENO
         if (( $? )); then
@@ -2102,8 +2114,9 @@ media_format(){
             return 10
         fi
 
-        echo "Creating 'primary' partition on '$DEVICE'..."
-        run_command "sudo parted -s -a opt $DEVICE mkpart primary 4M 100%" $LINENO
+        echo "Creating empty partition on '$DEVICE'..."
+       # run_command "sudo parted -s -a opt $DEVICE mkpart primary $FS_TYPE 2M 100%" $LINENO
+       run_command "sudo parted -s -a opt $DEVICE mkpart $PART_TYPE $PART_NAME $FS_TYPE 2M 100%" $LINENO
         if (( $? )); then
             error $LINENO "mkpart failed"
             return 11
@@ -2116,7 +2129,7 @@ media_format(){
     echo "Formatting the partition to '$FORMAT'..."
 
     case $FORMAT in
-        fat16)
+        fat16)  
             run_command "sudo mkfs.vfat -F16 -v -I -n FAT16 $PARTITION" $LINENO
             rc=$?
             ;;
@@ -2125,6 +2138,18 @@ media_format(){
             run_command "sudo mkfs.vfat -v -I -n FAT32 $PARTITION" $LINENO
             rc=$?
             ;;
+            
+        exfat)
+            #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
+            if [[ -z $(which mkfs.exfat) ]] ; then
+                echo Installing exfat support ...
+                sudo $INSTALL exfat-utils exfat-fuse
+                sudo modprobe fuse 
+                echo "fuse" | sudo tee -a /etc/modules
+            fi    
+            run_command "sudo mkfs.exfat -n EXFAT $PARTITION" $LINENO
+            rc=$?
+            ;;      
         
         ntfs)
             if [[ -z $(which mkfs.ntfs) ]] ; then
@@ -2152,18 +2177,6 @@ media_format(){
             run_command "sudo mkfs.ext4 -L EXT4 -E root_owner=$UID:$GID -F $PARTITION" $LINENO
             rc=$?
             ;;
- 
-        exfat)
-            #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
-            if [[ -z $(which mkfs.exfat) ]] ; then
-                echo Installing exfat support ...
-                sudo $INSTALL exfat-utils exfat-fuse
-                sudo modprobe fuse 
-                echo "fuse" | sudo tee -a /etc/modules
-            fi    
-            run_command "sudo mkfs.exfat -n EXFAT $PARTITION" $LINENO
-            rc=$?
-            ;;   
             
         *)
             error $LINENO "Unknown format '$FORMAT'"
