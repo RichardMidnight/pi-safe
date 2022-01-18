@@ -52,6 +52,12 @@ Beta version:
     bash pisafe install
     
  
+ Previous version:
+
+    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.1.1 -O pisafe
+    bash pisafe install
+    
+ 
  
  
  
