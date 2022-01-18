@@ -39,7 +39,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
 
 # Install
 
-In a terminal window, type in
+Paste or type this into a terminal window:
 
     
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
@@ -52,7 +52,7 @@ Beta version:
     bash pisafe install
     
  
- Previous version:
+Previous version:
 
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.1.1 -O pisafe
     bash pisafe install
