@@ -93,7 +93,7 @@ Previous version:
  
    
    
-# Compatibility   
+# Release notes   
 
 Originally developed and tested on Raspberry pi 4 running Raspberry Pi OS Buster.
 
@@ -104,14 +104,16 @@ v1.0.5 Added support for other terminals: lxterminal, gnome-terminal, xfce-termi
 V1.0.5 Added support for other text editors: leafpad, mousepad, gedit, kwrite, pluma, featherpad, xed, geany, kate, nano.
 
 V1.1.0 Added support for Manjaro and probably other Arch-based distros.
+
+v1.2.0 Cleaned up the code a lot, added "ignore_freespace_at_end", added erase (fat32, exfat, ntfs, ext4).  
  
    
  # Tips
  PiSafe is optimized for Raspberry Pis running Raspios around the year 2020.  It will work with many other linux distributions and other hardware but some features may not be optimized or may not work at all depending on the configuration.  The following tips can help you optimize PiSafe for your configuration.
  
-  - Ignore Freespace at end of media  (beta, ver 1.1.5+ )
+  - Ignore Freespace at end of media
     - PiSafe will ignore freespace at the end of the media, speeding up the backup process and using less working space.  
-    - If you have a small amount of data on a large media (eg using 10GB of a 500GB drive), you can resize your partitions (with gparted) and leave freespace (unallocated) at the end of the media to be ignored.  Note, freespace not at the end of the media cannot be ignored.
+    - If you have a small amount of data on a large media (eg using 10GB of a 500GB drive), you can resize your partitions (with gparted) and leave freespace (unallocated) at the end of the media which PiSafe will ignored.  Note, freespace not at the end of the media cannot be ignored.
  
   - Shrinking the filesystem on backup  
     - Shrinking the filesystem is VERY VALUABLE because it creates a smaller image file, and allows you to restore the image to a different size media.
