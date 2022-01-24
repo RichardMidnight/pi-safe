@@ -16,7 +16,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.0"   # 2022/01/18 
+SCRIPTVER="1.2.1"   # 2022/01/23 
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -34,6 +34,7 @@ SKIP_FREESPACE=on
 LOG=on
 LOG_FILE="/home/$USER/.config/pisafe/PiSafe.log"
 CHECK_FOR_UPDATES_ON_STARTUP=on
+COMPRESSION=1
 
 WHITE='\033[1;37m'
 RED='\033[1;31m'
@@ -103,7 +104,7 @@ run_command(){
         echo_blue $CMD
     fi
     
-    $CMD
+    eval $CMD
     rc=$?
     if (( rc )); then
         ui_error $LINENO "Error $rc running '$CMD'"
@@ -1440,11 +1441,11 @@ media_backup(){
     #sudo dd bs=4M if=$INDEV of="$OUTFILE_BASE".img status=progress conv=fsync 
     MEDIA_SIZE=$(sudo lsblk -ndb $MEDIA -o size)
     if [[ ! -z $(which pv) ]]; then
-		sudo pv $INDEV -s $BYTES_TO_READ $DEVICE | dd bs=$BS of="$OUTFILE_BASE".img count="$BLOCKS_TO_READ" iflag=fullblock conv=fsync 
-		RC=$?
+		run_command "sudo pv $INDEV -s $BYTES_TO_READ $DEVICE | dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
+       	RC=$?
     else
       echo "Note: 'pv' is not installed so there is no progress indicator for this step. Please wait..."
-      sudo dd bs=4M if=$INDEV of="$OUTFILE_BASE".img  conv=fsync 
+      run_command "sudo dd bs=4M if=$INDEV of='$OUTFILE_BASE.img'  conv=fsync " $LINENO
       RC=$?
     fi
     if (( $RC )); then
@@ -1468,7 +1469,7 @@ media_backup(){
             PI_SHRINK_OPTS="-s"
         fi
         if [[ $SHRINK_FS != off ]]; then
-            sudo pishrink.sh $PI_SHRINK_OPTS "$OUTFILE_BASE".img
+            run_command "sudo pishrink.sh $PI_SHRINK_OPTS '$OUTFILE_BASE'.img " $LINENO
             RC=$?
             if (( $RC )); then
                 echo Continuing without shrinking file system...
@@ -1488,7 +1489,7 @@ media_backup(){
     echo_white "Step 3 of 3 - Compressing '$OUTFILE_BASE.img' to '$OUTFILE' ... "
     date
     echo Compression set to level $COMPRESSION of 9
-    echo "$(file_size $OUTFILE_BASE.img -h) to compress."
+    echo "$(file_size '$OUTFILE_BASE'.img -h) to compress."
     
     case $(file_ext "$OUTFILE") in
         img)
@@ -1497,8 +1498,9 @@ media_backup(){
         
         iso)
             echo Not compressing .iso file ...
-            mv $OUTFILE_BASE.img $OUTFILE_BASE.iso
+            mv "$OUTFILE_BASE".img "$OUTFILE_BASE".iso
             RC=$?
+            OUTFILE="$OUTFILE_BASE".iso
             ;;
         
         zip)
@@ -1507,7 +1509,8 @@ media_backup(){
             echo Each dot=$DOTSIZE 
             echo -n "                      $OUTFILE_BASE.img"
             echo "...........25...........50...........75..........100%"
-            zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
+            run_command "zip -dbds $DOTSIZE -m -$COMPRESSION '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
+            #zip -dbds $DOTSIZE -m -$COMPRESSION "$OUTFILE" "$OUTFILE_BASE".img
             RC=$?
             
             #warning, with progress bar it loses .img in the image name
@@ -1517,15 +1520,15 @@ media_backup(){
             ;;
         
         xz)
-            # With progress bar
-            pv "$OUTFILE_BASE".img | xz -z -c -T0 -$COMPRESSION > "$OUTFILE"
+            # With progress bar            
+            run_command "pv '$OUTFILE_BASE.img' | xz -z -c -T0 -$COMPRESSION > '$OUTFILE'" $LILNENO
             RC=$? 
             rm -f "$OUTFILE_BASE".img
             ;;
         
         gz)
             # With progress bar
-            pv "$OUTFILE_BASE".img | pigz -$COMPRESSION > "$OUTFILE"
+            run_command "pv '$OUTFILE_BASE.img' | pigz -$COMPRESSION > '$OUTFILE'"
             RC=$? 
             rm -f "$OUTFILE_BASE".img
             ;;
@@ -1666,7 +1669,7 @@ media_restore(){
              if [[ $INTERFACE = cli ]]; then
                  #unzip -p "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
                  #pv "$INFILE" | unzip -p | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
-                 unzip -p "$INFILE" | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync
+                 run_command "unzip -p '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                  RC=$?
             else
                 (unzip -p "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
@@ -1678,7 +1681,7 @@ media_restore(){
         xz)
             if [[ $INTERFACE = cli ]]; then
                  #xz -v -d -c "$INFILE" | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
-                 pv "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync
+                 run_command "pv '$INFILE' | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                  RC=$?
             else
                 (sudo pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
@@ -1690,7 +1693,7 @@ media_restore(){
         gz)
             if [[ $INTERFACE = cli ]]; then
                 #pigz -v -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync status=progress
-                pv "$INFILE" | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync
+                run_command "pv '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 RC=$?
             else
                 (pv -n "$INFILE" | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync) 2>&1 | \
@@ -1754,7 +1757,7 @@ media_list() {
 media_details(){
     local MEDIA=$1
     local MSG=
-    MSG="==== Media details ===="
+    MSG="===== Media details ====="
     MSG="$MSG\nMedia: '$(media_name $MEDIA)' \n"
 
     echo "Serching for OSs..."
@@ -2715,7 +2718,7 @@ menu_backup(){
     whiptail  --backtitle "$BACKTITLE" --title " BACKUP-DONE "  \
         --msgbox "'$(media_name $INDEV)' backed up to 
         \n'$OUTFILE' 
-        \ncompressed from '$(media_size $INDEV -h)' to '$(file_size $OUTFILE -h)' in $(get_elapsed_time $TIME1 $TIME4) 
+        \ncompressed from '$(media_size $INDEV -h)' to '$(file_size "$OUTFILE" -h)' in $(get_elapsed_time $TIME1 $TIME4) 
         \n\nYou can remove '$(media_name $INDEV)' now. " $WT_MB_HEIGHT $WT_WIDTH
 }  
 
@@ -3055,6 +3058,7 @@ fi
 pisafe_install_tools
 
 config_var_init_configfile
+# why was this next line disabled?
 #config_var_get_settings
 
 whiptail_calc_wt_size
