@@ -12,7 +12,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
  
  - Supports .img .zip .xz and .gz file formats.
 
- - Images are compatible popular imaging software such as Raspberry PI Imager.
+ - Images are compatible with popular imaging software such as Raspberry PI Imager.
  
  - Supports USB storage devices.
  
@@ -63,26 +63,22 @@ Previous version:
  
 # Simple Setup
  
-  1) You will need a large "Master" SD-card (eg 32GB), a smaller "Source" SD-card (eg 8GB) and a USB-SD-card reader.
+   1) You will need a large "Master" SD-card (eg 32GB), a smaller "Source" SD-card (eg 8GB) and a USB-SD-card reader.
   
-  2) Install Raspberry PI OS on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This is your "Master" SD-card.
+   2) Install Raspberry PI OS and PiSafe on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This is your "Master" SD-card.
    
-   3) Boot from the "Master" card and install Pi-Safe on it.
-   
-   4) Install Raspberry PI OS or whatever OS you want on the "Source" SD-card.  Use as small of an SD-card as you can because the entire card is read in before it is shrunk and compressed.  I have been using Sandisk Industrial 8GB cards.
+   3) Install Raspberry PI OS or whatever OS you want on the "Source" SD-card.  Use as small of an SD-card as you can because the entire card is read in before it is shrunk and compressed.  I have been using Sandisk Industrial 8GB cards.  Make changes, install other softwaare, change the desktop, whatever you want.
 
-   5) Boot from the "Source" card (8GB), make changes, install other softwaare, change the desktop, whatever you want.
-
-   6) To make an image of the "Source" (8GB) card that you can restore anytime in the future do the following...
+   4) To make an image of the "Source" (8GB) card that you can restore anytime in the future do the following...
   
   
 
   
 # Usage - make an image file 
    
-   1) Boot your Pi with your Master SD-card as above.
+   1) Boot your Pi with your "Master" SD-card as above.
    
-   2) Put your Source SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
+   2) Put your "Source" SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
    
    3) Startup Pi-Safe from the menu.  Or in a terminal, type in 'pisafe'
         
