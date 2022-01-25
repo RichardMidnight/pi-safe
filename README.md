@@ -67,7 +67,7 @@ Previous version:
   
    2) Install Raspberry PI OS and PiSafe on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This is your "Master" SD-card.
    
-   3) Install Raspberry PI OS or whatever OS you want on the "Source" SD-card.  Use as small of an SD-card as you can because the entire card is read in before it is shrunk and compressed.  I have been using Sandisk Industrial 8GB cards.  Make changes, install other softwaare, change the desktop, whatever you want.
+   3) Install Raspberry PI OS or whatever OS you want on the "Source" SD-card.  Use as small of an SD-card as you can because the entire card is read in before it is shrunk and compressed.  I have been using Sandisk Industrial 8GB cards.  Make changes, install other software, change the desktop, whatever you want.
 
    4) To make an image of the "Source" (8GB) card that you can restore anytime in the future do the following...
   
