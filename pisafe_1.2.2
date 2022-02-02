@@ -1622,7 +1622,7 @@ media_format(){
         return 3
     fi
 
-    ui_echo "$PRODUCTNAME $SCRIPTVER Formatting '$(media_name $DEVICE)' to '$FORMAT'..." white
+    ui_echo "$PRODUCTNAME $SCRIPTVER Format '$(media_name $DEVICE)' to '$FORMAT'..." white
     
    # echo $SILENT
     
@@ -1974,6 +1974,10 @@ whiptail_calc_wt_size() {
     WT_WIDTH=80
     WT_HEIGHT_TALL=$(($(tput lines)-10))
     WT_WIDTH_WIDE=$(($(tput cols)-7))
+    
+    if [[ $WT_WIDTH_WIDE -gt 120 ]]; then
+        WT_WIDTH_WIDE=120
+    fi
 
     if [[ -z $WT_WIDTH ]] || [[ $WT_WIDTH -lt 60 ]]; then
         WT_WIDTH=80
