@@ -23,36 +23,15 @@ PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
 CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG="/home/$USER/.config/pisafe/pisafe.conf"
+LOG_FILE="/home/$USER/.config/pisafe/pisafe.log"
 REQUIRED_TOOLS="bc pv whiptail pishrink.sh zip unzip pigz xz"
 INDEV=
 OUTDEV=
 INFILE=
 OUTFILE=
 BACKTITLE="$PRODUCTNAME ver $SCRIPTVER   === $PRODUCTCOMMENT === "
-
-#general defaults
 INTERFACE="cli"
-HIDE_ROOT_DEVICE=off
-CHECK_FOR_UPDATES_ON_STARTUP=on
-
-#backup settings defaults
-DEFAULT_PATH="."
-SHRINK_FS=on
-AUTO_EXPAND_FS=on
-DEFAULT_EXTENSION=zip
-COMPRESSION_LEVEL=1
-PARALLEL_COMPRESSION=on
-LARGE_DEVICE_READ_WARNING=17179869184
-SKIP_FREESPACE=on
-
-#restore settings defaults
-LARGE_DEVICE_WRITE_WARNING=17179869184
-SAFETY=on
-
-#other defaults
-SOUND=ON
 LOG=on
-LOG_FILE="/home/$USER/.config/pisafe/pisafe.log"
 
 
 WHITE='\033[1;37m'
@@ -63,8 +42,8 @@ LTBLUE='\033[1;34m'
 NC='\033[0m' 		# No Color, standard text
 echo_white()        { (echo -e "${WHITE}$*${NC}") }
 echo_red()          { (echo -e "${RED}$*${NC}") }
-echo_green()        { (echo -e "${GREEN}$*${NC}") }
 echo_blue()         { (echo -e "${LTBLUE}$*${NC}") }  
+echo_green()        { (echo -e "${GREEN}$*${NC}") }
 
 
 desktop_environment_notes(){
@@ -155,7 +134,7 @@ pisafe_help() {
     echo "  backup [device] [file] [-y]  - backup media to image-file"
     echo "  restore [file] [device] [-y] - restore image-file to media"
     echo "  details [device]             - show media details"
-    echo "  erase [device] [format] [-y] - format media as FAT32 exfat ntfs or ext4"
+    echo "  erase [device] [format] [-y] - format media as fat32 exfat ntfs or ext4"
     echo "  install [-y]                 - install this script"
     echo "  update [-y]                  - update script from website"
     echo "  uninstall [-y]               - uninstall this script"
@@ -175,18 +154,19 @@ pisafe_help() {
     echo "$SCRIPTNAME "
     echo "$SCRIPTNAME list"
     echo "$SCRIPTNAME backup sda newimage"
-    echo "$SCRIPTNAME backup /dev/sdb newimage.xz"
+    echo "$SCRIPTNAME backup /dev/sdb newimage.xz -y"
     echo "$SCRIPTNAME restore newimage.img.zip sda"
-    echo "$SCRIPTNAME backup /dev/sda /home/pi/Downloads/backup_\$(date +%Y-%d-%m_%I%M%p).img.gz"
+    echo "$SCRIPTNAME backup /dev/sda /home/pi/Downloads/backup_\$(date +%Y-%d-%m_%I%M%p).img.gz -y"
+    echo "$SCRIPTNAME format /dev/sda fat32"
     echo
 }
 
 
 pisafe_about(){
     echo "$PRODUCTNAME was started in 2017 as 'sd' by 'RichardMidnight on github'"\
-        "while working on a Raspberry Pi Homebridge project and needing"\
-        "to make numerous restore-points.  The image writers available at the"\
-        "time did not run on the pi itself and were not able to create a new image file." 
+        "while working on a Raspberry Pi project and needing to make restore-points."\
+        "The image writers available at the time did not run on the pi itself"\
+        "and were not able to create a new image file." 
     echo
     echo "It was originally called 'sd' and only had a CLI."
     echo
@@ -194,7 +174,7 @@ pisafe_about(){
         "It was then renamed it 'PiSafe' which is a reference to the 'ventilated cupboards for storing"\
         "pies while protecting them from insects and vermin'. "
     echo
-    echo "It may work on many debian and arch distros."
+    echo "It is pretty clean linux so it works on many debian and arch distros."
     echo 
     echo "It's home is $PRODUCTHOME"
     echo
@@ -202,6 +182,7 @@ pisafe_about(){
     echo
     echo "Hopfully $PRODUCTNAME is useful to others."
     echo
+    echo "Peace"
 }
  
 
@@ -461,7 +442,6 @@ file_image_exists(){
     local IMG
     
     if [[ ! -f $INFILE ]] ; then
-        #echo_if_cli "ERROR '$INFILE' not found"
         ui_error $LINENO "'$INFILE' not found"
         return 1
     fi
@@ -663,6 +643,7 @@ do_list_info() {
     echo "Root size     = $(media_size $(env_root_device) -h )"
     echo "TrashSize     = $(file_folder_size /home/$USER/.local/share/Trash)"
     echo "RootTrash     = $(file_folder_size /root/.local/share/Trash)"
+  #  echo "working dir   = $(pwd) $(file_fs_freespace $(pwd) -h)"
  #   echo "FreeSpace in current dir= $(file_fs_freespace . -h)  $(pwd)"
     echo
     #    echo "Default dir = '$DIR' - $(file_fs_freespace $DIR -h) free"  
@@ -793,7 +774,9 @@ pisafe_update() {
     SUMMARY=${2:-"yes"}
     local YES=${3:-"-n"}
       
-    ui_echo "Checking for $PRODUCTNAME $SCRIPTVER updates..." white
+    if [[ $SUMMARY = yes ]]; then
+        ui_echo "Checking for $PRODUCTNAME $SCRIPTVER updates..." white
+    fi
       
     local SERVER_VER=
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/$SCRIPTNAME -O $SCRIPTNAME.tmp 2> /dev/null 
@@ -837,7 +820,9 @@ pisafe_update() {
 pisafe_uninstall(){
     SILENT=${1:-"-n"}
     
-    INSTALLED_VER=$(/usr/local/bin/$SCRIPTNAME -v)
+    if [[ -f /usr/local/bin/$SCRIPTNAME ]]; then
+        INSTALLED_VER=$(/usr/local/bin/$SCRIPTNAME -v)
+    fi
     
     if [[ $SILENT != -y ]]; then
         if [[ $(ui_yesno "UNINSTALL" "Uninstall $PRODUCTNAME $INSTALLED_VER" "--defaultno") != y ]] ; then
@@ -856,10 +841,6 @@ pisafe_uninstall(){
     # remove the script and config
     sudo rm -f "/usr/local/bin/$SCRIPTNAME"
     rm -f $CONFIG
-    
-    if [[ ! -z /usr/local/bin/$SCRIPTNAME ]]; then
-        echo $PRODUCTNAME uninstalled
-    fi
     
     ui_msg  UNINSTALL "~ $PRODUCTNAME $INSTALLED_VER uninstalled.  $LOG_FILE not removed." white OK log
 }
@@ -1135,12 +1116,15 @@ media_backup(){
 
 		echo Media size=$(media_size $INDEV -h)
 		echo Skipping $(get_bytes $(( $(media_size $INDEV) - $START_OF_FREESPACE )) -h ) of freespace at end of media.
-		echo Reading $(get_bytes $START_OF_FREESPACE -h)
+		#echo Reading $(get_bytes $START_OF_FREESPACE -h)
 	else
         BYTES_TO_READ=$(media_size $INDEV)
         BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS + 1))
+      #  echo Reading $(get_bytes $START_OF_FREESPACE -h)
 	fi    
-	#end of freespace     
+	#end of freespace  
+    
+    echo Reading $(get_bytes $BYTES_TO_READ -h)
     
     
  #   MEDIA_SIZE=$(sudo lsblk -ndb $MEDIA -o size)
@@ -1276,21 +1260,20 @@ media_restore(){
     echo "OUT-DEV='$OUTDEV'"
 
  
-  #  if [[ $SILENT != -y ]]; then
-        file_check_infile
-        RC=$?
-        if (( $RC )); then
-            do_beep_down
-            return $RC
-        fi
-    
-        media_check_outdev
-        RC=$?
-        if (( $RC )); then
-            do_beep_down
-            return $RC
-        fi
-  #  fi
+    file_check_infile
+    RC=$?
+    if (( $RC )); then
+        do_beep_down
+        return $RC
+    fi
+
+    media_check_outdev
+    RC=$?
+    if (( $RC )); then
+        do_beep_down
+        return $RC
+    fi
+
 
     # Final check before writing data
     # quit if INFILE is not a file
@@ -1432,7 +1415,7 @@ media_list() {
         
         n)      ROOT_FILTER="aspodiausdfpoiasdf" ;;
         
-        *)      if [[ $(config_var_get hide_root_device) = on ]]; then
+        *)      if [[ $HIDE_ROOT_DEVICE = on ]]; then
                     ROOT_FILTER=$(env_root_device)
                 else    
                     ROOT_FILTER="aspodiausdfpoiasdf"
@@ -1751,7 +1734,6 @@ media_details(){
 
     echo "Calculating backup estimates..."
     echo
-   # MSG="$(media_backup_estimate  $INDEV)"
     MSG="$MSG\n$(media_backup_estimate  $MEDIA)"
     MSG="$MSG\n\n===== PARTITION TABLE DETAILS ===== \n$(sudo parted -s $MEDIA print free) \n\n"
     MSG="$MSG$(lsblk $MEDIA -o maj:min,fssize,fsused,fsavail,fsuse%)\n\n"
@@ -2146,7 +2128,6 @@ config_var_set() {
     case $(config_var_get $SETTING) in
     
         '') # add setting to end of file
- #           touch $CONFIG
             echo "$SETTING"="$VAL" >> $CONFIG 
             ;;
         
@@ -2242,6 +2223,11 @@ config_var_get_settings(){
     TEXT_EDITOR=$(config_var_get text_editor)
     
     mkdir -p "$DEFAULT_PATH"
+    
+    if [[ $INTERFACE != gui ]]; then 
+        DEFAULT_PATH=$CURRENT_DIR
+      #  HIDE_ROOT_DEVICE=off
+    fi
 }
 
 
@@ -2782,6 +2768,7 @@ menu_splashscreen(){
 
 menu_gui(){
     INTERFACE="gui"
+    config_var_get_settings
     while true
     do
         whiptail_calc_wt_size
@@ -2816,7 +2803,7 @@ menu_gui(){
              
             "  "*)          ;;
             
-            * )             return          ;;
+            * )             return       ;;
         esac
     done
 }
@@ -2826,54 +2813,39 @@ menu_cli(){
     INTERFACE="cli"
     case $1 in
         
-        backup|read)
-            media_backup $2 $3 $4
-            ;;
+        backup|read)        media_backup $2 $3 $4  ;;
         
-        restore|write)
-            media_restore $2 $3 $4
-            ;;
+        restore|write)      media_restore $2 $3 $4  ;;
         
-        list)
-            do_list_info  ;;
+        list)               do_list_info  ;;
 
-        install)
-            echo_white Installing PiSafe...
-            pisafe_install $2 ;;
+        install)            pisafe_install $2 ;;
             
-        update)
-            echo_white Updating PiSafe...
-            pisafe_update cli yes $2
-            ;;
+        update)             pisafe_update cli yes $2   ;;
         
-        uninstall)
-            echo_white Uninstalling PiSafe...
-            pisafe_uninstall $2 ;;
+        uninstall)          pisafe_uninstall $2 ;;
             
-        log)
-            nano $LOG_FILE;;
+        log)                nano $LOG_FILE  ;;
             
-        config)
-            nano $CONFIG;;
+        config)             nano $CONFIG    ;;
             
-        details)
-            media_details $2  ;;
+        details)            media_details $2  ;;
 
-        erase|format)
-            media_format $2 $3 $4 ;;
+        erase|format)       media_format $2 $3 $4 ;;
+            
+        beep)
+            SOUND=on
+            echo beep ; do_beep ; sleep 2
+            echo beep_down ; do_beep_down ; sleep 2
+            echo beep_up ;  do_beep_up;;
         
-        help|-h|--h)
-            pisafe_help  ;;
+        help|-h|--h)        pisafe_help  ;;
         
-        -v)
-            echo $SCRIPTVER  ;;
+        -v)                 echo $SCRIPTVER  ;;
         
-        "")
-            config_var_get_settings
-            menu_gui  ;;
+        "")                 menu_gui  ;;
         
-        *)   
-            pisafe_help  ;;
+        *)                  pisafe_help  ;;
     esac
 }
 
@@ -2887,20 +2859,18 @@ if  [[ ~$1 = ~-v ]]; then
     exit
 fi
 
-pisafe_install_tools
-
-config_var_init_configfile
-# why was this next line disabled?
-#config_var_get_settings
-
-whiptail_calc_wt_size
-
-
-## check for updates if not uninstalling
-if [[ ! ~$1 = ~uninstall ]]; then
-    if  [[ $CHECK_FOR_UPDATES_ON_STARTUP = on ]]; then
-        pisafe_update gui no
-    fi
+# if uninstalling, uninstall and exit
+if [[ ~$1 = ~uninstall ]]; then
+    pisafe_uninstall $2
+    exit
 fi
 
-menu_cli $1 $2 $3 $4 $5
+pisafe_install_tools
+config_var_init_configfile
+config_var_get_settings
+
+if  [[ $CHECK_FOR_UPDATES_ON_STARTUP = on ]]; then
+    pisafe_update cli no 
+fi
+
+menu_cli $1 $2 $3 $4
