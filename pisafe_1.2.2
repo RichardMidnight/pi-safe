@@ -119,12 +119,11 @@ run_command(){
     local QUIET=${3:-n}
     
     ui_echo "~ Running: $CMD" blue
-    
     eval $CMD
-    rc=$?
-    if (( $rc )); then
-        ui_error $LINENO "Error $rc running '$CMD'"
-        return $rc
+    RC=$?
+    if (( $RC )); then
+        ui_error $LINENO "Error $RC running '$CMD'"
+        return $RC
     fi
 }
 
@@ -223,6 +222,7 @@ env_root_device() {
 do_beep(){
     FREQ=${1:-600}
     TIME=${2:-.5}
+    
     if [[ $SOUND = on ]] ; then
         (speaker-test -t sign -f $FREQ > /dev/null & sleep $TIME && kill -9 $! ) > /dev/null
       #  sleep .5  # to allow the beep to end
@@ -278,6 +278,7 @@ do_countdown(){
 get_ver_to_int() {
 	local IFS=.
 	parts=($1)
+    
 	let val=1000000*parts[0]+1000*parts[1]+parts[2]
 	echo $val
     unset IFS
@@ -318,7 +319,7 @@ get_bytes(){
             local t_era=$g_iga*$k_ilo;
             local p_eta=$t_era*$k_ilo;
             
-        [[ -z $BYTES ]] && return
+            [[ -z $BYTES ]] && return
             
             if ! [[ $BYTES =~ ^[0-9]+$ ]] ; then   # not a number   
                 echo 0
@@ -383,6 +384,7 @@ file_base() {
 
 file_ext(){
 	base=$(basename "$*")
+    
 	#look for a period in the basename.  if there is one, there is an extention
 	HAS_DOT=$(echo "$base" | grep \\.)
 	if [[ ! -z $HAS_DOT ]] ; then
@@ -653,6 +655,7 @@ file_check_infile(){
 
 do_list_info() {
     DIR=${1:-$PWD}
+    
     echo "~~~ CURRENT SYSTEM ~~~"
     echo $PRODUCTNAME ver $SCRIPTVER
     echo $(cat /etc/os-release | grep "PRETTY_NAME=" | cut -d '"' -f2) hw=$(uname -m) kernel=$(uname -r)
@@ -707,7 +710,6 @@ pisafe_install_tools() {
                     ui_error $LINENO "pishrink not installed."
                 fi
                 ;;
-            
             
             *)
                 #echo_white Installing $TOOL ...
@@ -909,6 +911,7 @@ media_size() {
 
 media_serialno(){
     local DEVICE=$1
+    
     # currently vendor + SN
     SN=$(lsblk -n -d --output vendor,model,serial "$DEVICE" | sed 's/ /_/g' )
     echo $SN
@@ -1054,7 +1057,6 @@ media_backup(){
     #local INDEV=$1
     INDEV=$1
     OUTFILE=$2
-   # local SAFETY=${3:-on}   # off lets us bypass some of the safety prompts
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
     INTERFACE=${4:-cli}  #CLI or gui
    
@@ -1722,8 +1724,10 @@ media_format(){
     esac
 
     if (( $rc )); then
-        error $LINENO "mkfs failed"
+        ui_error $LINENO "mkfs failed"
         return 12
+    else
+        ui_msg "ERASE MEDIA" "~ Formatting complete. '$(media_name $DEVICE)' has been erased." white OK log
     fi
 
     echo "Mounting the drive..."
@@ -1733,8 +1737,6 @@ media_format(){
         error $LINENO "mount failed"
         return 13
     fi
-
-    ui_msg "ERASE MEDIA" "~ Formatting complete. '$(media_name $DEVICE)' has been erased." white OK log
 }
 
 
