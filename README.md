@@ -6,7 +6,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
 
  - Restore an image-file to an SD card (or other media).
 
- - Works entirely on a Raspberry Pi.  No Windows or Mac needed. 
+ - Works entirely on a Raspberry Pi (or other linux).  No Windows or Mac needed. 
  
  - Creates a compressed image-file that will resize to fill the new media to which it is restored.
  
@@ -30,7 +30,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
 
  - Create a library of your own pi images, then restore them to whatever media you want, whenever you want.  
  
- - Can be run fully from the command line or use the easy menu interface.
+ - Can be run from the command line or use the easy menu interface.
 
  - Should work with most debian and arch distros, see below.   
 
