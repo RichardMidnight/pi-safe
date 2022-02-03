@@ -24,7 +24,7 @@ CURRENT_DIR=$(pwd)
 USER=$(whoami)
 CONFIG="/home/$USER/.config/pisafe/pisafe.conf"
 LOG_FILE="/home/$USER/.config/pisafe/pisafe.log"
-REQUIRED_TOOLS="bc pv whiptail pishrink.sh zip unzip pigz xz"
+REQUIRED_TOOLS="bc pv whiptail pishrink.sh zip unzip pigz xz file"
 INDEV=
 OUTDEV=
 INFILE=
@@ -1003,7 +1003,7 @@ media_check_outdev(){
     
     # Stop if outdev is the root device
     if [[ $OUTDEV = $(env_root_device) ]]; then
-        ui_error $INENO "Restore to root device not allowed"
+        ui_error $LINENO "Restore to root device not allowed"
         return 1
     fi
     
@@ -1602,6 +1602,12 @@ media_format(){
 
     if [[ $1 = $ROOT ]] ; then
         error $LINENO "Can not format root device"
+        return 3
+    fi
+    
+    # Stop if dev is the root device
+    if [[ $1 = $(env_root_device) ]]; then
+        ui_error $LINENO "Format root device not allowed"
         return 3
     fi
 
@@ -2222,12 +2228,12 @@ config_var_get_settings(){
     VERIFY=off
     TEXT_EDITOR=$(config_var_get text_editor)
     
-    mkdir -p "$DEFAULT_PATH"
-    
     if [[ $INTERFACE != gui ]]; then 
         DEFAULT_PATH=$CURRENT_DIR
       #  HIDE_ROOT_DEVICE=off
     fi
+    
+    mkdir -p "$DEFAULT_PATH"
 }
 
 
