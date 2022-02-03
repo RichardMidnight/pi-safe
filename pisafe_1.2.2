@@ -189,12 +189,13 @@ pisafe_about(){
 env_root_device() {
     local ROOT_PARTITION
     local ROOT_DRIVE
-    
-    # new simpler way
-    # ROOT_PARTITION=$(findmnt -no source /)
+
     ROOT_MAJ=$(findmnt  -n -e  -o MAJ:MIN / | cut -d: -f1)
     ROOT_DEV=$(lsblk -p | grep $ROOT_MAJ:0 | cut -d" " -f1)
     echo $ROOT_DEV
+    
+    # new simpler way
+    # ROOT_PARTITION=$(findmnt -no source /)
 }
 
 
@@ -1567,7 +1568,7 @@ media_format(){
     local FORMAT=${2:-"fat32"}    # fat32, ntfs, ext4, exfat
     local SILENT=${3:-"-n"}
     
-    local ROOT="/dev/$(env_root_device)"
+    local ROOT="$(env_root_device)"
     local TYPE="$(lsblk $DEVICE -dnpo TYPE)"
     local NAME="$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE,TYPE) ($DEVICE)"
     local PARTITION=$DEVICE
@@ -1590,18 +1591,18 @@ media_format(){
 	
 
     if [[ -z $1 ]] ; then
-        error $LINENO "Device not specified."
+        ui_error $LINENO "Device not specified."
         lsblk -dp
         return 1
     fi
 
     if [[ ! -e $DEVICE ]]; then
-      error $LINENO "'$DEVICE' does not exist"
+      ui_error $LINENO "'$DEVICE' does not exist"
       return 2
     fi
 
     if [[ $1 = $ROOT ]] ; then
-        error $LINENO "Can not format root device"
+        ui_error $LINENO "Can not format root device"
         return 3
     fi
     
@@ -1642,14 +1643,14 @@ media_format(){
         echo "Writing zeros to '$DEVICE'..."
         run_command "sudo dd if=/dev/zero of=$DEVICE bs=512 count=4" $LINENO
         if (( $? )); then
-            error $LINENO "Writing zeros failed"
+            ui_error $LINENO "Writing zeros failed"
             return 9
         fi
 
         echo "Writing new '$PART_TABLE' partition table to '$DEVICE'..."
         run_command "sudo parted -s $DEVICE mklabel $PART_TABLE" $LINENO
         if (( $? )); then
-            error $LINENO "mklabel failed"
+            ui_error $LINENO "mklabel failed"
             return 10
         fi
 
@@ -1657,7 +1658,7 @@ media_format(){
         # run_command "sudo parted -s -a opt $DEVICE mkpart primary $FS_TYPE 2M 100%" $LINENO
         run_command "sudo parted -s -a opt $DEVICE mkpart $PART_TYPE $PART_NAME $FS_TYPE 2M 100%" $LINENO
         if (( $? )); then
-            error $LINENO "mkpart failed"
+            ui_error $LINENO "mkpart failed"
             return 11
         fi
         
@@ -1708,7 +1709,7 @@ media_format(){
             ;;
             
         *)
-            error $LINENO "Unknown format '$FORMAT'"
+            ui_error $LINENO "Unknown format '$FORMAT'"
             
     esac
 
@@ -1723,7 +1724,7 @@ media_format(){
     sleep 2
     run_command "udisksctl mount -b $PARTITION" $LINENO
     if (( $? )); then
-        error $LINENO "mount failed"
+        ui_error $LINENO "mount failed"
         return 13
     fi
 }
