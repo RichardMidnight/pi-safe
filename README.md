@@ -80,7 +80,7 @@ Previous version:
    
    2) Put your "Source" SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
    
-   3) Startup Pi-Safe from the menu.  Or in a terminal, type in 'pisafe'
+   3) Startup pisafe from the menu.  Or in a terminal, type in 'pisafe'
         
    4) Use the menu to select BACKUP, select your SD-card and give the image-file a name.
    
