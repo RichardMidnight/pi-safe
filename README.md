@@ -121,7 +121,7 @@ v1.2.0 Cleaned up the code a lot, added "ignore_freespace_at_end", added erase (
  - Auto-expand filesystem on restore   
     - PiSafe will setup the image file to auto-expand to fill the new media on first boot after restoring if your distro supports rc.local.  
     - If not, you can resize your partition manual by booting from another media and using gparted.
-    - Note: Auto-expand may not work on an overlay filesystem.  Recomend turning off auto-expand in Settings/Options.  
+    - Note: Auto-expand may not work on an overlay filesystem.  Recommend turning off auto-expand in Settings/Options.  
    
  - Data compression
     - Compressing the image file with zip, xz, or gz reduces the size of the image file to 1/2 or smaller.  
