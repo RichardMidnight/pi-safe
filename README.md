@@ -109,7 +109,7 @@ v1.2.0 Cleaned up the code a lot, added "ignore_freespace_at_end", added erase (
  
   - Ignore Freespace at end of media
     - PiSafe will ignore freespace at the end of the media, speeding up the backup process and using less working space.  
-    - If you have a small amount of data on a large media (eg using 10GB of a 500GB drive), you can resize your partitions (with gparted) and leave freespace (unallocated) at the end of the media which PiSafe will ignored.  Note, freespace not at the end of the media cannot be ignored.
+    - If you have a small amount of data on a large media (eg using 10GB of a 500GB drive), you can resize your partitions (with gparted) and leave freespace (unallocated) at the end of the media which PiSafe will ignore.  Note, freespace not at the end of the media cannot be ignored.
  
   - Shrinking the filesystem on backup  
     - Shrinking the filesystem is VERY VALUABLE because it creates a smaller image file, and allows you to restore the image to a different size media.
