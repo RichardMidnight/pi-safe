@@ -2131,6 +2131,14 @@ echo_if_cli (){
 config_var_set() {
     SETTING=$1
     VAL=$2
+    local FORCE=${3:-true}
+    
+    #dont update the setting if force is false and Setting not blank
+    if [[ $FORCE = false ]];  then
+      if [[ ! -z "$(config_var_get $SETTING)" ]]; then
+        return
+      fi
+    fi    
     
     case $(config_var_get $SETTING) in
     
@@ -2168,38 +2176,44 @@ config_var_init_configfile(){
         touch $CONFIG
         echo "# $CONFIG" > $CONFIG
         config_var_set_defaults
+    else    
+        # update any missing values.  false means dont force the update
+        config_var_set_defaults false
     fi
+    
 }
 
 
 config_var_set_defaults(){
-    config_var_init_configfile
+    FORCE=${1:-true}
     
+   # config_var_init_configfile
     config_var_set settings_script_ver $SCRIPTVER 
-    config_var_set default_path $HOME/Downloads 
-    config_var_set hide_root_device on 
-    config_var_set check_for_updates_on_startup on 
+    
+    config_var_set default_path $HOME/Downloads $FORCE
+    config_var_set hide_root_device on $FORCE
+    config_var_set check_for_updates_on_startup on $FORCE
 
 #backup settings
-    config_var_set shrink_fs on 
-    config_var_set auto_expand_fs on 
-    config_var_set default_extension zip 
-    config_var_set compression_level 1 
-    config_var_set parallel_compression on 
-    config_var_set large_device_read_warning 17179869184 
-    config_var_set skip_freespace on 
+    config_var_set shrink_fs on $FORCE
+    config_var_set auto_expand_fs on $FORCE
+    config_var_set default_extension zip $FORCE
+    config_var_set compression_level 1 $FORCE
+    config_var_set parallel_compression on $FORCE
+    config_var_set large_device_read_warning 17179869184 $FORCE
+    config_var_set skip_freespace on $FORCE
     
 #restore settings
-    config_var_set large_device_write_warning 17179869184 
-    config_var_set safety on 
+    config_var_set large_device_write_warning 17179869184 $FORCE
+    config_var_set safety on $FORCE
 
 #other    
-    config_var_set debug_mode off 
-    config_var_set sound on 
-    config_var_set log on 
+    config_var_set debug_mode off $FORCE
+    config_var_set sound on $FORCE
+    config_var_set log on $FORCE
   #  config_var_set log_file $LOG_FILE 
     
-    config_var_set text_editor $(env_texteditor) 
+    config_var_set text_editor $(env_texteditor) $FORCE
 }
 
 
@@ -2536,7 +2550,8 @@ menu_backup(){
     INDEV=$(menu_select_sddevice "BACKUP")
     RC=$?
     if (( $RC )); then
-        ui_error $LINENO "No media found."
+       # ui_error $LINENO "No media found."
+        ui_msg BACKUP "No media found" white
         return $RC
     fi 
     
