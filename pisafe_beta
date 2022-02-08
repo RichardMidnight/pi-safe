@@ -106,19 +106,6 @@ run_command(){
 }
 
 
-ui_log(){
-    # usage ui_log "message"
-    INFO=$*
-    
-    INFO=$(echo $INFO | sed 's/\\n/ -/g')  #change newline for ~
-    
-    if [[ $LOG = on ]]; then
-        touch $LOG_FILE
-        echo "$(date "+%Y-%m-%d %H:%M") $INFO" >> $LOG_FILE
-    fi
-}
-
-
 pisafe_help() {
     echo "$PRODUCTNAME v$SCRIPTVER  - Designed for Raspberry Pi"
     echo " - Backup media (SD card) to an image file"
@@ -184,6 +171,189 @@ pisafe_about(){
     echo "Peace"
 }
  
+ 
+# ---------- Config_var functions
+
+
+config_var_set() {
+    SETTING=$1
+    VAL=$2
+    local FORCE=${3:-true}
+    
+    #dont update the setting if thre is a value and we are not forcing new values
+    if [[ $FORCE = false ]];  then
+      if [[ ! -z "$(config_var_get $SETTING)" ]]; then
+        return
+      fi
+    fi    
+    
+    case $(config_var_get $SETTING) in
+    
+        '') # add setting to end of file
+            echo "$SETTING"="$VAL" >> $CONFIG 
+            ;;
+        
+        *)  #update setting to val
+            sed -i 's~'$SETTING'=.*$~'$SETTING'='$VAL'~' $CONFIG
+            ;;
+            
+    esac
+}
+
+
+config_var_clear(){
+    SETTING=$1
+    VAL=$2
+    sed -i 's~'$SETTING'=.*$~'$VAR'=~' $CONFIG 
+}
+
+
+config_var_get(){
+    SETTING=$1"="
+    cat $CONFIG | grep $SETTING | sed 's~'$SETTING'~~'
+}
+
+
+config_var_init_configfile(){
+    if [[ ! -d $(file_path $CONFIG) ]]; then
+        mkdir -p $(file_path $CONFIG)
+    fi
+    
+    if [[ ! -f $CONFIG ]]; then
+        touch $CONFIG
+        echo "# $CONFIG" > $CONFIG
+        config_var_set_defaults
+    else    
+        # update any missing values.  false means dont force the update
+        config_var_set_defaults false
+    fi
+}
+
+
+config_var_set_defaults(){
+    FORCE=${1:-true}
+    
+    # config_var_init_configfile
+    config_var_set settings_script_ver $SCRIPTVER 
+    
+    config_var_set default_path $HOME/Downloads $FORCE
+    config_var_set hide_root_device on $FORCE
+    config_var_set check_for_updates_on_startup on $FORCE
+
+    #backup settings
+    config_var_set shrink_fs on $FORCE
+    config_var_set auto_expand_fs on $FORCE
+    config_var_set default_extension zip $FORCE
+    config_var_set compression_level 1 $FORCE
+    config_var_set parallel_compression on $FORCE
+    config_var_set large_device_read_warning 17179869184 $FORCE
+    #config_var_set large_device_read_warning 14gb $FORCE
+    config_var_set skip_freespace on $FORCE
+    
+    #restore settings
+    config_var_set large_device_write_warning 17179869184 $FORCE
+    config_var_set safety on $FORCE
+
+    #other    
+    config_var_set debug_mode off $FORCE
+    config_var_set sound on $FORCE
+    config_var_set log on $FORCE
+    #  config_var_set log_file $LOG_FILE 
+    
+    config_var_set text_editor $(env_texteditor) $FORCE
+}
+
+
+config_var_get_settings(){
+    SETTINGS_SCRIPT_VER=$(config_var_get settings_script_ver)
+    DEFAULT_PATH=$(config_var_get default_path)
+    HIDE_ROOT_DEVICE=$(config_var_get hide_root_device)
+    CHECK_FOR_UPDATES_ON_STARTUP=$(config_var_get check_for_updates_on_startup)
+ 
+    # backup settings
+    SHRINK_FS=$(config_var_get shrink_fs)
+    AUTO_EXPAND_FS=$(config_var_get auto_expand_fs)
+    DEFAULT_EXTENSION=$(config_var_get default_extension)
+    COMPRESSION_LEVEL=$(config_var_get compression_level)
+    LARGE_DEVICE_READ_WARNING=$(config_var_get large_device_read_warning) 
+    #LARGE_DEVICE_READ_WARNING=$(get_bytes $(config_var_get large_device_read_warning) -b)
+    SKIP_FREESPACE=$(config_var_get skip_freespace)
+    
+    # restore settings
+    LARGE_DEVICE_WRITE_WARNING=$(config_var_get large_device_write_warning)
+    #LARGE_DEVICE_WRITE_WARNING=$(get_bytes $(config_var_get large_device_write_warning) -b)
+    SAFETY=$(config_var_get safety)  
+
+    # other    
+    DEBUG_MODE=$(config_var_get debug_mode)
+    SOUND=$(config_var_get sound)
+    LOG=$(config_var_get log)
+  #  LOG_FILE=$(config_var_get log_file)
+    VERIFY=off
+    TEXT_EDITOR=$(config_var_get text_editor)
+    
+    if [[ $INTERFACE != gui ]]; then 
+        DEFAULT_PATH=$CURRENT_DIR
+      #  HIDE_ROOT_DEVICE=off
+    fi
+    
+    mkdir -p "$DEFAULT_PATH"
+}
+
+
+# ---------- Enviroment functions
+env_installer(){
+    local INSTALLER=
+    if [ -f /usr/bin/apt ]; then             # debian
+        INSTALLER="apt install -y"
+    elif [ -f /usr/bin/pacman ]; then        # arch
+        INSTALLER="pacman -S --noconfirm"
+    elif [ -f /usr/bin/dnf ]; then            #rpm / fedora
+        INSTALLER="dnf install -y"  
+    fi
+    echo "$INSTALLER"
+}
+
+
+env_terminal(){
+    local TERMINAL1=
+    if [ -f /usr/bin/lxterminal ];then
+      TERMINAL1="lxterminal --geometry=110x40 --title='PiSafe' -e bash -c "
+    elif [ -f /usr/bin/xfce4-terminal ];then
+      TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
+    elif [ -f /usr/bin/mate-terminal ];then
+      TERMINAL1="mate-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
+    elif [ -f /usr/bin/gnome-terminal ];then
+      TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
+    elif [ -f /usr/bin/xterm ];then
+      TERMINAL1="xterm -geometry 110x40 -T 'PiSafe' -e bash -c " 
+    elif [ -f /usr/bin/terminator ];then
+      TERMINAL1="terminator --geometry=110x40 -T 'PiSafe' -x bash -c "
+    elif [ -f /usr/bin/konsole ];then
+      TERMINAL1="konsole -e bash -c " 
+    elif [ -f /usr/bin/qterminal ];then
+      TERMINAL1="qterminal -e bash -c "   
+    elif [ -f /usr/bin/x-terminal-emulator ];then
+      TERMINAL1="$(readlink -f /usr/bin/x-terminal-emulator) -e bash -c "
+    else
+      echo "Failed to locate any terminal emulators!!!"
+      return 1
+    fi
+    echo "$TERMINAL1"
+}
+
+
+env_texteditor(){
+    TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
+    
+    for TEXT_EDITOR in $TEXT_EDITORS ; do
+        if [[ -f /usr/bin/$TEXT_EDITOR ]]; then
+            echo $TEXT_EDITOR
+            return
+        fi
+    done
+} 
+ 
 
 env_root_device() {
     local ROOT_PARTITION
@@ -234,8 +404,10 @@ get_elapsed_time() {
 
 do_countdown(){  
     local MAX=${1:-10}
+    local MSG=${2:-"Pausing for $MAX seconds... Press y to continue immediately or any other key to stop"}
  
-    echo "Pausing for $MAX seconds... Press y to continue immediately or any other key to stop"
+   # echo "Pausing for $MAX seconds... Press y to continue immediately or any other key to stop"
+    echo "$MSG"
 	echo -n $MAX
     sleep 1
     for number in $(seq 1 $MAX) ; do
@@ -384,9 +556,8 @@ file_size() {
     
     if [[ -f $FILE ]] ; then
         SIZE_BYTES="$(($(ls -s "$FILE" | cut -d' ' -f1) * 1024))"
-        RC=$?
-        if (( $RC )); then
-            return $RC
+        if (( $? )); then
+            return 1
         fi
         if [[ $HUMAN = -h ]]; then
             echo $(get_bytes $SIZE_BYTES -h)
@@ -427,25 +598,6 @@ file_image_size() {
         echo $SIZE_BYTES
     fi
 }    
-
-
-file_ext_ok(){
-    #check_for_supported_file_extention(){
-    #returns 0 if good, 1 if bad
-    OUTFILE_EXT=$(file_ext "$1")
-
-    case $OUTFILE_EXT in
-        img | zip | xz | gz | iso | "" )
-            echo true
-            return 0
-            ;;
-        
-        *)  
-            echo ""
-            return 1
-            ;;
-    esac
-}
 
 
 file_list_image_files(){
@@ -518,13 +670,13 @@ file_check_outfile(){
     #Quit if outfile is blank
     if [[ -z $OUTFILE ]] ; then
         ui_error $LINENO "File '$OUTFILE' can't be blank" 
-        if [[ $SAFETY = on ]]; then return 1 ; fi   
+        return 1   
     fi  
     
     # Quit if path does not exist
     if [[ ! -d  $(file_path $OUTFILE) ]] ; then     
         ui_error $LINENO "Directory does not exist '$(file_path $OUTFILE)'"
-        if [[ $SAFETY = on ]]; then return 1 ; fi   
+        return 1  
     fi
     
     # add ext if missing
@@ -542,29 +694,64 @@ file_check_outfile(){
         echo "OUT-FILE='$OUTFILE'" 
     fi
 
+ 
     # quit if unsupported extension
-    if [[ -z $(file_ext_ok "$OUTFILE") ]]; then
-        ui_error $LINENO "Unsupported file extension '$(file_ext $OUTFILE)'"
-        if [[ $SAFETY = on ]]; then return 1 ; fi   
-    fi
+    #if [[ -z $(file_ext_ok "$OUTFILE") ]]; then
+    #    ui_error $LINENO "Unsupported file extension '$(file_ext $OUTFILE)'"
+    #    return 1 
+    #fi
+    case $(file_ext "$OUTFILE") in 
+        img | zip | xz | gz | iso | "" )    
+            ;;
+        *)  
+            ui_error $LINENO "Unsupported file extension '$(file_ext $OUTFILE)'"
+            return 1 
+            ;;
+    esac        
 
     # Quit if outfile exists
     if [[ -f $OUTFILE ]]  ; then
         ui_error $LINENO "File '$OUTFILE' already exists"
-        if [[ $SAFETY = on ]]; then return 1 ; fi   
+        return 1   
     fi 
 
     # Quit if OUTFILE_BASE.img exists
     if [[ -f $(file_path_base $OUTFILE).img ]]  ; then
         ui_error $LINENO "File '$(file_path_base $OUTFILE).img' already exists"
-        if [[ $SAFETY = on ]]; then return 1 ; fi   
+        return 1 
     fi 
     
     # Quit if OUTFILE_BASE.img.ext exists
     if [[ -f $(file_path_base $OUTFILE).img.$(file_ext "$OUTFILE") ]]  ; then
         ui_error $LINENO "File '$(file_path_base $OUTFILE).img.$(file_ext "$OUTFILE")' already exists"
-        if [[ $SAFETY = on ]]; then return 1 ; fi   
+        return 1   
     fi 
+    
+    # Quit if media is bigger than freespace  
+    PARTED_OUTPUT=$(sudo parted $INDEV unit B print free )
+    MEDIA_FREESPACE_AT_END=$(echo "$PARTED_OUTPUT" | tail -1 | grep Free | sed 's/[ ]\+/ /g' | cut -d " " -f 4 | tr -d 'B' )
+    if [[ -z $MEDIA_FREESPACE_AT_END ]]; then
+        MEDIA_FREESPACE_AT_END=0
+    fi
+    MEDIA_SIZE=$(( $(media_size $INDEV) - $MEDIA_FREESPACE_AT_END ))
+    AVAILABLE_SPACE=$(file_fs_freespace $(file_path "$OUTFILE"))
+    if [[ $MEDIA_SIZE -gt $AVAILABLE_SPACE ]]; then
+        MSG="Not enough free space on '$(file_path "$OUTFILE")'
+'$(media_name  $INDEV)' is $(get_bytes $MEDIA_SIZE -h)
+available space on '$(file_path "$OUTFILE")' is $(get_bytes $AVAILABLE_SPACE -h) "
+         #ui_msg WARNING "$MSG" red "" log
+         ui_error $LINENO "$MSG"
+         return 1    
+    fi
+
+    # Warning if one and a half times the media is bigger than freespace
+    SPACENEEDED=$(( $MEDIA_SIZE + $(( $MEDIA_SIZE / 2 )) ))
+    if [[ $SPACENEEDED -gt $AVAILABLE_SPACE ]]; then
+        MSG="Might not be enough free space for backup.
+'$(media_name $INDEV)' is $(get_bytes $MEDIA_SIZE -h)
+freespace on '$(file_path "$OUTFILE")' is $(get_bytes $AVAILABLE_SPACE -h)"
+        ui_warning $LINENO "$MSG"
+    fi
 }
 
 
@@ -583,7 +770,8 @@ file_check_infile(){
     
     #Warning if image file size is 0
     if [[ $(file_image_size $INFILE) = 0 ]]; then
-        ui_error $LINENO "Image file size is 0"
+        ui_warning $LINENO "Image file size is 0"
+        #return 1
     fi    
 }
 
@@ -634,7 +822,7 @@ pisafe_install_tools() {
                 ui_echo "Installing xz-utils..." white
                 sudo $INSTALL xz-utils
                 if [[ ! -f /usr/bin/xz ]]; then
-                    ui_error $LINENO "xz not installed."
+                    ui_warning $LINENO "xz not installed."
                 fi
                 ;;
             
@@ -645,7 +833,7 @@ pisafe_install_tools() {
                 sudo mv pishrink.sh /usr/local/bin
                 
                 if [[ ! -f /usr/local/bin/pishrink.sh ]] ; then
-                    ui_error $LINENO "pishrink not installed."
+                    ui_warning $LINENO "pishrink not installed."
                 fi
                 ;;
             
@@ -654,7 +842,7 @@ pisafe_install_tools() {
                 ui_echo "Installing $TOOL..." white
                 sudo $INSTALL $TOOL
                 if (( $? )); then
-                    ui_error $LINENO "$TOOL not installed."
+                    ui_warning $LINENO "$TOOL not installed."
                 fi
                 ;;
             esac    
@@ -668,7 +856,7 @@ pisafe_install(){
     
     if [[ $SILENT != -y ]]; then
         if [[ $(ui_yesno INSTALL "Install $PRODUCTNAME $SCRIPTVER?") != y ]]; then
-            ui_msg NOTICE "$PRODUCTNAME not installed"
+            ui_msg NOTICE "~ $PRODUCTNAME not installed" "" "" log
             return
         fi
     fi
@@ -714,15 +902,14 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
         \n\nOr you can execute it from any directory by typing '$SCRIPTNAME'."
     
         if [[ $INTERFACE = cli ]]; then
-            MSG="$PRODUCTNAME $SCRIPTVER installed.  Select it from the 'Accessories' menu or you can execute it in a terminal window by typing '$SCRIPTNAME'."
+            MSG="$PRODUCTNAME $SCRIPTVER installed.  Select it from the 'Accessories' menu or type '$SCRIPTNAME' in a terminal."
         fi
         
     else
         MSG="$PRODUCTNAME $SCRIPTVER not installed.  '/usr/local/bin/$SCRIPTNAME' not found. "
-       
     fi
     
-    ui_msg INSTALL "~ $MSG" white OK log
+    ui_msg INSTALL "~ $MSG" "" "" log
 }
 
 
@@ -768,7 +955,7 @@ pisafe_update() {
     else  
         rm $SCRIPTNAME.tmp
         if [[ $SUMMARY = yes ]]; then
-            ui_msg UPDATE "~ $PRODUCTNAME $SCRIPTVER is up to date.  Server ver is '$SERVER_VER' " white OK log
+            ui_msg UPDATE "~ $PRODUCTNAME $SCRIPTVER is up to date.  Server ver is '$SERVER_VER' " "" "" log
         fi
     fi
 }
@@ -783,7 +970,7 @@ pisafe_uninstall(){
     
     if [[ $SILENT != -y ]]; then
         if [[ $(ui_yesno UNINSTALL "Uninstall $PRODUCTNAME $INSTALLED_VER" "--defaultno") != y ]] ; then
-            ui_msg UNINSTALL "$PRODUCTNAME not uninstalled"
+            ui_msg UNINSTALL "~ $PRODUCTNAME $INSTALLED_VER not uninstalled" "" "" log
             return
         fi
     fi
@@ -799,7 +986,7 @@ pisafe_uninstall(){
     sudo rm -f "/usr/local/bin/$SCRIPTNAME"
     rm -f $CONFIG
     
-    ui_msg  UNINSTALL "~ $PRODUCTNAME $INSTALLED_VER uninstalled.  $LOG_FILE not removed." white OK log
+    ui_msg  UNINSTALL "~ $PRODUCTNAME $INSTALLED_VER uninstalled.  $LOG_FILE not removed." "" "" log
 }
 
 
@@ -881,7 +1068,7 @@ media_check_indev(){
     
     # Warning if INDEV is root device
     if [[ $INDEV = $(env_root_device) ]]; then
-        ui_msg WARNING "~ SD-card '$(media_name $INDEV)' is root device '$(env_root_device)'." red OK log
+        ui_warning $LINENO "~ SD-card '$(media_name $INDEV)' is root device '$(env_root_device)'."
     fi  
     
     # Warning if device filesystem has an overlay
@@ -889,44 +1076,23 @@ media_check_indev(){
     if [[ ! -z $OVERLAY ]] && [[ $AUTO_EXPAND_FS = on ]]; then
         if [[ $(ui_yesno WARNING "'$(media_name $INDEV)' filesystem has an overlay and cannot auto-expand. Turn off auto-expand?" ) = y ]]; then
 			AUTO_EXPAND_FS=off
-			ui_msg WARNING "~ Overlay found.  Auto-expand turned off" red OK log
+			ui_warning $LINENO "~ Overlay found.  Auto-expand turned off"
 		fi
     fi
     
-    # Warning if media is bigger than 16GB
-    if [[ $(media_size $INDEV) -gt 16000000000 ]]; then
-        MESG=" '$(media_name $INDEV)' is larger than 16GB.  \
-         \n\nUse a smaller media if you can.  \
-         \nIt will be faster because the entire media must be read before it can be compressed.\
-         \n\nA good 8gb card with RaspiOS in a Raspberry Pi 4 takes about 10 minutes"
-         ui_msg WARNING "$MESG" red OK
+    # Warning if media is bigger than ~16GB
+    if [[ $(media_size $INDEV) -gt $LARGE_DEVICE_READ_WARNING ]]; then
+        MESG="'$(media_name $INDEV)' is larger than $(get_bytes $LARGE_DEVICE_READ_WARNING). 
+Use a smaller media if you can.  
+It will be faster because the entire media must be read before it can be compressed.
+A good 8gb card with RaspiOS in a Raspberry Pi 4 takes about 10 minutes"
+        ui_warning $LINENO "$MESG"
     fi
     
-    # Warning if SD-card is bigger than freespace  
-    PARTED_OUTPUT=$(sudo parted $INDEV unit B print free )
-    MEDIA_FREESPACE_AT_END=$(echo "$PARTED_OUTPUT" | tail -1 | grep Free | sed 's/[ ]\+/ /g' | cut -d " " -f 4 | tr -d 'B' )
-    if [[ -z $MEDIA_FREESPACE_AT_END ]]; then
-        MEDIA_FREESPACE_AT_END=0
-    fi
-    MEDIA_SIZE=$(( $(media_size $INDEV) - $MEDIA_FREESPACE_AT_END ))
-    if [[ $MEDIA_SIZE -gt $(file_fs_freespace "$DEFAULT_PATH") ]]; then
-        MSG="WARNING - Not enough free space on '$DEFAULT_PATH' 
-         \n'$(media_name  $INDEV)' is $(get_bytes $MEDIA_SIZE -h)
-         \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h) "
-         ui_msg WARNING "$MSG" red OK
-        # return 1    
-        do_beep_down     
-    fi
     
-    # Warning if one and a half times the SD-card is bigger than freespace
-    SPACENEEDED=$(( $MEDIA_SIZE + $(( $MEDIA_SIZE / 2 )) ))
-    if [[ $SPACENEEDED -gt $(file_fs_freespace "$DEFAULT_PATH") ]]; then
-        MSG="Might not be enough free space on '$DEFAULT_PATH'
-            \n'$(media_name $INDEV)' is $(get_bytes $MEDIA_SIZE -h)
-            \nfreespace on '$DEFAULT_PATH' is $(file_fs_freespace "$DEFAULT_PATH" -h)
-            \nThere is $(file_folder_size /home/$USER/.local/share/Trash) in the Trash" 
-        ui_msg WARNING "$MSG" red OK
-    fi
+    # warning if unused space is > something or some percent.
+    
+    
 }
 
 
@@ -947,17 +1113,8 @@ media_check_outdev(){
     # Quit if OUTDEV is not found
     if  [[ ! -e $OUTDEV ]]  ; then
         ui_error $LINENO "Device '$OUTDEV' not found"
-        return 2
+        return 1
     fi 
-           
-    VENDOR=$(lsblk -n -d --output vendor /dev/sda)
-    SERIAL=$(lsblk -n -d --output serial /dev/sda)
-    
-    #stop if outdev is piSave-locked
-  #  if [[ $(config_var_get device_lock_$(media_serialno $OUTDEV)) = on ]]; then
-  #      ui_error $LINENO "Device '$(media_serialno $OUTDEV)' is locked by PiSafe in the config file"
-  #      return 1
-  #  fi
     
     # Stop if outdev is the root device
     if [[ $OUTDEV = $(env_root_device) ]]; then
@@ -973,18 +1130,99 @@ media_check_outdev(){
     
     # Warning if device is large
     if [[ $(media_size $OUTDEV) -gt $LARGE_DEVICE_WRITE_WARNING ]]; then
-        ui_msg "RESTORE WARNING" "'$(media_name $OUTDEV)'
-        \nis larger than $(get_bytes $LARGE_DEVICE_WRITE_WARNING -h)... 
-        \n\nBe sure this is the right device" red OK
+        ui_warning $LINENO "'$(media_name $OUTDEV)' is larger than $(get_bytes $LARGE_DEVICE_WRITE_WARNING -h)... 
+Be sure this is the right device"
     fi
      
     # Stop if imagefile is larger than device
     if [[ $(file_image_size "$INFILE") -gt $(media_size $OUTDEV) ]]; then
-        ui_msg "RESTORE ERROR" "~ Not enough room
-        \nThe image in '$INFILE' is ' $(file_image_size "$INFILE" -h)' 
-        \nand '$OUTDEV' is only '$(media_size $OUTDEV -h)'" red "" log
-        if [[ $SAFETY = on ]]; then return 1 ; fi    
+        #ui_msg "RESTORE ERROR" "~ Not enough room
+        ui_error $LINENO "The image in '$INFILE' is ' $(file_image_size "$INFILE" -h)' 
+and '$OUTDEV' is only '$(media_size $OUTDEV -h)'"
+         return 1    
     fi
+}
+
+
+media_backup_checklist(){
+    local SILENT=$1
+    
+    # get and check infile
+    if [[ -z $INDEV ]]; then
+        INDEV=$(menu_select_device "BACKUP")
+        if (( $? )); then
+            # ui_error $LINENO "No media found."
+            ui_msg BACKUP "No media found." 
+            return 2
+        fi
+    fi
+
+    media_check_indev
+    if (( $? )); then
+        return 1
+    fi          
+        
+        
+    #get and check outfile
+    if [[ -z $OUTFILE ]]; then
+        menu_get_outfile   # this includes file_check_outfile
+        if (( $? )); then
+            return 1
+        fi
+    else
+        file_check_outfile   
+        if (( $? )); then
+            return 1
+        fi      
+    fi   
+    
+    echo $(get_bytes $(media_backup_bytes_to_read) -h) to read...
+    
+      #confirm to continue
+    if [[ $SILENT != -y ]]; then
+        if [[ $INTERFACE = gui ]]; then
+            MSG="Backup '$(media_name $INDEV)' 
+to '$OUTFILE'. \n\n
+A good 8GB SD-card with RaspiOS on a Pi4 takes about 11 minutes with zip 
+and about 8 minutes with gz. \n\n
+Switch to terminal and create image-file now?"
+        else
+            MSG="Backup '$(media_name $INDEV)' to '$OUTFILE' now?"
+        fi        
+        if [[ $(ui_yesno BACKUP "$MSG"  --defaultno) != y ]]; then
+            ui_log "~ Backup canceled"
+            echo
+            return 1
+        else
+            echo
+        fi
+    fi
+}
+
+
+media_backup_bytes_to_read(){
+    BS=$(( 4 * 1024 * 1024 ))
+    BLOCKS_TO_READ=$(( $(media_size $INDEV) / $BS ))
+
+	if [[ $SKIP_FREESPACE = on ]]; then
+
+		START_OF_FREESPACE=$(sudo parted -ms "$INDEV" unit B print free)
+		RC=$?
+		if (( $RC )); then
+			ui_error $LINENO "parted failed with rc $RC"
+			exit 1
+		fi
+		START_OF_FREESPACE=$(tail -1 <<< "$START_OF_FREESPACE" | grep free | cut -d ':' -f 2 | tr -d 'B')
+		if ! (( $START_OF_FREESPACE )); then 
+			START_OF_FREESPACE=$(media_size $INDEV)
+		fi
+
+		BYTES_TO_READ=$START_OF_FREESPACE
+	else
+        BYTES_TO_READ=$(media_size $INDEV)
+	fi     
+    
+    echo $BYTES_TO_READ
 }
 
 
@@ -997,74 +1235,14 @@ media_backup(){
     INDEV=$1
     OUTFILE=$2
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
-    INTERFACE=${4:-cli}  #cli or gui
   
-  
-    # get and check infile
-    if [[ -z $INDEV ]]; then
-        INDEV=$(menu_select_device "BACKUP")
-        if (( $? )); then
-            # ui_error $LINENO "No media found."
-            ui_msg BACKUP "No media found." 
-            return 2
-        fi
-      ui_echo "INDEV='$INDEV'"  
+    # preflight check.  Be sure INDEV and OUTFILE are good. 
+    ui_echo "$PRODUCTNAME $SCRIPTVER Backup... " white
+    media_backup_checklist $SILENT
+    if (( $? )); then
+        return 1
     fi
-
-    media_check_indev
-    RC=$?
-    if (( $RC )); then
-        #do_beep_down
-        return $RC
-    fi          
-        
-        
-    #get and check outfile
-    if [[ -z $OUTFILE ]]; then
-        menu_get_outfile
-        RC=$?
-        if (( $RC )); then
-            return $RC
-        fi
-    fi   
-    
-    file_check_outfile   
-    RC=$?
-    if (( $RC )); then
-        do_beep_down
-        return $RC
-    fi    
- 
- 
-    ui_echo "$PRODUCTNAME $SCRIPTVER Backup '$INDEV' to '$OUTFILE'" white
- 
- 
-    #confirm to continue
-    if [[ $SILENT != -y ]]; then
-        if [[ $INTERFACE = gui ]]; then
-            MSG="Backup '$(media_name $INDEV)' 
-to '$OUTFILE'. \n\n
-A good 8GB card with RaspiOS on a Pi4 takes about 11 minutes with zip 
-and about 8 minutes with gz. \n\n
-This will switch to the terminal screen to watch the progress ... \n\n
-Create backup image-file now?"
-        else
-            MSG="Backup '$(media_name $INDEV)' to '$OUTFILE' now?"
-        fi        
-        if [[ $(ui_yesno BACKUP "$MSG"  --defaultno) != y ]]; then
-            return 1
-        fi
-    fi
-    
-    # countdown before continuing
- #   if [[ $SILENT != -y ]]; then
- #       do_beep
- #       do_countdown 10
- #       if (( $? )); then
- #           return 1
- #       fi
- #   fi
-   
+    ui_echo "~ $PRODUCTNAME $SCRIPTVER Backup '$INDEV' to '$OUTFILE'" white
 
     #################################################
     # this section reads the data to a file
@@ -1072,58 +1250,27 @@ Create backup image-file now?"
     OUTFILE_BASE=$(file_path_base "$OUTFILE" )
 
     TIME1=$(date +%s)
-    echo_white "Step 1 of 3 - Reading  '$INDEV' to '$OUTFILE_BASE.img' ... "
+    ui_echo "~ Step 1 of 3 - Reading  '$INDEV' to '$OUTFILE_BASE.img' ... " white log
     date
     
     BS=$(( 4 * 1024 * 1024 ))
-    BLOCKS_TO_READ=$(( $(media_size $INDEV) / $BS ))
-    
-    
-	# new section to skip freespace 
-	if [[ $SKIP_FREESPACE = on ]]; then
-
-		START_OF_FREESPACE=$(sudo parted -ms "$INDEV" unit B print free)
-		RC=$?
-		if (( $RC )); then
-			error $LINENO "parted failed with rc $RC"
-            do_beep_down
-			exit 15
-		fi
-		START_OF_FREESPACE=$(tail -1 <<< "$START_OF_FREESPACE" | grep free | cut -d ':' -f 2 | tr -d 'B')
-		if ! (( $START_OF_FREESPACE )); then 
-			START_OF_FREESPACE=$(media_size $INDEV)
-		fi
-
-		BYTES_TO_READ=$START_OF_FREESPACE
-		BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS + 1))
-
-		echo Media size=$(media_size $INDEV -h)
-		echo Skipping $(get_bytes $(( $(media_size $INDEV) - $START_OF_FREESPACE )) -h ) of freespace at end of media.
-		#echo Reading $(get_bytes $START_OF_FREESPACE -h)
-	else
-        BYTES_TO_READ=$(media_size $INDEV)
-        BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS + 1))
-      #  echo Reading $(get_bytes $START_OF_FREESPACE -h)
-	fi    
-	#end of freespace  
-    
-    echo Reading $(get_bytes $BYTES_TO_READ -h)
-    
-    
- #   MEDIA_SIZE=$(sudo lsblk -ndb $MEDIA -o size)
+    BYTES_TO_READ=$(media_backup_bytes_to_read)
+    BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS +1 ))
+    echo Media size=$(media_size $INDEV -h) 
+	echo Skipping $(get_bytes $(( $(media_size $INDEV) - $BYTES_TO_READ )) -h ) of freespace at end of media.
+	echo Reading $(get_bytes $BYTES_TO_READ -h)...
     if [[ ! -z $(which pv) ]]; then
 		run_command "sudo pv $INDEV -s $BYTES_TO_READ $DEVICE | dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
        	RC=$?
     else
-      echo "Note: 'pv' is not installed so there is no progress indicator for this step. Please wait..."
-      run_command "dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync  " $LINENO
-      RC=$?
+        echo "Note: 'pv' is not installed so there is no progress indicator for this step. Please wait..."
+        run_command "dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync  " $LINENO
+        RC=$?
     fi
     if (( $RC )); then
         do_beep_down
         return $RC
     fi
-    
     sleep 5s
     echo "Done reading device '$INDEV'"
     echo_white "'$(ls -s -h "$OUTFILE_BASE".img)'"
@@ -1131,9 +1278,11 @@ Create backup image-file now?"
     echo_white Step 1 took $(get_elapsed_time $TIME1 $TIME2)
     echo
    
-   
+    #################################################
+    # this section shrinks the fs
+    #################################################
     if [[ ! $(file_ext "$OUTFILE") = iso ]]; then 
-        echo_white "Step 2 of 3 - Shrinking filesystem ..."
+        ui_echo "~ Step 2 of 3 - Shrinking filesystem ..." white log
         PI_SHRINK_OPTS=
 
         if [[ $AUTO_EXPAND_FS = off ]] ; then 
@@ -1155,8 +1304,11 @@ Create backup image-file now?"
         echo_white Step 2 took $(get_elapsed_time $TIME2 $TIME3)
     fi
     
+    #################################################
+    # this section compresses the file
+    #################################################   
     echo
-    echo_white "Step 3 of 3 - Compressing '$OUTFILE_BASE.img' to '$OUTFILE' ... "
+    ui_echo "~ Step 3 of 3 - Compressing '$OUTFILE_BASE.img' to '$OUTFILE' ... " white log
     date
     echo Compression set to level $COMPRESSION_LEVEL of 9
     echo "$(file_size "$OUTFILE_BASE".img -h) to compress."
@@ -1204,9 +1356,7 @@ Create backup image-file now?"
         *)
             echo
             ui_error $LINENO "Unsupported file extension '$(file_ext "$OUTFILE")'"
-            do_beep_down
             RC=1
-            #return 1
             ;;
     esac
     
@@ -1215,7 +1365,7 @@ Create backup image-file now?"
         return $RC
     fi
     
-    sleep 5 
+    sleep 8
     
     echo "Done compressing '$OUTFILE_BASE.img' to '$OUTFILE' "
     echo_white $(ls -s -h "$OUTFILE")
@@ -1224,26 +1374,12 @@ Create backup image-file now?"
     
     # check if "$OUTFILE" was created
     if [[ ! -f $OUTFILE ]]; then
-        do_beep_down
-        #echo
-        #echo_red "ERROR: creating '$OUTFILE'"
         ui_error $LINENO "Error creating '$OUTFILE'"
         return 1
     fi    
     
     do_beep_up
-    #ui_echo "~ Backup complete. $(media_size $INDEV -h) reduced to $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4)." white
- 
-    if [[ $INTERFACE = cli ]]; then
-        MSG="~ Backup complete. $(media_size $INDEV -h) reduced to $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4)."
-    else
-        MSG="~ '$(media_name $INDEV)' backed up to 
-        \n'$OUTFILE' 
-        \ncompressed from '$(media_size $INDEV -h)' to '$(file_size "$OUTFILE" -h)' in $(get_elapsed_time $TIME1 $TIME4) 
-        \n\nYou can remove '$(media_name $INDEV)' now. "
-    fi    
- 
-    ui_msg BACKUP "$MSG" white OK log
+    ui_msg BACKUP "~ Backup complete. \n'$(media_name $INDEV)' backed up to \n'$OUTFILE' \n$(media_size $INDEV -h) reduced to $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME2)." white "" log
 }
 
 
@@ -1251,7 +1387,7 @@ media_restore(){
     local INFILE=$1
     local OUTDEV=$2
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
-    INTERFACE=${4:-cli}  #CLI or gui
+  #  INTERFACE=${4:-cli}  #CLI or gui
 
  
     #GET INFILE
@@ -1264,10 +1400,9 @@ media_restore(){
     fi
  
     file_check_infile
-    RC=$?
-    if (( $RC )); then
-        do_beep_down
-        return $RC
+    if (( $? )); then
+        #do_beep_down
+        return 1
     fi
 
 
@@ -1275,17 +1410,16 @@ media_restore(){
     if [[ -z $OUTDEV ]]; then
         OUTDEV=$(menu_select_device "RESTORE"  y )    # this sets global variable OUTDEV
         if (( $? )); then
-            #ui_error $LINENO "No media found."
-            ui_msg BACKUP "No media found." 
-            return 2
+            ui_error $LINENO "No media found."
+            #ui_msg BACKUP "No media found." 
+            return 1
         fi
     fi
 
     media_check_outdev
-    RC=$?
-    if (( $RC )); then
-        do_beep_down
-        return $RC
+    if (( $? )); then
+        #do_beep_down
+        return 1
     fi
     
     
@@ -1301,14 +1435,14 @@ media_restore(){
         do_beep
         RESULT=$(ui_yesno RESTORE "WARNING... All existing data on '$(media_name $OUTDEV)' - will be erased!  Continue y/n?" "--defaultno")
         if [[ $RESULT != y ]]; then
-            ui_msg RESTORE "~ You did not answer 'y'" white OK log
+            ui_msg RESTORE "~ You did not answer 'y'" "" "" log
             return 1
         fi
     fi
     
-    ui_countdown 10 "RESTORE" "Overwriting '$(media_name $OUTDEV)' in 10 seconds...\n\n"
+    ui_countdown 10 "RESTORE" # "Overwriting '$(media_name $OUTDEV)' in 10 seconds...\n\n"
     if (( $? )); then
-        ui_msg  RESTORE "~ Restore stopped." white "" log
+        ui_msg  RESTORE "~ Restore stopped." "" "" log
         return 2
     fi
     
@@ -1391,12 +1525,11 @@ media_restore(){
     
     if (( $RC )); then
         echo
-        do_beep_down  
         ui_error $LINENO "Restore failed. RC=$RC"
         return $RC
     else
         do_beep_up
-        ui_msg RESTORE "~ Restore complete. '$INFILE' written to '$OUTDEV' in $(get_elapsed_time $TIME1 $TIME2)." white "" log
+        ui_msg RESTORE "~ Restore complete. \n'$INFILE' written to \n'$(media_name $OUTDEV)' \nin $(get_elapsed_time $TIME1 $TIME2)." white "" log
     fi
 }
 
@@ -1451,22 +1584,23 @@ media_power_off(){
 
 # ---------- UI functions
 
-
 ui_msg() {
     #general message function.  Supports CLI whiptail and logging.
     # usage ui_msg INSTALL "$MSG" white OK log
     TITLE="$1"
     MSG="${2:-no message}"
     COLOR="${3:-grey}"
-    OK_BUTTON="${4:-Back}"
+   # OK_BUTTON="${4:-Back}"
+    OK_BUTTON="${4:-OK}"
     local LOGIT="${5:-no}"   # or log
     
+    if [[ $LOGIT = log ]]; then
+        ui_log "$MSG"
+    fi    
+    
     if [[ $INTERFACE = cli ]]; then
-        ui_echo "$MSG" $COLOR $LOGIT 
+        ui_echo "$TITLE: $MSG" $COLOR nolog 
     else
-        if [[ $LOGIT = log ]]; then
-            ui_log "$MSG"
-        fi    
         whiptail --backtitle "$BACKTITLE" --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
     fi
 }
@@ -1479,16 +1613,16 @@ ui_echo(){
     COLOR="${2:-grey}"
     local LOGIT="${3:-log}"   # or nolog
     
+    if [[ $LOGIT = log ]]; then    
+        ui_log "$MSG"  
+    fi
+    
     case $COLOR in
         red)        echo_red "$MSG" ;;
         white)      echo_white "$MSG" ;;
         blue)       echo_blue "$MSG" ;;
         *)          echo -e "$MSG" ;;
     esac
-    
-    if [[ $LOGIT = log ]]; then    
-        ui_log "$MSG"  
-    fi
 }
 
 
@@ -1525,22 +1659,49 @@ ui_yesno(){
 }
 
 
+ui_log(){
+    # usage ui_log "message"
+    INFO=$*
+    
+    INFO=$(echo $INFO | sed 's/\\n/ -/g')  #change newline for ~
+    
+    if [[ $LOG = on ]]; then
+        touch $LOG_FILE
+        echo "$(date "+%Y-%m-%d %H:%M") $INFO" >> $LOG_FILE
+    fi
+}
+
+
+
+ui_warning(){
+    # usage:  ui_warning $LINENO "message"
+    LINE=$1
+    shift
+    do_beep
+    do_beep
+    MSG="$@"
+    ui_msg WARNING "~ $MSG" red "" nolog
+}
+
+
 ui_error() {
     # usage:  ui_error $LINENO "message"
     LINE=$1
     shift
+    do_beep_down
     MSG="$@"
-    ui_msg ERROR "~ Error in line $LINE. $MSG" red "" log
+    ui_msg ERROR "~ Error at line $LINE. $MSG" red "" log
 }
 
 
 ui_countdown(){
     local SECONDS=${1:-10}
-    local TITLE=$2
-    local MESSAGE="${3:-Counting down...}"
+    local TITLE="${2:-Countdown}"
+    #local MESSAGE="${3:-Counting down...}"
+    local MESSAGE=${3:-"Pausing for $SECONDS seconds... Press y to continue immediately or any other key to stop"}
     
     if [[ $INTERFACE = cli ]]; then
-        do_countdown $1
+        do_countdown $SECONDS "$MESSAGE"
     else
         whiptail_countdown "$SECONDS" "$TITLE" "$MESSAGE"
     fi
@@ -1613,18 +1774,18 @@ media_format(){
    # echo $SILENT
     
     if [[ $SILENT != -y ]]; then
-        RESULT=$(ui_yesno ERASE "WARNING!!  \n\nFormat '$DEVICE' to '$FORMAT' \n\nAll existing data on '$NAME' will be erased.  \n\nAre you sure you want to continue? y/n?" "--defaultno")
+        RESULT=$(ui_yesno "ERASE MEDIA" "WARNING!!  \n\nFormat '$DEVICE' to '$FORMAT' \n\nAll existing data on '$NAME' will be erased.  \n\nAre you sure you want to continue? y/n?" "--defaultno")
         echo
         if [[ $RESULT != y ]]; then
-            ui_msg ERASE "~ $DEVICE not erased. you answered '$RESULT'" white OK log
+            ui_msg "ERASE MEDIA" "~ $DEVICE not erased. you answered '$RESULT'" "" "" log
             return 1
         fi
     fi
 
-    ui_countdown 10 "" "Erasing Media '$(media_name $DEVICE)' in 10 seconds...\n\n"
+    ui_countdown 10 "ERASE MEDIA"  # "Erasing Media '$(media_name $DEVICE)' in 10 seconds...\n\n"
     if (( $? )); then
     # ui_msg  "INSTALL:" "$MSG" "white" "OK" "log"
-        ui_msg  ERASE "~ Erase Media stopped." white OK log
+        ui_msg  "ERASE MEDIA"  "~ Erase Media stopped." "" "" log
         return 2
     fi
 
@@ -1711,17 +1872,17 @@ media_format(){
 
     if (( $rc )); then
         ui_error $LINENO "mkfs failed"
-        return 12
+        return 1
     else
-        ui_msg "ERASE MEDIA" "~ Formatting complete. '$(media_name $DEVICE)' has been erased." white OK log
+        ui_msg "ERASE MEDIA" "~ Formatting complete. '$(media_name $DEVICE)' has been erased." white "" log
     fi
 
     echo "Mounting the drive..."
     sleep 2
     run_command "udisksctl mount -b $PARTITION" $LINENO
     if (( $? )); then
-        ui_error $LINENO "mount failed"
-        return 13
+        ui_warning $LINENO "mount failed"
+        #return 1
     fi
 }
 
@@ -2120,184 +2281,6 @@ echo_if_cli (){
 }
 
 
-# ---------- Config_var functions
-
-config_var_set() {
-    SETTING=$1
-    VAL=$2
-    local FORCE=${3:-true}
-    
-    #dont update the setting if thre is a value and we are not forcing new values
-    if [[ $FORCE = false ]];  then
-      if [[ ! -z "$(config_var_get $SETTING)" ]]; then
-        return
-      fi
-    fi    
-    
-    case $(config_var_get $SETTING) in
-    
-        '') # add setting to end of file
-            echo "$SETTING"="$VAL" >> $CONFIG 
-            ;;
-        
-        *)  #update setting to val
-            sed -i 's~'$SETTING'=.*$~'$SETTING'='$VAL'~' $CONFIG
-            ;;
-            
-    esac
-}
-
-
-config_var_get(){
-    SETTING=$1"="
-    cat $CONFIG | grep $SETTING | sed 's~'$SETTING'~~'
-}
-
-
-config_var_clear(){
-    SETTING=$1
-    VAL=$2
-    sed -i 's~'$SETTING'=.*$~'$VAR'=~' $CONFIG 
-}
-
-
-config_var_init_configfile(){
-    if [[ ! -d $(file_path $CONFIG) ]]; then
-        mkdir -p $(file_path $CONFIG)
-    fi
-    
-    if [[ ! -f $CONFIG ]]; then
-        touch $CONFIG
-        echo "# $CONFIG" > $CONFIG
-        config_var_set_defaults
-    else    
-        # update any missing values.  false means dont force the update
-        config_var_set_defaults false
-    fi
-}
-
-
-config_var_set_defaults(){
-    FORCE=${1:-true}
-    
-    # config_var_init_configfile
-    config_var_set settings_script_ver $SCRIPTVER 
-    
-    config_var_set default_path $HOME/Downloads $FORCE
-    config_var_set hide_root_device on $FORCE
-    config_var_set check_for_updates_on_startup on $FORCE
-
-    #backup settings
-    config_var_set shrink_fs on $FORCE
-    config_var_set auto_expand_fs on $FORCE
-    config_var_set default_extension zip $FORCE
-    config_var_set compression_level 1 $FORCE
-    config_var_set parallel_compression on $FORCE
-    config_var_set large_device_read_warning 17179869184 $FORCE
-    config_var_set skip_freespace on $FORCE
-    
-    #restore settings
-    config_var_set large_device_write_warning 17179869184 $FORCE
-    config_var_set safety on $FORCE
-
-    #other    
-    config_var_set debug_mode off $FORCE
-    config_var_set sound on $FORCE
-    config_var_set log on $FORCE
-    #  config_var_set log_file $LOG_FILE 
-    
-    config_var_set text_editor $(env_texteditor) $FORCE
-}
-
-
-config_var_get_settings(){
-    SETTINGS_SCRIPT_VER=$(config_var_get settings_script_ver)
-    DEFAULT_PATH=$(config_var_get default_path)
-    HIDE_ROOT_DEVICE=$(config_var_get hide_root_device)
-    CHECK_FOR_UPDATES_ON_STARTUP=$(config_var_get check_for_updates_on_startup)
- 
-    # backup settings
-    SHRINK_FS=$(config_var_get shrink_fs)
-    AUTO_EXPAND_FS=$(config_var_get auto_expand_fs)
-    DEFAULT_EXTENSION=$(config_var_get default_extension)
-    COMPRESSION_LEVEL=$(config_var_get compression_level)
-    LARGE_DEVICE_READ_WARNING=$(config_var_get large_device_read_warning) 
-    SKIP_FREESPACE=$(config_var_get skip_freespace)
-    
-    # restore settings
-    LARGE_DEVICE_WRITE_WARNING=$(config_var_get large_device_write_warning) 
-    SAFETY=$(config_var_get safety)  
-
-    # other    
-    DEBUG_MODE=$(config_var_get debug_mode)
-    SOUND=$(config_var_get sound)
-    LOG=$(config_var_get log)
-  #  LOG_FILE=$(config_var_get log_file)
-    VERIFY=off
-    TEXT_EDITOR=$(config_var_get text_editor)
-    
-    if [[ $INTERFACE != gui ]]; then 
-        DEFAULT_PATH=$CURRENT_DIR
-      #  HIDE_ROOT_DEVICE=off
-    fi
-    
-    mkdir -p "$DEFAULT_PATH"
-}
-
-
-# ---------- Enviroment functions
-env_installer(){
-    local INSTALLER=
-    if [ -f /usr/bin/apt ]; then             # debian
-        INSTALLER="apt install -y"
-    elif [ -f /usr/bin/pacman ]; then        # arch
-        INSTALLER="pacman -S --noconfirm"
-    elif [ -f /usr/bin/dnf ]; then            #rpm / fedora
-        INSTALLER="dnf install -y"  
-    fi
-    echo "$INSTALLER"
-}
-
-
-env_terminal(){
-    local TERMINAL1=
-    if [ -f /usr/bin/lxterminal ];then
-      TERMINAL1="lxterminal --geometry=110x40 --title='PiSafe' -e bash -c "
-    elif [ -f /usr/bin/xfce4-terminal ];then
-      TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
-    elif [ -f /usr/bin/mate-terminal ];then
-      TERMINAL1="mate-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
-    elif [ -f /usr/bin/gnome-terminal ];then
-      TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
-    elif [ -f /usr/bin/xterm ];then
-      TERMINAL1="xterm -geometry 110x40 -T 'PiSafe' -e bash -c " 
-    elif [ -f /usr/bin/terminator ];then
-      TERMINAL1="terminator --geometry=110x40 -T 'PiSafe' -x bash -c "
-    elif [ -f /usr/bin/konsole ];then
-      TERMINAL1="konsole -e bash -c " 
-    elif [ -f /usr/bin/qterminal ];then
-      TERMINAL1="qterminal -e bash -c "   
-    elif [ -f /usr/bin/x-terminal-emulator ];then
-      TERMINAL1="$(readlink -f /usr/bin/x-terminal-emulator) -e bash -c "
-    else
-      echo "Failed to locate any terminal emulators!!!"
-      return 1
-    fi
-    echo "$TERMINAL1"
-}
-
-
-env_texteditor(){
-    TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
-    
-    for TEXT_EDITOR in $TEXT_EDITORS ; do
-        if [[ -f /usr/bin/$TEXT_EDITOR ]]; then
-            echo $TEXT_EDITOR
-            return
-        fi
-    done
-}
-
 
 ########  MENU  FUNCTIONS ######################
 
@@ -2564,8 +2547,8 @@ menu_tools(){
             DETAILS)    
                 DEVICE=$(menu_select_device "MEDIA DETAILS")
                 if (( $? )); then
-                    #ui_error $LINENO "No media found."
-                    ui_msg BACKUP "No media found." 
+                    ui_error $LINENO "No media found."
+                    #ui_msg BACKUP "No media found." 
                     return 2
                 fi
                 media_details "$DEVICE"
@@ -2574,12 +2557,12 @@ menu_tools(){
             ERASE)                  
                 DEVICE=$(menu_select_device "ERASE MEDIA" "y")
                 if (( $? )); then
-                    #ui_error $LINENO "No media found."
-                    ui_msg BACKUP "No media found." 
+                    ui_error $LINENO "No media found."
+                    #ui_msg BACKUP "No media found." 
                     return 2
                 fi
                 
-                FORMAT=$(whiptail --clear --backtitle "$BACKTITLE" --title "Select format" --ok-button "Select" --cancel-button "Exit" --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+                FORMAT=$(whiptail --clear --backtitle "$BACKTITLE" --title "ERASE MEDIA: Select format" --ok-button "Select" --cancel-button "Exit" --menu "    " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
                             "fat32"     "     Most universal format for media under 32GB" \
                             "exfat"     "     Most universal format for media over 32GB and files over 4GB" \
                             "ntfs"      "     Native Windows format" \
@@ -2628,9 +2611,9 @@ menu_gui(){
  
         whiptail_calc_wt_size        
         case $MENU_CHOICE in
-            BACKUP)         media_backup "" "" "" "gui"  ;;
+            BACKUP)         media_backup  ;;
             
-            RESTORE)        media_restore "" "" "" "gui"  ;;
+            RESTORE)        media_restore ;;
             
             LIST)           echo "Getting list of images ready..."
                             ui_msg LIST "$(do_list_info $DEFAULT_PATH)"  ;;
