@@ -100,7 +100,8 @@ run_command(){
     eval $CMD
     RC=$?
     if (( $RC )); then
-        ui_msg_error $LINENO "Error $RC running '$CMD'"
+        #ui_msg_error $LINENO "Error $RC running '$CMD'"
+        ui_echo "~ Error $RC running '$CMD'" red log
         return $RC
     fi
 }
@@ -987,7 +988,7 @@ media_restore_check_outdev(){
     fi
     
     # Warning if device is large
-    if [[ $(media_size $OUTDEV) -gt $LARGE_DEVICE_WRITE_WARNING ]]; then
+    if [[ $(media_size $OUTDEV) -gt $(get_bytes $LARGE_DEVICE_WRITE_WARNING -b) ]]; then
         ui_msg_warning $LINENO "'$(media_name $OUTDEV)' is larger than $(get_bytes $LARGE_DEVICE_WRITE_WARNING -h)... 
 Be sure this is the right device"
     fi
@@ -1069,10 +1070,10 @@ media_backup(){
             run_command "sudo pishrink.sh $PI_SHRINK_OPTS '$OUTFILE_BASE'.img " $LINENO
             RC=$?
             if (( $RC )); then
-                echo Continuing without shrinking file system...
+                ui_echo "~ Continuing without shrinking the file system..." red log
             fi
         else
-            echo "Filesystem not shrunk.  Setting is 'off'."
+            ui_echo "~ Filesystem not shrunk.  Setting is 'off'." red log
         fi
         sleep 5    # to allow file size to register with the OS
         echo Done shrinking filesystem.
@@ -1457,6 +1458,8 @@ Switch to terminal and create image-file now?"
 
         *)
             MSG=$MSG"   Warning: The filesystem on the last partition is '$MEDIA_LAST_PARTITION_FS'. This filesystem will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
+ # need to verify next line works.
+             ui_echo "~ Warning, The filesystem on the last partition is '$MEDIA_LAST_PARTITION_FS' and will not shrink." red log
             ;;
     esac
   
@@ -2683,6 +2686,8 @@ menu_cli(){
 
 
 ##########################################################
+
+
 
 # if -v, show version and exit
 if  [[ ~$1 = ~-v ]]; then
