@@ -559,7 +559,7 @@ env_texteditor(){
     TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
     
     for TEXT_EDITOR in $TEXT_EDITORS ; do
-        if [[ $(which $TEXT_EDITOR) ]]; then
+        if [[ $(which $TEXT_EDITOR 2>&1) ]]; then
         #if [[ -f /usr/bin/$TEXT_EDITOR ]]; then
             echo $TEXT_EDITOR
             return
