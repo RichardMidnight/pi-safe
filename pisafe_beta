@@ -16,7 +16,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4.e"   # 2022/2/14
+SCRIPTVER="1.2.4.f"   # 2022/2/14
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -561,8 +561,8 @@ env_texteditor(){
     for TEXT_EDITOR in $TEXT_EDITORS ; do
         #if [[ $(which $TEXT_EDITOR 2>&1) ]]; then
         #if [[ -f /usr/bin/$TEXT_EDITOR ]]; then
-        which $TEXT_EDITOR
-        if (( $? )); then
+        which $TEXT_EDITOR 1> //null
+        if (( ! $? )); then
             echo $TEXT_EDITOR
             return
         fi
