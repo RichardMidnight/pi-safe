@@ -261,8 +261,23 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 
 
 pisafe_install_tools() {   
-    TOOL_MISSING=false
+    SILENT=${1:-"-n"}
+    MISSING_TOOLS=
     INSTALL=$(env_installer)  
+    
+    #scan for missing tools
+    for TOOL in $REQUIRED_TOOLS ; do
+        if [[ -z $(which $TOOL) ]] ; then
+            MISSING_TOOLS="$MISSING_TOOLS $TOOL"
+        fi
+    done
+    
+    # if nothing missing, return; else silent or ask
+    if [[ -z $MISSING_TOOLS ]]; then
+        return
+    elif  [[ $SILENT = -n ]] && [[ $(ui_yesno "Install needed tools:'$MISSING_TOOLS '") = n ]]; then
+        return
+    fi
     
     for TOOL in $REQUIRED_TOOLS ; do
         if [[ -z $(which $TOOL) ]] ; then
@@ -2696,8 +2711,6 @@ menu_cli(){
 
 ##########################################################
 
-
-
 # if -v, show version and exit
 if  [[ ~$1 = ~-v ]]; then
     echo $SCRIPTVER
@@ -2708,6 +2721,11 @@ fi
 if [[ ~$1 = ~uninstall ]]; then
     pisafe_uninstall $2
     exit
+fi
+
+# if installing silent, then install tools silently
+if [[ -$1 = -install ]] && [[ -$2 = --y ]]; then
+    pisafe_install_tools -y
 fi
 
 
