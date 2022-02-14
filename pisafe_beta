@@ -275,7 +275,7 @@ pisafe_install_tools() {
     # if nothing missing, return; else silent or ask
     if [[ -z $MISSING_TOOLS ]]; then
         return
-    elif  [[ $SILENT = -n ]] && [[ $(ui_yesno "Install needed tools:'$MISSING_TOOLS '") = n ]]; then
+    elif  [[ $SILENT = -n ]] && [[ $(ui_yesno "Install dependencies:'$MISSING_TOOLS '") = n ]]; then
         return
     fi
     
@@ -286,7 +286,7 @@ pisafe_install_tools() {
             xz)
                 ui_echo "Installing xz-utils..." white
                 sudo $INSTALL xz-utils
-                if [[ ! -f /usr/bin/xz ]]; then
+                if [[ -z $(which xz) ]]; then
                     ui_msg_warning $LINENO "xz not installed."
                 fi
                 ;;
@@ -297,7 +297,7 @@ pisafe_install_tools() {
                 sudo chmod +x pishrink.sh
                 sudo mv pishrink.sh /usr/local/bin
                 
-                if [[ ! -f /usr/local/bin/pishrink.sh ]] ; then
+                if [[ -z $(which pishrink.sh) ]] ; then
                     ui_msg_warning $LINENO "pishrink not installed."
                 fi
                 ;;
@@ -510,12 +510,17 @@ config_var_get_settings(){
 # ---------- Enviroment functions
 env_installer(){
     local INSTALLER=
-    if [ -f /usr/bin/apt ]; then             # debian
+    if [ $(which apt) ]; then             # debian
         INSTALLER="apt install -y"
-    elif [ -f /usr/bin/pacman ]; then        # arch
+    #elif [ -f /usr/bin/pacman ]; then        # arch
+    elif [ $(which pacman) ]; then        # arch
         INSTALLER="pacman -S --noconfirm"
-    elif [ -f /usr/bin/dnf ]; then            #rpm / fedora
+    #elif [ -f /usr/bin/dnf ]; then            #rpm / fedora
+    elif [ $(which dnf) ]; then            #rpm / fedora
         INSTALLER="dnf install -y"  
+    else
+        echo "Failed to locate any installers."
+        return 1
     fi
     echo "$INSTALLER"
 }
@@ -523,7 +528,8 @@ env_installer(){
 
 env_terminal(){
     local TERMINAL1=
-    if [ -f /usr/bin/lxterminal ];then
+    #if [ -f /usr/bin/lxterminal ];then
+    if [ $(which lxterminal) ];then
       TERMINAL1="lxterminal --geometry=110x40 --title='PiSafe' -e bash -c "
     elif [ -f /usr/bin/xfce4-terminal ];then
       TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
@@ -542,7 +548,7 @@ env_terminal(){
     elif [ -f /usr/bin/x-terminal-emulator ];then
       TERMINAL1="$(readlink -f /usr/bin/x-terminal-emulator) -e bash -c "
     else
-      echo "Failed to locate any terminal emulators!!! "
+      echo "Failed to locate any terminal emulators. "
       return 1
     fi
     echo "$TERMINAL1"
@@ -553,7 +559,8 @@ env_texteditor(){
     TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
     
     for TEXT_EDITOR in $TEXT_EDITORS ; do
-        if [[ -f /usr/bin/$TEXT_EDITOR ]]; then
+        if [[ $(which $TEXT_EDITOR) ]]; then
+        #if [[ -f /usr/bin/$TEXT_EDITOR ]]; then
             echo $TEXT_EDITOR
             return
         fi
