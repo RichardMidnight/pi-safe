@@ -16,7 +16,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4.k"   # 2022/2/14
+SCRIPTVER="1.2.4.l"   # 2022/2/14
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -267,8 +267,7 @@ pisafe_install_tools() {
     
     #scan for missing tools
     for TOOL in $REQUIRED_TOOLS ; do
-        which $TOOL 1>/dev/null 2> /dev/null
-        if (( $? )); then
+        if [[ -z $(ui_which $TOOL) ]]; then
             MISSING_TOOLS="$MISSING_TOOLS $TOOL"
         fi
     done
@@ -282,13 +281,13 @@ pisafe_install_tools() {
     echo
     
     for TOOL in $REQUIRED_TOOLS ; do
-        if [[ -z $(which $TOOL) ]] ; then
+        if [[ -z $(ui_which $TOOL) ]] ; then
             case $TOOL in
             
             xz)
                 ui_echo "Installing xz-utils..." white
                 sudo $INSTALL xz-utils
-                if [[ -z $(which xz) ]]; then
+                if [[ -z $(ui_which xz) ]]; then
                     ui_msg_warning $LINENO "xz not installed."
                 fi
                 ;;
@@ -299,7 +298,7 @@ pisafe_install_tools() {
                 sudo chmod +x pishrink.sh
                 sudo mv pishrink.sh /usr/local/bin
                 
-                if [[ -z $(which pishrink.sh) ]] ; then
+                if [[ -z $(ui_which pishrink.sh) ]] ; then
                     ui_msg_warning $LINENO "pishrink not installed."
                 fi
                 ;;
@@ -515,8 +514,7 @@ env_installer(){
     local INSTALLER=
     
     for INSTALLER in $INSTALLERS;  do
-        which $INSTALLER 1>/dev/null 2>/dev/null
-        if (( ! $? )); then
+        if [[ $(ui_which $INSTALLER) ]]; then 
             break
         fi
     done
@@ -534,7 +532,7 @@ env_installer(){
 env_terminal(){
     local TERMINAL1=
     #if [ -f /usr/bin/lxterminal ];then
-    if [ $(which lxterminal) ];then
+    if [ $(ui_which lxterminal) ];then
       TERMINAL1="lxterminal --geometry=110x40 --title='PiSafe' -e bash -c "
     elif [ -f /usr/bin/xfce4-terminal ];then
       TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
@@ -564,10 +562,7 @@ env_texteditor(){
     TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
     
     for TEXT_EDITOR in $TEXT_EDITORS ; do
-        #if [[ $(which $TEXT_EDITOR 2>&1) ]]; then
-        #if [[ -f /usr/bin/$TEXT_EDITOR ]]; then
-        which $TEXT_EDITOR 1>/dev/null 2>/dev/null
-        if (( ! $? )); then
+        if [[ $(ui_which $TEXT_EDITOR) ]] ; then
             echo $TEXT_EDITOR
             return
         fi
@@ -594,7 +589,7 @@ do_beep(){
     FREQ=${1:-600}
     TIME=${2:-.5}
 
-    if [[ $SOUND = on ]] && [[ $(which speaker-test) ]]; then
+    if [[ $SOUND = on ]] && [[ $(ui_which speaker-test) ]]; then
         (speaker-test -t sign -f $FREQ > /dev/null & sleep $TIME && kill -9 $! ) > /dev/null
       #  sleep .5  # to allow the beep to end
     fi
@@ -1841,9 +1836,24 @@ ui_yesno(){
         fi
         return $ES
     fi
+
+    
 }
 
 
+    ui_which () {
+        #fixes manjaro's which command 
+        local FILE=$1
+        
+        which $FILE 1>/dev/null 2>/dev/null
+        if (( $? )); then
+            #echo false
+            return 1
+        else
+            echo true
+            return 0
+        fi       
+    }
 
 
 menu_1start_of_menu_functions(){
