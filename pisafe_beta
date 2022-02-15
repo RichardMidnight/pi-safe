@@ -16,7 +16,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4.l"   # 2022/2/14
+SCRIPTVER="1.2.5"   # 2022/2/15
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -170,10 +170,10 @@ pisafe_help() {
     echo "CLI Function is:"
     echo "                               - with no arguments it launches the PiSafe menu (recommended)"
     echo "  list                         - list media and image-files "
-    echo "  backup [device] [file] [-y]  - backup media to image-file"
-    echo "  restore [file] [device] [-y] - restore image-file to media"
-    echo "  details [device]             - show media details"
-    echo "  erase [device] [format] [-y] - format media as fat32 exfat ntfs or ext4"
+    echo "  backup [media] [file] [-y]   - backup media to image-file (-y also supresses check-for-updates)"
+    echo "  restore [file] [media] [-y]  - restore image-file to media"
+    echo "  details [media]              - show media details"
+    echo "  erase [media] [format] [-y]  - format media as fat32 exfat ntfs or ext4"
     echo "  install [-y]                 - install this script"
     echo "  update [-y]                  - update script from website"
     echo "  uninstall [-y]               - uninstall this script"
@@ -185,7 +185,7 @@ pisafe_help() {
     echo "Notes: "
     echo " - Supports .img .zip .xz .gz and .iso files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
     echo " - Specifying an '.img' or '.iso' extension is faster but twice the size because it is not compressed."
-    echo " -y answers 'y' to prompts."
+    echo " - -y answers 'y' to prompts."
     echo " - There are a number of settings that can be changed in the settings file. "
     echo
     #echo It will run dd, then pishrink, then compress to create a smallimage file of the SD card
@@ -198,6 +198,7 @@ pisafe_help() {
     echo "$SCRIPTNAME restore newimage.img.zip sda"
     echo "$SCRIPTNAME backup /dev/sda /home/pi/Downloads/backup_\$(date +%Y-%d-%m_%I%M%p).img.gz -y"
     echo "$SCRIPTNAME format /dev/sda fat32"
+    echo "$SCRIPTNAME settings"
     echo
 }
 
@@ -534,9 +535,9 @@ env_terminal(){
     #if [ -f /usr/bin/lxterminal ];then
     if [ $(ui_which lxterminal) ];then
       TERMINAL1="lxterminal --geometry=110x40 --title='PiSafe' -e bash -c "
-    elif [ -f /usr/bin/xfce4-terminal ];then
+    elif [ $(ui_which xfce4-terminal) ];then
       TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
-    elif [ -f /usr/bin/mate-terminal ];then
+    elif [ $(ui_which mate-terminal) ];then
       TERMINAL1="mate-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
     elif [ -f /usr/bin/gnome-terminal ];then
       TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
@@ -2695,9 +2696,9 @@ menu_cli(){
     INTERFACE="cli"
     case $1 in
         
-        backup|read)        media_backup $2 $3 $4  ;;
+        backup)             media_backup $2 $3 $4  ;;
         
-        restore|write)      media_restore $2 $3 $4  ;;
+        restore)            media_restore $2 $3 $4  ;;
         
         list)               do_list_info  ;;
 
@@ -2736,19 +2737,19 @@ menu_cli(){
 ##########################################################
 
 # if -v, show version and exit
-if  [[ ~$1 = ~-v ]]; then
+if  [[ $1 = -v ]]; then
     echo $SCRIPTVER
     exit
 fi
 
 # if uninstalling, uninstall and exit
-if [[ ~$1 = ~uninstall ]]; then
+if [[ $1 = uninstall ]]; then
     pisafe_uninstall $2
     exit
 fi
 
 # if installing silent, then install tools silently
-if [[ -$1 = -install ]] && [[ -$2 = --y ]]; then
+if [[ $1 = install ]] && [[ $2 = -y ]]; then
     pisafe_install_tools -y
 fi
 
@@ -2757,9 +2758,15 @@ config_var_init_configfile
 config_var_get_settings
 pisafe_install_tools
 
-
-if  [[ $CHECK_FOR_UPDATES_ON_STARTUP = on ]]; then
+# supress check-for-updates if "backup and -y"
+# check for updates if "not (backup and -y)" and check=on
+# a bit messy, but works for now.
+if   [[ $1 = backup ]] && [[ $4 = -y ]] ; then
+    x=1
+elif [[ $CHECK_FOR_UPDATES_ON_STARTUP = on ]] ; then
+    ui_echo "Checking for $PRODUCTNAME updates..."
     pisafe_update cli no 
 fi
+
 
 menu_cli $1 $2 $3 $4
