@@ -16,7 +16,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4.i"   # 2022/2/14
+SCRIPTVER="1.2.4.k"   # 2022/2/14
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -267,7 +267,8 @@ pisafe_install_tools() {
     
     #scan for missing tools
     for TOOL in $REQUIRED_TOOLS ; do
-        if [[ -z $(which $TOOL) ]] ; then
+        which $TOOL 1>/dev/null 2> /dev/null
+        if (( $? )); then
             MISSING_TOOLS="$MISSING_TOOLS $TOOL"
         fi
     done
