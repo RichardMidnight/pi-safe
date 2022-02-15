@@ -16,7 +16,7 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4.g"   # 2022/2/14
+SCRIPTVER="1.2.4.h"   # 2022/2/14
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -510,13 +510,13 @@ config_var_get_settings(){
 # ---------- Enviroment functions
 env_installer(){
     local INSTALLER=
-    if [ $(which apt) ]; then             # debian
+    if [ ! $(which apt 1>/dev/null 2>/dev/null) ]; then             # debian
         INSTALLER="apt install -y"
     #elif [ -f /usr/bin/pacman ]; then        # arch
-    elif [ $(which pacman) ]; then        # arch
+    elif [ ! $(which pacman 1>/dev/null 2>/dev/null) ]; then        # arch
         INSTALLER="pacman -S --noconfirm"
     #elif [ -f /usr/bin/dnf ]; then            #rpm / fedora
-    elif [ $(which dnf) ]; then            #rpm / fedora
+    elif [ ! $(which dnf 1>/dev/null 2>/dev/null) ]; then            #rpm / fedora
         INSTALLER="dnf install -y"  
     else
         echo "Failed to locate any installers."
