@@ -1,6 +1,6 @@
 #!/bin/bash
 
-COPYRIGHT="By Richard Reed 2018 - 2021" 
+COPYRIGHT="By Richard Reed 2018 - 2022" 
 
 # This script basically 
 # 1- copies a media-device with 'dd'
@@ -14,9 +14,8 @@ COPYRIGHT="By Richard Reed 2018 - 2021"
 
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
-
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5"   # 2022/2/15
+SCRIPTVER="1.2.4"   # 2022/2/16
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -38,11 +37,11 @@ RED='\033[1;31m'
 GREEN='\033[0;32m'
 BLUE='\033[0;34m'
 LTBLUE='\033[1;34m'
-NC='\033[0m' 		# No Color, standard text
-echo_white()        { (echo -e "${WHITE}$*${NC}") }
-echo_red()          { (echo -e "${RED}$*${NC}") }
-echo_blue()         { (echo -e "${LTBLUE}$*${NC}") }  
-echo_green()        { (echo -e "${GREEN}$*${NC}") }
+NC='\033[0m'    # No Color, standard text
+echo_white()    { (echo -e "${WHITE}$*${NC}") }
+echo_red()      { (echo -e "${RED}$*${NC}") }
+echo_blue()     { (echo -e "${LTBLUE}$*${NC}") }  
+echo_green()    { (echo -e "${GREEN}$*${NC}") }
 
 
 
@@ -70,8 +69,6 @@ echo_green()        { (echo -e "${GREEN}$*${NC}") }
 # 20
 
 # 
-
-
 
 
 desktop_environment_notes(){
@@ -188,7 +185,6 @@ pisafe_help() {
     echo " - -y answers 'y' to prompts."
     echo " - There are a number of settings that can be changed in the settings file. "
     echo
-    #echo It will run dd, then pishrink, then compress to create a smallimage file of the SD card
     echo
     echo "Examples:"
     echo "$SCRIPTNAME "
@@ -539,17 +535,17 @@ env_terminal(){
       TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
     elif [ $(ui_which mate-terminal) ];then
       TERMINAL1="mate-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
-    elif [ -f /usr/bin/gnome-terminal ];then
+    elif [ $(ui_which gnome-terminal) ];then
       TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
-    elif [ -f /usr/bin/xterm ];then
+    elif [ $(ui_which xterm) ];then
       TERMINAL1="xterm -geometry 110x40 -T 'PiSafe' -e bash -c " 
-    elif [ -f /usr/bin/terminator ];then
+    elif [ $(ui_which terminator) ];then
       TERMINAL1="terminator --geometry=110x40 -T 'PiSafe' -x bash -c "
-    elif [ -f /usr/bin/konsole ];then
+    elif [ $(ui_which konsole) ];then
       TERMINAL1="konsole -e bash -c " 
-    elif [ -f /usr/bin/qterminal ];then
+    elif [ $(ui_which qterminal) ];then
       TERMINAL1="qterminal -e bash -c "   
-    elif [ -f /usr/bin/x-terminal-emulator ];then
+    elif [ $(ui_which x-terminal-emulator) ];then
       TERMINAL1="$(readlink -f /usr/bin/x-terminal-emulator) -e bash -c "
     else
       echo "Failed to locate any terminal emulators. "
@@ -561,7 +557,6 @@ env_terminal(){
 
 env_texteditor(){
     TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
-    
     for TEXT_EDITOR in $TEXT_EDITORS ; do
         if [[ $(ui_which $TEXT_EDITOR) ]] ; then
             echo $TEXT_EDITOR
@@ -621,6 +616,7 @@ get_elapsed_time() {
 do_countdown(){  
     local MAX=${1:-10}
     local MSG=${2:-"Pausing for $MAX seconds... Press y to continue immediately or any other key to stop"}
+    local DEF=${3:-"y"}
  
    # echo "Pausing for $MAX seconds... Press y to continue immediately or any other key to stop"
     echo "$MSG"
@@ -635,11 +631,15 @@ do_countdown(){
                 return
             else
                 echo " $INPUT Stopping countdown..."
-                return 2
+                return 1
             fi
         fi 
         MSG=$(echo "$MSG.$i")
-    done 
+    done
+     
+    if [[ $DEF = n ]]; then
+        return 1
+    fi
     echo ...
 }
 
@@ -886,9 +886,6 @@ file_size() {
 }
 
 
-
-
-
 media_restore_check_infile(){
     # quit if infile is blank
     if [[ -z $INFILE ]] ; then
@@ -1050,7 +1047,7 @@ media_backup(){
     OUTFILE=$2
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
   
-    # preflight check.  Be sure INDEV and OUTFILE are good. 
+    # preflight checklist.  Be sure INDEV and OUTFILE are good. 
     ui_echo "$PRODUCTNAME $SCRIPTVER Backup... " white
     media_backup_checklist $SILENT
     ES=$?
@@ -1099,18 +1096,16 @@ media_backup(){
     if [[ ! $(file_ext "$OUTFILE") = iso ]]; then 
         ui_echo "~ Step 2 of 3 - Shrinking filesystem ..." white log
         PI_SHRINK_OPTS=
-
         if [[ $AUTO_EXPAND_FS = off ]] ; then 
             PI_SHRINK_OPTS="-s"
         fi
-        if [[ $SHRINK_FS != off ]]; then
+        if [[ $SHRINK_FS = off ]]; then
+            ui_echo "~ Filesystem not shrunk.  Setting is 'off'." red log
+        else
             run_command "sudo pishrink.sh $PI_SHRINK_OPTS '$OUTFILE_BASE'.img " $LINENO
-            ES=$?
-            if (( $ES )); then
+            if (( $? )); then
                 ui_echo "~ Continuing without shrinking the file system..." red log
             fi
-        else
-            ui_echo "~ Filesystem not shrunk.  Setting is 'off'." red log
         fi
         sleep 5    # to allow file size to register with the OS
         echo Done shrinking filesystem.
@@ -1305,7 +1300,6 @@ media_backup_check_outfile(){
         OUTFILE=$(file_path_base "$OUTFILE").img.$(file_ext "$OUTFILE")
         echo "OUT-FILE='$OUTFILE'" 
     fi
-
  
     # quit if unsupported extension
     case $(file_ext "$OUTFILE") in 
@@ -1948,25 +1942,13 @@ media_format(){
        
         echo "Writing zeros to '$DEVICE'..."
         run_command "sudo dd if=/dev/zero of=$DEVICE bs=512 count=4" $LINENO
-    #    if (( $? )); then
-    #        ui_msg_error $LINENO "Writing zeros failed"
-    #        return 9
-    #    fi
 
         echo "Writing new '$PART_TABLE' partition table to '$DEVICE'..."
         run_command "sudo parted -s $DEVICE mklabel $PART_TABLE" $LINENO
-    #    if (( $? )); then
-    #        ui_msg_error $LINENO "mklabel failed"
-    #        return 10
-    #    fi
 
         echo "Creating empty partition on '$DEVICE'..."
-        # run_command "sudo parted -s -a opt $DEVICE mkpart primary $FS_TYPE 2M 100%" $LINENO
+      # run_command "sudo parted -s -a opt $DEVICE mkpart primary $FS_TYPE 2M 100%" $LINENO
         run_command "sudo parted -s -a opt $DEVICE mkpart $PART_TYPE $PART_NAME $FS_TYPE 2M 100%" $LINENO
-     #   if (( $? )); then
-     #       ui_msg_error $LINENO "mkpart failed"
-     #       return 11
-     #   fi
         
         PARTITION=$DEVICE\1    
     fi    
@@ -2759,11 +2741,7 @@ config_var_get_settings
 pisafe_install_tools
 
 # supress check-for-updates if "backup and -y"
-# check for updates if "not (backup and -y)" and check=on
-# a bit messy, but works for now.
-if   [[ $1 = backup ]] && [[ $4 = -y ]] ; then
-    x=1
-elif [[ $CHECK_FOR_UPDATES_ON_STARTUP = on ]] ; then
+if [[ $CHECK_FOR_UPDATES_ON_STARTUP = on ]] && ! ( [[ $1 = backup ]] && [[ $4 = -y ]] ) ; then
     ui_echo "Checking for $PRODUCTNAME updates..."
     pisafe_update cli no 
 fi
