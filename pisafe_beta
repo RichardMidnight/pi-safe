@@ -32,6 +32,11 @@ OUTFILE=
 BACKTITLE="$PRODUCTNAME ver $SCRIPTVER   === $PRODUCTCOMMENT === "
 INTERFACE="cli"
 
+
+
+##### check_for_preq=on   off
+
+
 WHITE='\033[1;37m'
 RED='\033[1;31m'
 GREEN='\033[0;32m'
@@ -1047,6 +1052,9 @@ media_backup(){
     OUTFILE=$2
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
   
+OUTFILE_BASE=$(file_path_base "$OUTFILE" )
+# OUTFILE_BASE=$( dirname "$*"    filename=$(basename "$fullfilename")
+  
     # preflight checklist.  Be sure INDEV and OUTFILE are good. 
     ui_echo "$PRODUCTNAME $SCRIPTVER Backup... " white
     media_backup_checklist $SILENT
@@ -1059,7 +1067,7 @@ media_backup(){
     #################################################
     # this section reads the data to a file
     #################################################
-    OUTFILE_BASE=$(file_path_base "$OUTFILE" )
+    
 
     TIME1=$(date +%s)
     ui_echo "~ Step 1 of 3 - Copying  '$INDEV' to '$OUTFILE_BASE.img' ... " white log
@@ -2732,15 +2740,20 @@ if [[ $1 = uninstall ]]; then
     exit
 fi
 
-# if installing silent, then install tools silently
-if [[ $1 = install ]] && [[ $2 = -y ]]; then
-    pisafe_install_tools -y
-fi
-
 
 config_var_init_configfile
 config_var_get_settings
-pisafe_install_tools
+
+
+if [[ $(config_var_get INSTALL_DEPENDENCIES) != yes ]]; then
+    # if installing silent, then install tools silently
+    if [[ $1 = install ]] && [[ $2 = -y ]]; then
+        pisafe_install_tools -y
+    else
+        pisafe_install_tools
+    fi
+fi
+    
 
 # supress check-for-updates if "backup and -y"
 if [[ $CHECK_FOR_UPDATES_ON_STARTUP = on ]] && ! ( [[ $1 = backup ]] && [[ $4 = -y ]] ) ; then
