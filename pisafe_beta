@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4"   # 2022/2/16
+SCRIPTVER="1.2.4.a"   # 2022/2/16
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -2745,7 +2745,7 @@ config_var_init_configfile
 config_var_get_settings
 
 
-if [[ $(config_var_get install_dependencies) != yes ]]; then
+if [[ $(config_var_get install_dependencies) != off ]]; then
     # if installing silent, then install tools silently
     if [[ $1 = install ]] && [[ $2 = -y ]]; then
         pisafe_install_tools -y
