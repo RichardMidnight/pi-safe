@@ -24,7 +24,7 @@ USER=$(whoami)
 CONFIG="/home/$USER/.config/pisafe/pisafe.conf"
 LOG_FILE="/home/$USER/.config/pisafe/pisafe.log"
 LOG=on
-REQUIRED_TOOLS="bc pv whiptail pishrink.sh zip unzip pigz xz file"
+REQUIRED_TOOLS="dd pishrink.sh zip unzip pigz xz pv bc whiptail file"
 INDEV=
 OUTDEV=
 INFILE=
@@ -1076,7 +1076,7 @@ media_backup(){
        	ES=$?
     else
         echo "Note: 'pv' is not installed so there is no progress indicator for this step. Please wait..."
-        run_command "sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync  " $LINENO
+        run_command "sudo dd bs=$BS if=$INDEV of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync  " $LINENO
         ES=$?
     fi
     if (( $ES )); then
@@ -1142,7 +1142,7 @@ media_backup(){
             echo Each dot=$DOTSIZE 
             echo -n "                    $OUTFILE_BASE.img"
             echo " [........................|.........................] 100%"
-            run_command "sudo zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
+            run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
             #zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL "$OUTFILE" "$OUTFILE_BASE".img
             ES=$?
             
