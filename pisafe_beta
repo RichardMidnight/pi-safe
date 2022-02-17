@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4-e"   # 2022/2/16
+SCRIPTVER="1.2.4-f"   # 2022/2/16
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -269,7 +269,7 @@ pisafe_install_tools() {
     
     #scan for missing tools
     for TOOL in $REQUIRED_TOOLS ; do
-        if [[ -z $(ui_which $TOOL) ]]; then
+        if [[ -z $(env_which $TOOL) ]]; then
             MISSING_TOOLS="$MISSING_TOOLS $TOOL"
         fi
     done
@@ -283,13 +283,13 @@ pisafe_install_tools() {
     echo
     
     for TOOL in $REQUIRED_TOOLS ; do
-        if [[ -z $(ui_which $TOOL) ]] ; then
+        if [[ -z $(env_which $TOOL) ]] ; then
             case $TOOL in
             
             xz)
                 ui_echo "Installing xz-utils..." white
                 sudo $INSTALL xz-utils
-                if [[ -z $(ui_which xz) ]]; then
+                if [[ -z $(env_which xz) ]]; then
                     ui_msg_warning $LINENO "xz not installed."
                 fi
                 ;;
@@ -300,7 +300,7 @@ pisafe_install_tools() {
                 sudo chmod +x pishrink.sh
                 sudo mv pishrink.sh /usr/local/bin
                 
-                if [[ -z $(ui_which pishrink.sh) ]] ; then
+                if [[ -z $(env_which pishrink.sh) ]] ; then
                     ui_msg_warning $LINENO "pishrink not installed."
                 fi
                 ;;
@@ -518,7 +518,7 @@ env_installer(){
     local INSTALLER=
     
     for INSTALLER in $INSTALLERS;  do
-        if [[ $(ui_which $INSTALLER) ]]; then 
+        if [[ $(env_which $INSTALLER) ]]; then 
             break
         fi
     done
@@ -536,23 +536,23 @@ env_installer(){
 env_terminal(){
     local TERMINAL1=
     #if [ -f /usr/bin/lxterminal ];then
-    if [ $(ui_which lxterminal) ];then
+    if [ $(env_which lxterminal) ];then
       TERMINAL1="lxterminal --geometry=110x40 --title='PiSafe' -e bash -c "
-    elif [ $(ui_which xfce4-terminal) ];then
+    elif [ $(env_which xfce4-terminal) ];then
       TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
-    elif [ $(ui_which mate-terminal) ];then
+    elif [ $(env_which mate-terminal) ];then
       TERMINAL1="mate-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
-    elif [ $(ui_which gnome-terminal) ];then
+    elif [ $(env_which gnome-terminal) ];then
       TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
-    elif [ $(ui_which xterm) ];then
+    elif [ $(env_which xterm) ];then
       TERMINAL1="xterm -geometry 110x40 -T 'PiSafe' -e bash -c " 
-    elif [ $(ui_which terminator) ];then
+    elif [ $(env_which terminator) ];then
       TERMINAL1="terminator --geometry=110x40 -T 'PiSafe' -x bash -c "
-    elif [ $(ui_which konsole) ];then
+    elif [ $(env_which konsole) ];then
       TERMINAL1="konsole -e bash -c " 
-    elif [ $(ui_which qterminal) ];then
+    elif [ $(env_which qterminal) ];then
       TERMINAL1="qterminal -e bash -c "   
-    elif [ $(ui_which x-terminal-emulator) ];then
+    elif [ $(env_which x-terminal-emulator) ];then
       TERMINAL1="$(readlink -f /usr/bin/x-terminal-emulator) -e bash -c "
     else
       echo "Failed to locate any terminal emulators. "
@@ -565,7 +565,7 @@ env_terminal(){
 env_texteditor(){
     TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
     for TEXT_EDITOR in $TEXT_EDITORS ; do
-        if [[ $(ui_which $TEXT_EDITOR) ]] ; then
+        if [[ $(env_which $TEXT_EDITOR) ]] ; then
             echo $TEXT_EDITOR
             return
         fi
@@ -592,7 +592,7 @@ do_beep(){
     FREQ=${1:-600}
     TIME=${2:-.5}
 
-    if [[ $SOUND = on ]] && [[ $(ui_which speaker-test) ]]; then
+    if [[ $SOUND = on ]] && [[ $(env_which speaker-test) ]]; then
         (speaker-test -t sign -f $FREQ > /dev/null & sleep $TIME && kill -9 $! ) > /dev/null
       #  sleep .5  # to allow the beep to end
     fi
@@ -1055,7 +1055,7 @@ media_backup(){
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
   
 OUTFILE_BASE=$(file_path_base "$OUTFILE" )
-# OUTFILE_BASE=$( dirname "$*"    filename=$(basename "$fullfilename")
+# OUTFILE_BASE=$(dirname "$OUTFILE")/$(basename "$fullfilename")
   
     # preflight checklist.  Be sure INDEV and OUTFILE are good. 
     ui_echo "$PRODUCTNAME $SCRIPTVER Backup... " white
@@ -1848,7 +1848,7 @@ ui_yesno(){
 }
 
 
-    ui_which () {
+    env_which () {
         #fixes manjaro's which command 
         local FILE=$1
         
