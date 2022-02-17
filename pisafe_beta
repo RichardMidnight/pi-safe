@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4-d"   # 2022/2/16
+SCRIPTVER="1.2.4-e"   # 2022/2/16
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -457,6 +457,7 @@ config_var_set_defaults(){
     config_var_set default_path_cli_from_settings off $FORCE
     config_var_set default_path $HOME/Downloads $FORCE
     config_var_set check_for_updates_on_startup on $FORCE
+    config_var_set check_dependencies_on_startup on $FORCE
     config_var_set debug_mode off $FORCE
     config_var_set sound on $FORCE
     config_var_set log on $FORCE
@@ -484,6 +485,7 @@ config_var_get_settings(){
     DEFAULT_PATH=$(config_var_get default_path)
     HIDE_ROOT_DEVICE=$(config_var_get hide_root_device)
     CHECK_FOR_UPDATES_ON_STARTUP=$(config_var_get check_for_updates_on_startup)
+    CHECK_DEPENDENCIES_ON_STARTUP=$(config_var_get check_dependencies_on_startup)
     DEBUG_MODE=$(config_var_get debug_mode)
     SOUND=$(config_var_get sound)
     LOG=$(config_var_get log)
@@ -2747,7 +2749,7 @@ config_var_init_configfile
 config_var_get_settings
 
 
-if [[ $(config_var_get check_dependencies) != off ]]; then
+if [[ $CHECK_DEPENDENCIES_ON_STARTUP != off ]]; then
     # if installing silent, then install tools silently
     if [[ $1 = install ]] && [[ $2 = -y ]]; then
         pisafe_install_tools -y
