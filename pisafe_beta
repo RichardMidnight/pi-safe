@@ -1136,12 +1136,13 @@ media_backup(){
             ;;
         
         zip)
+            # added sudo to the command so manjaro can write to a network folder.
             local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
             local DOTSIZE=$(( $FILESIZE_M / 50 ))m
             echo Each dot=$DOTSIZE 
-            echo -n "                     $OUTFILE_BASE.img"
+            echo -n "                    $OUTFILE_BASE.img"
             echo " [........................|.........................] 100%"
-            run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
+            run_command "sudo zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
             #zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL "$OUTFILE" "$OUTFILE_BASE".img
             ES=$?
             
@@ -1807,6 +1808,7 @@ ui_yesno(){
     TITLE="$1"
     MSG="$2"
     DEFAULT="${3:-""}"   # defaults to Yes.  can specify --defaultno
+    TIMEOUT=${4:-0}
    # COLOR="${4:-white}"  color does not work with the 'read' command
     
     if [[ $INTERFACE = cli ]]; then
