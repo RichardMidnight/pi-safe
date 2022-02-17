@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4-c"   # 2022/2/16
+SCRIPTVER="1.2.4-d"   # 2022/2/16
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -2704,7 +2704,7 @@ menu_cli(){
             
         settings)           nano $CONFIG    ;;
         
-        defaults)           config_var_set_defaults  ;;
+        defaults)           if [[ $(ui_yesno "Reset settings to factory defaults") = y ]]; then config_var_set_defaults; fi  ;;
             
         details)            media_details $2  ;;
 
