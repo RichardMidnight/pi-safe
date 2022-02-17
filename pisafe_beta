@@ -2745,7 +2745,7 @@ config_var_init_configfile
 config_var_get_settings
 
 
-if [[ $(config_var_get INSTALL_DEPENDENCIES) != yes ]]; then
+if [[ $(config_var_get install_dependencies) != yes ]]; then
     # if installing silent, then install tools silently
     if [[ $1 = install ]] && [[ $2 = -y ]]; then
         pisafe_install_tools -y
