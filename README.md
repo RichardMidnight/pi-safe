@@ -102,6 +102,10 @@ V1.0.5 Added support for other text editors: leafpad, mousepad, gedit, kwrite, p
 V1.1.0 Added support for Manjaro and probably other Arch-based distros.
 
 v1.2.0 Cleaned up the code a lot, added "ignore_freespace_at_end", added erase (fat32, exfat, ntfs, ext4).  
+
+v1.2.3 Cleaned up more code. Fixed bug in available-space on network-shares which halted backup.
+
+v1.2.4 Cleaned up more code.  Backup with -y bypasses check_for_updates.
  
    
  # Tips
