@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4 b"   # 2022/02/19
+SCRIPTVER="1.2.4 c"   # 2022/02/19
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -985,7 +985,7 @@ media_backup(){
 	echo Reading $(get_bytes $BYTES_TO_READ -h)...
 
     if [[ ! -z $(which pv) ]]; then
-		run_command "sudo pv $INDEV -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
+		run_command "sudo pv -p $INDEV -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
        	ES=$?
     else
         echo "Note: 'pv' is not installed so there is no progress bar."
@@ -1069,13 +1069,13 @@ media_backup(){
             ;;
         
         xz)
-            run_command "pv '$OUTFILE_BASE.img' | xz -z -c -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+            run_command "pv -p '$OUTFILE_BASE.img' | xz -z -c -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
             ES=$? 
             rm -f "$OUTFILE_BASE".img
             ;;
         
         gz)
-            run_command "pv '$OUTFILE_BASE.img' | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+            run_command "pv -p '$OUTFILE_BASE.img' | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
             ES=$? 
             rm -f "$OUTFILE_BASE".img
             ;;
@@ -1457,10 +1457,10 @@ media_restore(){
     case $INFILEEXT in
         img | iso)
             if [[ $INTERFACE = cli ]]; then
-                run_command "pv '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync"
+                run_command "pv -p '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync"
                 ES=$?
             else
-                ui_echo "~ Running: pv '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                ui_echo "~ Running: sudo pv -n '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
                 (sudo pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 ES=$?
@@ -1470,7 +1470,7 @@ media_restore(){
         zip)
             RESTORE_BYTES=$(file_image_size "$INFILE")
             if [[ $INTERFACE = cli ]]; then
-                run_command "unzip -p '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                run_command "unzip -p '$INFILE' | pv -p -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
                 ui_echo "~ Running: unzip -p '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
@@ -1482,7 +1482,7 @@ media_restore(){
         
         xz)
             if [[ $INTERFACE = cli ]]; then
-                run_command "pv '$INFILE' | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                run_command "pv -p '$INFILE' | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
                 ui_echo "~ Running: pv '$INFILE' | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
@@ -1494,7 +1494,7 @@ media_restore(){
 
         gz)
             if [[ $INTERFACE = cli ]]; then
-                run_command "pv '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                run_command "pv -p '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
                 ui_echo "~ Running: pv '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
