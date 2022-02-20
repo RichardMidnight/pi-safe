@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4 f"   # 2022/02/19
+SCRIPTVER="1.2.4 g"   # 2022/02/19
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -529,6 +529,19 @@ env_installer(){
 }
 
 
+env_root_device() {
+    local ROOT_PARTITION
+    local ROOT_DRIVE
+
+    ROOT_MAJ=$(findmnt  -n -e  -o MAJ:MIN / | cut -d: -f1)
+    ROOT_DEV=$(lsblk -p | grep $ROOT_MAJ:0 | cut -d" " -f1)
+    echo $ROOT_DEV
+    
+    # new simpler way
+    # ROOT_PARTITION=$(findmnt -no source /)
+}
+
+
 env_terminal(){
     local TERMINAL1=
     #if [ -f /usr/bin/lxterminal ];then
@@ -568,17 +581,27 @@ env_texteditor(){
     done
 } 
  
-
-env_root_device() {
-    local ROOT_PARTITION
-    local ROOT_DRIVE
-
-    ROOT_MAJ=$(findmnt  -n -e  -o MAJ:MIN / | cut -d: -f1)
-    ROOT_DEV=$(lsblk -p | grep $ROOT_MAJ:0 | cut -d" " -f1)
-    echo $ROOT_DEV
+ 
+env_which () {
+    #fixes manjaro's which command 
+    local FILE=$1
     
-    # new simpler way
-    # ROOT_PARTITION=$(findmnt -no source /)
+    # if which not installed, try to install it
+    which which 1>/dev/null 2>/dev/null
+    if (( $? )); then
+        sudo apt install which -y
+        sudo pacman -S which --noconfirm
+        sudo dnf install which -y
+    fi
+    
+    which $FILE 1>/dev/null 2>/dev/null
+    if (( $? )); then
+        #echo false
+        return 1
+    else
+        echo true
+        return 0
+    fi       
 }
 
 
@@ -1794,28 +1817,6 @@ ui_yesno(){
     fi
 }
 
-
-env_which () {
-    #fixes manjaro's which command 
-    local FILE=$1
-    
-    # if which not installed, try forcing the install
-    which which
-    if (( $? )); then
-        sudo apt install which -y
-        sudo pacman -S which --noconfirm
-        sudo dnf install which -y
-    fi
-    
-    which $FILE 1>/dev/null 2>/dev/null
-    if (( $? )); then
-        #echo false
-        return 1
-    else
-        echo true
-        return 0
-    fi       
-}
 
 
 menu_1start_of_menu_functions(){
