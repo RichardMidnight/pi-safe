@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4 c"   # 2022/02/19
+SCRIPTVER="1.2.4 d"   # 2022/02/19
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -985,7 +985,7 @@ media_backup(){
 	echo Reading $(get_bytes $BYTES_TO_READ -h)...
 
     if [[ ! -z $(which pv) ]]; then
-		run_command "sudo pv -p $INDEV -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
+		run_command "sudo pv $INDEV -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
        	ES=$?
     else
         echo "Note: 'pv' is not installed so there is no progress bar."
