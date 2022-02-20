@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4 g"   # 2022/02/19
+SCRIPTVER="1.2.4 h"   # 2022/02/19
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -2317,7 +2317,11 @@ menu_cli(){
         
         -v)                 echo $SCRIPTVER  ;;
         
-        "")                 menu_gui  ;;
+        "")                 if (( $(env_which whiptail) )); then                 
+                                menu_gui  
+                            else
+                                pisafe_help
+                            fi ;;
         
         *)                  pisafe_help  ;;
     esac
