@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4 h"   # 2022/02/19
+SCRIPTVER="1.2.4 i"   # 2022/02/19
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -599,7 +599,7 @@ env_which () {
         #echo false
         return 1
     else
-        echo true
+        echo 1
         return 0
     fi       
 }
@@ -2317,7 +2317,8 @@ menu_cli(){
         
         -v)                 echo $SCRIPTVER  ;;
         
-        "")                 if (( $(env_which whiptail) )); then                 
+        "")                # echo $(env_which whiptail)
+                            if [[ $(env_which whiptail) ]]; then                 
                                 menu_gui  
                             else
                                 pisafe_help
