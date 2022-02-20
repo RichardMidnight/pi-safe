@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4 e"   # 2022/02/19
+SCRIPTVER="1.2.4 f"   # 2022/02/19
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -97,7 +97,7 @@ desktop_environment_notes(){
     zorin - ubuntu based
     manjaro kde                 konsole             kate
     manjaro xfce                xfce-terminal       mousepad
-    kali 2022 -apt              xterm               mousepad
+    kali 2022 -apt              xterm               mousepad   -ver 1.2.5
     
     
     Tested with
@@ -117,8 +117,8 @@ desktop_environment_notes(){
     ubuntu                          good
     lubuntu                         good
     kali 2022                       good, noshrink, swap
+    Note: if you custom partition with ext4 as last, it shrinks.
 }
-
 
 run_command(){
     local CMD=$1
@@ -1792,24 +1792,30 @@ ui_yesno(){
         fi
         return $ES
     fi
-
-    
 }
 
 
-    env_which () {
-        #fixes manjaro's which command 
-        local FILE=$1
-        
-        which $FILE 1>/dev/null 2>/dev/null
-        if (( $? )); then
-            #echo false
-            return 1
-        else
-            echo true
-            return 0
-        fi       
-    }
+env_which () {
+    #fixes manjaro's which command 
+    local FILE=$1
+    
+    # if which not installed, try forcing the install
+    which which
+    if (( $? )); then
+        sudo apt install which -y
+        sudo pacman -S which --noconfirm
+        sudo dnf install which -y
+    fi
+    
+    which $FILE 1>/dev/null 2>/dev/null
+    if (( $? )); then
+        #echo false
+        return 1
+    else
+        echo true
+        return 0
+    fi       
+}
 
 
 menu_1start_of_menu_functions(){
