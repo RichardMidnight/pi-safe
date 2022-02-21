@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4 i"   # 2022/02/19
+SCRIPTVER="1.2.4 j"   # 2022/02/21
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -105,7 +105,7 @@ desktop_environment_notes(){
     Raspios Buster      good
     Raspbian Stretch    good
     Raspbian Jessy      can work with limitations
-    Manjaro             good         
+    Manjaro             good    no whiptail on lite ver       
     Ubuntu              good
     Note: overlay filesystem cannot be turned on
     
@@ -119,6 +119,7 @@ desktop_environment_notes(){
     kali 2022                       good, noshrink, swap
     Note: if you custom partition with ext4 as last, it shrinks.
 }
+
 
 run_command(){
     local CMD=$1
@@ -181,6 +182,7 @@ pisafe_help() {
     echo "  defaults                     - restore settings to defaults"
     echo "  log                          - view the log file with nano"
     echo "  -v                           - display version"
+    echo "  about                        - display about file"
     echo "  help | -h  | --h             - help"
     echo
     echo "Notes: "
@@ -208,10 +210,12 @@ pisafe_install(){
     SILENT=${1:-"-n"}
     
     if [[ $SILENT != -y ]] && [[ $(ui_yesno INSTALL "Install $PRODUCTNAME $SCRIPTVER?") != y ]]; then
+        echo
         ui_msg NOTICE "~ $PRODUCTNAME not installed" "" "" log
         return
     fi
     
+    echo
     ui_echo "Installing $PRODUCTNAME v $SCRIPTVER..." white
     
     # Install the CLI script
@@ -278,6 +282,7 @@ pisafe_install_tools() {
     if [[ -z $MISSING_TOOLS ]]; then
         return
     elif  [[ $SILENT = -n ]] && [[ $(ui_yesno "Install dependencies:'$MISSING_TOOLS '") = n ]]; then
+        echo
         return
     fi
     echo
@@ -348,6 +353,7 @@ pisafe_update() {
             RESULT="y"
         else
             RESULT=$(ui_yesno "UPDATE AVAILABLE" "Update $PRODUCTNAME from '$SCRIPTVER'  to '$SERVER_VER' ")
+            echo
         fi
         
         if [[ $RESULT = y ]]; then 
@@ -375,10 +381,12 @@ pisafe_uninstall(){
     fi
   
     if [[ $SILENT != -y ]]  &&  [[ $(ui_yesno UNINSTALL "Uninstall $PRODUCTNAME $INSTALLED_VER" "--defaultno") != y ]] ; then
+        echo
         ui_msg UNINSTALL "~ $PRODUCTNAME $INSTALLED_VER not uninstalled" "" "" log
         return
     fi
    
+    echo
     ui_echo "Uninstalling $PRODUCTNAME v $INSTALLED_VER..." white
     
     # remove from the menu
@@ -1079,7 +1087,7 @@ media_backup(){
             local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
             local DOTSIZE=$(( $FILESIZE_M / 50 ))m
             echo Each dot=$DOTSIZE 
-            echo -n "                     $OUTFILE_BASE.img"
+            echo -n "                    $OUTFILE_BASE.img"
             echo " [........................|.........................] 100%"
             run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
             #zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL "$OUTFILE" "$OUTFILE_BASE".img
@@ -1189,7 +1197,8 @@ media_backup_check_indev(){
     OVERLAY=$(media_os $INDEV | grep OVERLAY)
     if [[ ! -z $OVERLAY ]] && [[ $AUTO_EXPAND_FS = on ]]; then
         if [[ $(ui_yesno WARNING "'$(media_name $INDEV)' filesystem has an overlay and cannot auto-expand. Turn off auto-expand?" ) = y ]]; then
-			AUTO_EXPAND_FS=off
+			echo
+            AUTO_EXPAND_FS=off
 			ui_msg_warning $LINENO "Overlay found.  Auto-expand turned off"
 		fi
     fi
@@ -1635,6 +1644,7 @@ and '$OUTDEV' is only '$(media_size $OUTDEV -h)'"
     if [[ $SILENT != -y ]]; then
         do_beep
         RESULT=$(ui_yesno RESTORE "WARNING... All existing data on '$(media_name $OUTDEV)' - will be erased!  Continue y/n?" "--defaultno")
+        echo
         if [[ $RESULT != y ]]; then
             ui_msg RESTORE "~ You did not answer 'y'" "" "" log
             return 1
@@ -1721,8 +1731,8 @@ ui_echo(){
         red)        echo_red "$MSG" ;;
         white)      echo_white "$MSG" ;;
         blue)       echo_blue "$MSG" ;;
-   #     *)          echo -e "$MSG" ;;
-        *)          echo  "$MSG" ;;
+        *)          echo -e "$MSG" ;;
+    #    *)          echo  "$MSG" ;;
     esac
 }
 
@@ -1818,16 +1828,6 @@ ui_yesno(){
 }
 
 
-
-menu_1start_of_menu_functions(){
-    x=1
-    ##################################################################################
-    ##################################################################################
-    # all functions needed for the menu go below here
-    # all functions below here can be deleted if only using the CLI
-    ##################################################################################
-    ##################################################################################
-}
 
 ######## functions for advanced features
 
@@ -2313,6 +2313,9 @@ menu_cli(){
             echo beep_down ; do_beep_down ; sleep 2
             echo beep_up ;  do_beep_up;;
         
+        
+        about)              pisafe_about ;;
+        
         help|-h|--h)        pisafe_help  ;;
         
         -v)                 echo $SCRIPTVER  ;;
@@ -2515,6 +2518,7 @@ menu_set_compression(){
                                 config_var_get_settings ;;
             Factory*) 
                                if [[ $(ui_yesno WARNING "Are you sure you want to reset the settings to factory defaults?" "--defaultno") = y ]]; then
+                                    echo
                                     ui_log "Setting $PRODUCTNAME $SCRIPTVER to Factory Defaults"
                                     config_var_set_defaults
                                     config_var_get_settings
@@ -2695,27 +2699,23 @@ if [[ $1 = uninstall ]]; then
     exit
 fi
 
-
 config_var_init_configfile
 config_var_get_settings
 
-
 # check dependencies
 if [[ $CHECK_DEPENDENCIES_ON_STARTUP != off ]]; then
-    # if installing silent, then install tools silently
+    # if 'install -y' then install tools silently
     if [[ $1 = install ]] && [[ $2 = -y ]]; then
         pisafe_install_tools -y
     else
-        pisafe_install_tools
-    fi
+        pisafe_install_tools -n
+    fi 
 fi
-    
 
-# supress check-for-updates if "backup and -y"
+# check-for-updates if not "backup and -y"
 if [[ $CHECK_FOR_UPDATES_ON_STARTUP != off ]] && ! ( [[ $1 = backup ]] && [[ $4 = -y ]] ) ; then
     ui_echo "Checking for $PRODUCTNAME updates..." "" nolog
     pisafe_update cli no 
 fi
-
 
 menu_cli $1 "$2" "$3" $4
