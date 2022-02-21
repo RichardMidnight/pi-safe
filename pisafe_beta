@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4 j"   # 2022/02/21
+SCRIPTVER="1.2.4 k"   # 2022/02/21
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -321,6 +321,13 @@ pisafe_install_tools() {
             esac    
         fi
     done
+    
+    
+    # if whiptail did not install...
+    if ! [[ $(env_which whiptail) ]]; then
+        run_command "sudo $INSTALL newt"        # for fedora
+        run_command "sudo $INSTALL libnewt"     # for arch, manjaro
+    fi
 }    
 
 
@@ -1930,6 +1937,10 @@ media_format(){
             ;;
 
         fat32)
+            if [[ -z $(which mkfs.vfat) ]] ; then
+                echo Installing vfat support ...
+                sudo $INSTALL dosfstools
+            fi
             run_command "sudo mkfs.vfat -v -I -n FAT32 $PARTITION" $LINENO
             ES=$?
             ;;
@@ -1939,8 +1950,8 @@ media_format(){
             if [[ -z $(which mkfs.exfat) ]] ; then
                 echo Installing exfat support ...
                 sudo $INSTALL exfat-utils exfat-fuse
-                sudo modprobe fuse 
-                echo "fuse" | sudo tee -a /etc/modules
+                #sudo modprobe fuse 
+                #echo "fuse" | sudo tee -a /etc/modules
             fi    
             run_command "sudo mkfs.exfat -n EXFAT $PARTITION" $LINENO
             ES=$?
@@ -1950,7 +1961,7 @@ media_format(){
             if [[ -z $(which mkfs.ntfs) ]] ; then
                 #sudo apt-get install fuse ntfs-3g
                 echo Installing ntfs support...
-                sudo $INSTALL fuse ntfs-3g
+                sudo $INSTALL fuse ntfs-3g ntfsprogs  #ntfsprogs is for arch
                 sudo modprobe fuse 
                 echo "fuse" | sudo tee -a /etc/modules
             fi  
@@ -1975,13 +1986,16 @@ media_format(){
         ui_msg "ERASE MEDIA" "~ Formatting complete. '$(media_name $DEVICE)' has been erased." white "" log
     fi
 
-    echo "Mounting the drive..."
-    sleep 2
-    run_command "udisksctl mount -b $PARTITION" $LINENO
-    if (( $? )); then
-        ui_msg_warning $LINENO "mount failed"
-        #return 1
-    fi
+    # mount the drive with udisksctl if installed
+    if [[ $(env_which udisksctl) ]]; then
+        echo "Mounting the drive..."
+        sleep 2
+        run_command "udisksctl mount -b $PARTITION" $LINENO
+        if (( $? )); then
+            ui_msg_warning $LINENO "mount failed"
+            #return 1
+        fi
+    fi    
 }
 
 
