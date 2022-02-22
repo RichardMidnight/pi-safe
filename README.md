@@ -107,7 +107,7 @@ v1.2.3 Cleaned up more code. Fixed bug in available-space on network-shares whic
 
 v1.2.4 Cleaned up more code.  Backup with -y bypasses check_for_updates.
 
-v1.2.5 Improved support for Manjaro, Arch and Fedora.
+v1.2.5 Improved support for Manjaro, Arch, Suse and Fedora.
  
    
  # Tips
