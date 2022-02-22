@@ -106,6 +106,8 @@ v1.2.0 Cleaned up the code a lot, added "ignore_freespace_at_end", added erase (
 v1.2.3 Cleaned up more code. Fixed bug in available-space on network-shares which halted backup.
 
 v1.2.4 Cleaned up more code.  Backup with -y bypasses check_for_updates.
+
+v1.2.5 Improved support for Manjaro, Arch and Fedora.
  
    
  # Tips
