@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.4 k"   # 2022/02/21
+SCRIPTVER="1.2.5 b"   # 2022/02/21
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -1932,6 +1932,10 @@ media_format(){
 
     case $FORMAT in
         fat16)  
+            if [[ -z $(which mkfs.vfat) ]] ; then
+                echo Installing vfat support ...
+                sudo $INSTALL dosfstools
+            fi
             run_command "sudo mkfs.vfat -F16 -v -I -n FAT16 $PARTITION" $LINENO
             ES=$?
             ;;
@@ -1949,7 +1953,8 @@ media_format(){
             #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
             if [[ -z $(which mkfs.exfat) ]] ; then
                 echo Installing exfat support ...
-                sudo $INSTALL exfat-utils exfat-fuse
+                sudo $INSTALL exfat-utils 
+                sudo $INSTALL exfat-fuse 
                 #sudo modprobe fuse 
                 #echo "fuse" | sudo tee -a /etc/modules
             fi    
@@ -1961,9 +1966,11 @@ media_format(){
             if [[ -z $(which mkfs.ntfs) ]] ; then
                 #sudo apt-get install fuse ntfs-3g
                 echo Installing ntfs support...
-                sudo $INSTALL fuse ntfs-3g ntfsprogs  #ntfsprogs is for arch
-                sudo modprobe fuse 
-                echo "fuse" | sudo tee -a /etc/modules
+                sudo $INSTALL fuse 
+                sudo $INSTALL ntfs-3g 
+                sudo $INSTALL ntfsprogs  #ntfsprogs is for arch
+                #sudo modprobe fuse 
+                #echo "fuse" | sudo tee -a /etc/modules
             fi  
             run_command "sudo mkfs.ntfs -f -L NTFS $PARTITION" $LINENO
             ES=$?
@@ -1983,7 +1990,7 @@ media_format(){
   #      ui_msg_error $LINENO "mkfs failed"
         return 1
     else
-        ui_msg "ERASE MEDIA" "~ Formatting complete. '$(media_name $DEVICE)' has been erased." white "" log
+        ui_msg "ERASE MEDIA" "~ Format complete. '$(media_name $DEVICE)' has been erased." white "" log
     fi
 
     # mount the drive with udisksctl if installed
