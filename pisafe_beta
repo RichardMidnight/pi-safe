@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5 b"   # 2022/02/21
+SCRIPTVER="1.2.5 c"   # 2022/02/25
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -24,7 +24,7 @@ USER=$(whoami)
 CONFIG="/home/$USER/.config/pisafe/pisafe.conf"
 LOG_FILE="/home/$USER/.config/pisafe/pisafe.log"
 LOG=on
-REQUIRED_TOOLS="dd pishrink.sh zip unzip pigz xz pv bc whiptail file"
+REQUIRED_TOOLS="dd pishrink.sh zip unzip pigz xz pv bc whiptail file nano"
 INDEV=
 OUTDEV=
 INFILE=
