@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5 c"   # 2022/02/25
+SCRIPTVER="1.2.5 d"   # 2022/02/27
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -1026,8 +1026,13 @@ media_backup(){
 		run_command "sudo pv $INDEV -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
        	ES=$?
     else
-        echo "Note: 'pv' is not installed so there is no progress bar."
-        run_command "sudo dd bs=$BS if=$INDEV of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock status=progress conv=fsync  " $LINENO
+     #   echo "Note: 'pv' is not installed so there is no progress bar."
+        ui_echo "No progress bar installed.  Please wait..."
+        PROGRESS=
+        if (( $(dd --help | grep progress) )) ; then
+            PROGRESS="status=progress"
+        fi
+        run_command "sudo dd bs=$BS if=$INDEV of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock $PROGRESS conv=fsync " $LINENO
         ES=$?
     fi
     if (( $ES )); then
@@ -1107,15 +1112,28 @@ media_backup(){
             ;;
         
         xz)
-            run_command "pv '$OUTFILE_BASE.img' -p | xz -z -c -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
-            ES=$? 
-            rm -f "$OUTFILE_BASE".img
+            if [[ ! -z $(which pv) ]]; then
+                run_command "pv '$OUTFILE_BASE.img' -p | xz -z -c -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+                ES=$? 
+                rm -f "$OUTFILE_BASE".img
+            else
+                ui_echo "No progress bar installed.  Please wait..."
+                run_command "xz -z -T0 -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
+                ES=$? 
+            fi    
             ;;
         
         gz)
-            run_command "pv '$OUTFILE_BASE.img' -p | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
-            ES=$? 
-            rm -f "$OUTFILE_BASE".img
+            if [[ ! -z $(which pv) ]]; then
+                run_command "pv '$OUTFILE_BASE.img' -p | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+                ES=$? 
+                rm -f "$OUTFILE_BASE".img
+            else
+                ui_echo "No progress bar installed.  Please wait..."
+                run_command "pigz -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
+                ES=$? 
+            fi    
+            
             ;;
         
         *)
