@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5 d"   # 2022/02/27
+SCRIPTVER="1.2.5 e"   # 2022/02/27
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -1118,7 +1118,8 @@ media_backup(){
                 rm -f "$OUTFILE_BASE".img
             else
                 ui_echo "No progress bar installed.  Please wait..."
-                run_command "xz -z -T0 -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
+                #sudo chmod 777 '$OUTFILE_BASE.img'  
+                run_command "sudo xz -z -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
                 ES=$? 
             fi    
             ;;
@@ -1130,6 +1131,7 @@ media_backup(){
                 rm -f "$OUTFILE_BASE".img
             else
                 ui_echo "No progress bar installed.  Please wait..."
+                sudo chmod 777 '$OUTFILE_BASE.img'  
                 run_command "pigz -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
                 ES=$? 
             fi    
