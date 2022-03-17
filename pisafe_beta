@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5 f"   # 2022/02/27
+SCRIPTVER="1.2.5 g"   # 2022/03/17
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -620,6 +620,16 @@ env_which () {
 }
 
 
+env_sysinfo(){
+    uname -a
+    echo $(env_terminal)
+    which x-terminal-emulator
+    echo $(readlink -f /usr/bin/x-terminal-emulator)
+    echo $(env_installer)
+    echo $(env_texteditor) 
+    
+}
+
 # ---------- Misc functions
 
 do_beep(){
@@ -846,7 +856,8 @@ file_image_size() {
         img | iso)      SIZE_BYTES=$(echo $((  $(ls -s "$INFILE" | cut -d' ' -f1 ) * 1024 )) ) ;;
         zip)            SIZE_BYTES=$(zipinfo -t "$INFILE" 2> /dev/null | grep "%" | cut -d, -f2 | cut -d" " -f2  )  ;;
         xz)             SIZE_BYTES=$(xz -l -v "$INFILE" 2> /dev/null | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g')  ;;  
-        gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g')  ;;
+      #  gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g')  ;;
+        gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 )  ;;
         *)              echo 0
                         return 1 ;;
     esac
@@ -2353,6 +2364,8 @@ menu_cli(){
             echo beep ; do_beep ; sleep 2
             echo beep_down ; do_beep_down ; sleep 2
             echo beep_up ;  do_beep_up;;
+            
+        sysinfo)            env_sysinfo ;;
         
         
         about)              pisafe_about ;;
