@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5 g"   # 2022/03/17
+SCRIPTVER="1.2.5 h"   # 2022/03/17
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -567,7 +567,7 @@ env_terminal(){
     elif [ $(env_which mate-terminal) ];then
       TERMINAL1="mate-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
     elif [ $(env_which gnome-terminal) ];then
-      TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
+      TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -- bash -c "
     elif [ $(env_which xterm) ];then
       TERMINAL1="xterm -geometry 110x40 -T 'PiSafe' -e bash -c " 
     elif [ $(env_which terminator) ];then
@@ -623,11 +623,11 @@ env_which () {
 env_sysinfo(){
     uname -a
     echo $(env_terminal)
-    which x-terminal-emulator
-    echo $(readlink -f /usr/bin/x-terminal-emulator)
+    #which x-terminal-emulator
+    #echo $(readlink -f /usr/bin/x-terminal-emulator)
     echo $(env_installer)
     echo $(env_texteditor) 
-    
+    echo $(env_root_device)
 }
 
 # ---------- Misc functions
