@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5 h"   # 2022/03/17
+SCRIPTVER="1.2.5 i"   # 2022/04/15
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -829,10 +829,12 @@ file_fs_freespace() {
     local FREESPACE
     
     if [[ -d $FILENAME ]]; then
-        FREESPACE=$(df "$FILENAME" -B1 --output=avail | grep -v Avail)
+        #FREESPACE=$(df "$FILENAME" -B1 --output=avail | grep -v Avail)
+        FREESPACE=$(df "$FILENAME" -B1 --output=avail | tr -cd '[[:digit:]]' )
         ES=$?
     else
-        FREESPACE=$(df $(dirname "$FILENAME") -B1 --output=avail | grep -v Avail)
+        #FREESPACE=$(df $(dirname "$FILENAME") -B1 --output=avail | grep -v Avail)
+        FREESPACE=$(df $(dirname "$FILENAME") -B1 --output=avail | tr -cd '[[:digit:]]' )
         ES=$?
     fi
 
