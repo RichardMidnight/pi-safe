@@ -100,6 +100,8 @@ v1.2.3 Cleaned up more code. Fixed bug in available-space on network-shares whic
 v1.2.4 Cleaned up more code.  Backup with -y bypasses check_for_updates.
 
 v1.2.5 Improved support for Manjaro, Arch, Suse and Fedora.
+
+v1.2.5 j (beta) Fixed issue with non-english languages.  Added support for zstd compression.  Made gz, xz and zst only install as needed.
  
    
  # Tips
