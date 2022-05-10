@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5 i"   # 2022/04/15
+SCRIPTVER="1.2.5 j"   # 2022/05/09
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -24,7 +24,8 @@ USER=$(whoami)
 CONFIG="/home/$USER/.config/pisafe/pisafe.conf"
 LOG_FILE="/home/$USER/.config/pisafe/pisafe.log"
 LOG=on
-REQUIRED_TOOLS="dd pishrink.sh zip unzip pigz xz pv bc whiptail file nano"
+REQUIRED_TOOLS="dd pishrink.sh zip unzip pv bc whiptail file nano"
+OPTIONAL_TOOLS="pigz xz zstd"
 INDEV=
 OUTDEV=
 INFILE=
@@ -186,7 +187,7 @@ pisafe_help() {
     echo "  help | -h  | --h             - help"
     echo
     echo "Notes: "
-    echo " - Supports .img .zip .xz and .gz files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
+    echo " - Supports .img .zip .xz .gz and .zst files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
     echo " - Specifying an '.img' extension is faster but twice the size because it is not compressed."
     echo " - -y answers 'y' to prompts."
     echo " - There are a number of settings that can be changed in the settings file. "
@@ -266,10 +267,48 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 }
 
 
-pisafe_install_tools() {   
-    SILENT=${1:-"-n"}
-    MISSING_TOOLS=
-    INSTALL=$(env_installer)  
+pisafe_install_tool() {   
+    local TOOL=$1
+    #SILENT=${1:-"-n"}
+    local INSTALL=$(env_installer)  
+    
+    if [[ -z $(env_which $TOOL) ]] ; then
+        case $TOOL in
+        
+        xz)
+            ui_echo "Installing xz-utils..." white
+            sudo $INSTALL xz-utils
+            if [[ -z $(env_which xz) ]]; then
+                ui_msg_warning $LINENO "xz not installed."
+            fi
+            ;;
+        
+        pishrink.sh)
+            ui_echo "Installing pishrink..." white
+            wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
+            sudo chmod +x pishrink.sh
+            sudo mv pishrink.sh /usr/local/bin
+            
+            if [[ -z $(env_which pishrink.sh) ]] ; then
+                ui_msg_warning $LINENO "pishrink not installed."
+            fi
+            ;;
+        
+        *)
+            #echo_white Installing $TOOL ...
+            ui_echo "Installing $TOOL..." white
+            sudo $INSTALL $TOOL
+            if (( $? )); then
+                ui_msg_warning $LINENO "$TOOL not installed."
+            fi
+            ;;
+        esac    
+    fi
+}    
+
+
+pisafe_install_tools() { 
+    local MISSING_TOOLS=
     
     #scan for missing tools
     for TOOL in $REQUIRED_TOOLS ; do
@@ -288,47 +327,16 @@ pisafe_install_tools() {
     echo
     
     for TOOL in $REQUIRED_TOOLS ; do
-        if [[ -z $(env_which $TOOL) ]] ; then
-            case $TOOL in
-            
-            xz)
-                ui_echo "Installing xz-utils..." white
-                sudo $INSTALL xz-utils
-                if [[ -z $(env_which xz) ]]; then
-                    ui_msg_warning $LINENO "xz not installed."
-                fi
-                ;;
-            
-            pishrink.sh)
-                ui_echo "Installing pishrink..." white
-                wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
-                sudo chmod +x pishrink.sh
-                sudo mv pishrink.sh /usr/local/bin
-                
-                if [[ -z $(env_which pishrink.sh) ]] ; then
-                    ui_msg_warning $LINENO "pishrink not installed."
-                fi
-                ;;
-            
-            *)
-                #echo_white Installing $TOOL ...
-                ui_echo "Installing $TOOL..." white
-                sudo $INSTALL $TOOL
-                if (( $? )); then
-                    ui_msg_warning $LINENO "$TOOL not installed."
-                fi
-                ;;
-            esac    
-        fi
+        pisafe_install_tool $TOOL
     done
     
-    
-    # if whiptail did not install...
+    # if whiptail did not install then try installing newt...
     if ! [[ $(env_which whiptail) ]]; then
+        local INSTALL=$(env_installer) 
         run_command "sudo $INSTALL newt"        # for fedora
         run_command "sudo $INSTALL libnewt"     # for arch, manjaro
     fi
-}    
+}
 
 
 pisafe_update() {
@@ -858,8 +866,9 @@ file_image_size() {
         img | iso)      SIZE_BYTES=$(echo $((  $(ls -s "$INFILE" | cut -d' ' -f1 ) * 1024 )) ) ;;
         zip)            SIZE_BYTES=$(zipinfo -t "$INFILE" 2> /dev/null | grep "%" | cut -d, -f2 | cut -d" " -f2  )  ;;
         xz)             SIZE_BYTES=$(xz -l -v "$INFILE" 2> /dev/null | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g')  ;;  
-      #  gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g')  ;;
-        gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 )  ;;
+        gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g')  ;;
+      #  gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 )  ;;
+        zst)            SIZE_BYTES=$(zstd -v -l "$INFILE" 2> /dev/null | grep Decompressed | cut -d"(" -f2 | cut -d" " -f1) ;;
         *)              echo 0
                         return 1 ;;
     esac
@@ -887,7 +896,7 @@ file_list_image_files(){
     FILES="FILE_NAME FILE_SIZE (IMAGE_SIZE) \n"
     IFS=$'\t\n'
     
-    for FILE in $(ls *.img *.zip *.xz *.gz *.iso 2>/dev/null) ; do
+    for FILE in $(ls *.img *.zip *.xz *.gz *.zst *.iso 2>/dev/null) ; do
         FILE_NS=$(echo "$FILE" | sed 's/ /_/g')
         FILES="$FILES $FILE_NS  $(file_size "$FILE" -h)  ($(file_image_size "$FILE" -h)) \n "
     done
@@ -1148,7 +1157,20 @@ media_backup(){
                 run_command "pigz -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
                 ES=$? 
             fi    
-            
+            ;;
+        
+        zst)
+           # if [[ ! -z $(which pv) ]]; then
+           #     run_command "pv '$OUTFILE_BASE.img' -p | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+           #     ES=$? 
+           #     rm -f "$OUTFILE_BASE".img
+           # else
+              #  ui_echo "No progress bar installed.  Please wait..."
+                #sudo chmod 777 '$OUTFILE_BASE.img'  
+               # run_command "pigz -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
+            run_command "zstd -$((COMPRESSION_LEVEL * 2)) -T0 --rm '$OUTFILE_BASE.img'" $LINENO
+            ES=$? 
+           # fi    
             ;;
         
         *)
@@ -1291,11 +1313,14 @@ media_backup_check_outfile(){
     fi
  
     # quit if unsupported extension
-    case $(file_ext "$OUTFILE") in 
-        img | zip | xz | gz | iso | "" )    
-            ;;
+    FILE_EXT=$(file_ext "$OUTFILE")
+    case $FILE_EXT in 
+        img | zip | iso | "" )              ;;
+        xz)     pisafe_install_tool xz     ;;
+        gz)     pisafe_install_tool pigz   ;;
+        zst)    pisafe_install_tool zstd   ;;
         *)  
-            ui_msg_error $LINENO "Unsupported file extension '$(file_ext $OUTFILE)'"
+            ui_msg_error $LINENO "Unsupported file extension '$FILE_EXT'"
             return 15 
             ;;
     esac        
@@ -1557,7 +1582,7 @@ media_restore(){
                 run_command "pv '$INFILE' -p | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
-                ui_echo "~ Running: pv '$INFILE' | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                ui_echo "~ Running: pv -n '$INFILE' | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
                 (pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 ES=$?
@@ -1569,12 +1594,25 @@ media_restore(){
                 run_command "pv '$INFILE' -p | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
-                ui_echo "~ Running: pv '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                ui_echo "~ Running: pv -n '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
                 (pv -n "$INFILE" | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 ES=$?
             fi    
             ;;
+            
+        zst)
+            if [[ $INTERFACE = cli ]]; then
+               # run_command "pv '$INFILE' -p | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                run_command "zstd -c -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                ES=$?
+            else
+                ui_echo "~ Running: pv -n '$INFILE' | zstd -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                (pv -n "$INFILE" | zstd -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
+                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
+                ES=$?
+            fi
+            ;;            
 
         *)
             echo
@@ -1617,11 +1655,25 @@ media_restore_checklist(){
         ui_msg_error $LINENO "File '$INFILE' not found" 
         return 1
     fi 
+
+    # quit if unsupported extension
+    FILE_EXT=$(file_ext "$INFILE")
+    case $FILE_EXT in 
+        img | zip | iso | "" )              ;;
+        xz)     pisafe_install_tool xz     ;;
+        gz)     pisafe_install_tool pigz   ;;
+        zst)    pisafe_install_tool zstd   ;;
+        *)  
+            ui_msg_error $LINENO "Unsupported file extension '$FILE_EXT'"
+            return 15 
+            ;;
+    esac   
     
     #Warning if image file size is 0
     if [[ $(file_image_size "$INFILE") = 0 ]]; then
         ui_msg_warning $LINENO "Image file size cannot be read"
     fi    
+
 
     # GET OUTDEV if missing #############################################
     if [[ -z $OUTDEV ]]; then
@@ -2233,7 +2285,7 @@ whiptail_fselect() {
                 
     # Then add files                                
     for FILE in $(find $LOCAL_PATH -maxdepth 1 \
-        \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" \) \
+        \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" -o -name "*.zst" \) \
         -type f \
         -printf "%f\t     %s\n" | sort  2> /dev/null)                                                                  
     do
@@ -2404,7 +2456,7 @@ menu_get_outfile(){
         MSG="$MEDIA_OS \
         \n$ESTIMATES\n===== BACKUP FILENAME ===== \
         \nIf you don't include an extension '.img.$DEFAULT_EXTENSION' will be added \
-        \n\nSupported extensions are: .img .zip .xz .gz \
+        \n\nSupported extensions are: .img .zip .xz .gz .zst\
         \n.zip is the baseline \n.img is ~2x faster but twice the size (NOT compressed) \n.xz is ~25% smaller but takes 3x-4x longer \n.gz is ~25% faster \
         \n\nRecommended to have NO SPACES in the name \
         \n\nEnter the image filename (eg: 2020-12-15-buster32)"
