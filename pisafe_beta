@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5 j"   # 2022/05/09
+SCRIPTVER="1.2.5 k"   # 2022/05/10
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -149,7 +149,7 @@ pisafe_about(){
         "It was then renamed it 'PiSafe' which is a reference to the 'ventilated cupboards for storing"\
         "pies while protecting them from insects and vermin'. "
     echo
-    echo "It is pretty clean linux so it works on many debian and arch distros."
+    echo "It is pretty clean bash code so it works on many debian and arch distros."
     echo 
     echo "It's home is $PRODUCTHOME"
     echo
@@ -490,7 +490,7 @@ config_var_set_defaults(){
     config_var_set shrink_fs on $FORCE
     config_var_set auto_expand_fs on $FORCE
     config_var_set default_extension zip $FORCE
-    config_var_set compression_level 1 $FORCE
+    config_var_set compression_level 5 $FORCE
     config_var_set parallel_compression on $FORCE
     config_var_set large_device_read_warning 16gb $FORCE
     config_var_set skip_freespace on $FORCE
@@ -606,7 +606,7 @@ env_texteditor(){
  
  
 env_which () {
-    #fixes manjaro's which command 
+    #fixes manjaro's 'which' command 
     local FILE=$1
     
     # if which not installed, try to install it
@@ -631,15 +631,13 @@ env_which () {
 env_sysinfo(){
     uname -a
     echo $(env_terminal)
-    #which x-terminal-emulator
-    #echo $(readlink -f /usr/bin/x-terminal-emulator)
     echo $(env_installer)
     echo $(env_texteditor) 
     echo $(env_root_device)
 }
 
-# ---------- Misc functions
 
+# ---------- Misc functions
 do_beep(){
     FREQ=${1:-600}
     TIME=${2:-.5}
@@ -790,7 +788,6 @@ get_bytes(){
 
 
 # ---------- file functions
-
 file_base(){
     #returns the path and filename minus all extensions
     local DIR=$(dirname "$1")
@@ -913,7 +910,6 @@ file_path(){
 }
 
 
-
 file_size() {
     local FILE="$1"
     local HUMAN=${2:-"no"}
@@ -957,9 +953,6 @@ do_list_info() {
     echo "~~~ IMAGE FILES in '$DEFAULT_PATH' ($(file_fs_freespace $DEFAULT_PATH -h) free) ~~~"
     file_list_image_files
 }    
-
-
-# --------------------------------------
 
 
 
@@ -1048,7 +1041,6 @@ media_backup(){
 		run_command "sudo pv $INDEV -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
        	ES=$?
     else
-     #   echo "Note: 'pv' is not installed so there is no progress bar."
         ui_echo "No progress bar installed.  Please wait..."
         PROGRESS=
         if (( $(dd --help | grep progress) )) ; then
@@ -1117,33 +1109,19 @@ media_backup(){
             ;;
         
         zip)
+            # not using pv because it supresses the name of the file in the archive.
             # added sudo to the command so manjaro can write to a network folder.
             local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
             local DOTSIZE=$(( $FILESIZE_M / 50 ))m
-            echo Each dot=$DOTSIZE 
             echo -n "                    $OUTFILE_BASE.img"
             echo " [........................|.........................] 100%"
             run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
-            #zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL "$OUTFILE" "$OUTFILE_BASE".img
             ES=$?
-            
-            #warning, with progress bar ZIP loses .img in the image name
-            #sudo pv "$OUTFILE_BASE".img | sudo zip -$COMPRESSION_LEVEL  > "$OUTFILE"
-            #EXIT_CODE=$? 
-            #sudo rm -f "$OUTFILE_BASE".img 
             ;;
         
         xz)
-            if [[ ! -z $(which pv) ]]; then
-                run_command "pv '$OUTFILE_BASE.img' -p | xz -z -c -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
-                ES=$? 
-                rm -f "$OUTFILE_BASE".img
-            else
-                ui_echo "No progress bar installed.  Please wait..."
-                #sudo chmod 777 '$OUTFILE_BASE.img'  
-                run_command "sudo xz -z -$COMPRESSION_LEVEL -v '$OUTFILE_BASE.img'" $LINENO
-                ES=$? 
-            fi    
+            run_command "sudo xz -z -T0 -$COMPRESSION_LEVEL -v '$OUTFILE_BASE.img'" $LINENO
+            ES=$? 
             ;;
         
         gz)
@@ -1160,17 +1138,8 @@ media_backup(){
             ;;
         
         zst)
-           # if [[ ! -z $(which pv) ]]; then
-           #     run_command "pv '$OUTFILE_BASE.img' -p | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
-           #     ES=$? 
-           #     rm -f "$OUTFILE_BASE".img
-           # else
-              #  ui_echo "No progress bar installed.  Please wait..."
-                #sudo chmod 777 '$OUTFILE_BASE.img'  
-               # run_command "pigz -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
-            run_command "zstd -$((COMPRESSION_LEVEL * 2)) -T0 --rm '$OUTFILE_BASE.img'" $LINENO
+            run_command "zstd -T0 -$((COMPRESSION_LEVEL * 2)) --rm '$OUTFILE_BASE.img'" $LINENO
             ES=$? 
-           # fi    
             ;;
         
         *)
@@ -1603,8 +1572,8 @@ media_restore(){
             
         zst)
             if [[ $INTERFACE = cli ]]; then
-               # run_command "pv '$INFILE' -p | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
-                run_command "zstd -c -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                run_command "pv '$INFILE' -p | zstd -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+              #  run_command "zstd -c -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
                 ui_echo "~ Running: pv -n '$INFILE' | zstd -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
@@ -1659,7 +1628,7 @@ media_restore_checklist(){
     # quit if unsupported extension
     FILE_EXT=$(file_ext "$INFILE")
     case $FILE_EXT in 
-        img | zip | iso | "" )              ;;
+        img | zip | iso | "" )             ;;
         xz)     pisafe_install_tool xz     ;;
         gz)     pisafe_install_tool pigz   ;;
         zst)    pisafe_install_tool zstd   ;;
@@ -2581,11 +2550,11 @@ menu_select_device(){
 menu_set_compression(){
     CHOICE=$(whiptail --title "SETTINGS-COMPRESSION" --radiolist \
     "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-    "1" "Fastest time (default)" on \
+    "1" "Fastest time" off \
     "2" "" off \
     "3" "" off \
     "4" "" off \
-    "5" "" off \
+    "5" "(default)" on \
     "6" "" off \
     "7" "" off \
     "8" "" off \
