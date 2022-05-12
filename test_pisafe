@@ -1,0 +1,189 @@
+#! /bin/bash
+# 2022/02/22
+
+# for manjaro
+# sudo pacman -S wget
+
+# exfat for suse   https://software.opensuse.org/download/package?package=exfat-utils&project=filesystems
+# exfat for suse leap  https://software.opensuse.org/download/package?package=exfat-utils&project=filesystems
+
+WHITE='\033[1;37m'
+RED='\033[1;31m'
+GREEN='\033[0;32m'
+BLUE='\033[0;34m'
+LTBLUE='\033[1;34m'
+COLOR_BROWN='\e[0;33m'
+NC='\033[0m'    # No Color, standard text
+
+echo_white()    { (echo -e "${WHITE}$*${NC}") }
+echo_red()      { (echo -e "${RED}$*${NC}") }
+echo_blue()     { (echo -e "${LTBLUE}$*${NC}") }  
+echo_green()    { (echo -e "${GREEN}$*${NC}") }
+echo_brown()   { (echo -e "${COLOR_BROWN}$*${NC}")}
+
+
+ui_yesno(){
+    # general yes/no function.  Supports CLI and whiptail.
+    # note, this output is often assigned to a variable, so don't add any additional echo statements.
+    TITLE="$1"
+    MSG="$2"
+    DEFAULT="${3:-""}"   # defaults to Yes.  can specify --defaultno
+    TIMEOUT=${4:-0}
+   # COLOR="${4:-white}"  color does not work with the 'read' command
+    
+    if [[ $INTERFACE != gui ]]; then
+        MSG="$PRODUCTNAME: $TITLE: $MSG  [y/n]?"
+        # change 'newline' chars to ' -'
+        MSG=$(echo $MSG | sed 's/\\n/ -/g')
+        while true; do        
+            read -s -n1 -p "$MSG" yn
+            case $yn in
+                [Yy]* ) echo y; return 0;;
+                [Nn]* ) echo n; return 1;;
+                * )     ;;
+            esac
+        done
+    else    
+        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" $DEFAULT --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH 3>&1 1>&2 2>&3
+        ES=$?
+        if (( $ES )); then
+            echo n
+        else
+            echo y
+        fi
+        return $ES
+    fi
+}
+
+
+test_it(){
+    NAME="$1"
+    CMD="$2"
+    PAUSE=${3:--y}
+    
+  
+    
+    echo_green "$NAME"
+    echo_blue "$CMD"
+    eval "$CMD"
+    if (( $? )); then 
+        echo_red ERROR
+    fi
+
+    if [[ $PAUSE = -y ]]; then
+        echo_brown "Press any key ..."
+        read -n1 
+    fi
+}
+
+
+shared(){
+    local SHARED_USER=user
+    
+    if [[ $(ui_yesno "setup share") = y ]]; then 
+    sudo apt install cifs-utils
+
+    mkdir ~/shared
+
+    sudo mount.cifs //192.168.1.18/shared ~/shared -o user=$SHARED_USER,vers=1.0
+    fi
+}
+
+
+test_install(){
+    if [[ $(ui_yesno "test install") = y ]]; then 
+    
+    echo_green GETTING PISAFE_BETA as PISAFE
+    #wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_beta -O pisafe
+    #if (( $? )); then echo_red ERROR; fi
+    cp pisafe_beta pisafe
+    
+    
+    #    test_it "INSTALL..ANSWER N"     "bash pisafe install"
+        test_it "INSTALL -y"            "bash pisafe install -y"
+        test_it "UPDATE"                "pisafe update"
+        test_it "UNINSTALL -y"          "pisafe uninstall -y"
+    #    test_it "INSTALL..should fail"  "pisafe install -y"
+        test_it "INSTALL -y"            "bash pisafe install -y"
+    fi
+}
+
+
+test_other(){
+    if [[ $(ui_yesno "test other") = y ]]; then  
+    test_it "BEEP"                  "pisafe beep"
+    test_it HELP                    "pisafe help"
+    test_it ABOUT                   "pisafe about"
+
+    test_it LIST                    "pisafe list"
+    test_it SETTINGS                "pisafe settings"
+    test_it LOG                     "pisafe log"
+
+    test_it "DETAILS SDA"           "pisafe details $DEVICE"
+
+  #  test_it "SETTINGS - change"     "pisafe settings"
+  #  test_it DEFAULTS                "pisafe defaults"
+  #  test_it "SETTINGS - review"     "pisafe settings"
+    fi
+}
+
+
+test_backup(){
+#    DATE=$(date +%Y-%d-%m_%I%M%p)
+    if [[ $(ui_yesno "test backup") = y ]]; then   
+       
+       rm test.img test.img.zip test.img.gz test.img.xz -y
+    
+        test_it "backup -y"             "pisafe backup $DEVICE $OUTFILE -y"  -n
+        test_it "backup gz -y"          "pisafe backup $DEVICE $OUTFILE.gz -y"  -n
+        test_it "backup xz -y"          "pisafe backup $DEVICE $OUTFILE.xz -y"  -n
+        test_it "backup zst -y"          "pisafe backup $DEVICE $OUTFILE.zst -y"  -n
+        test_it LIST                    "pisafe list"
+    fi    
+}
+
+
+test_format(){
+    if [[ $(ui_yesno "test format") = y ]]; then   
+        test_it "FORMAT $DEVICE FAT32 -y"      "pisafe format $DEVICE fat32 -y"
+        test_it "FORMAT $DEVICE EXFAT -y"      "pisafe format $DEVICE exfat -y"
+        test_it "FORMAT $DEVICE NTFS -y"       "pisafe format $DEVICE ntfs -y"
+        test_it "FORMAT $DEVICE EXT4 -y"       "pisafe format $DEVICE ext4 -y"
+    fi
+}
+
+
+test_restore(){
+    if [[ $(ui_yesno "test restore") = y ]]; then   
+        test_it "restore zip -y"       "pisafe restore $OUTFILE.img.zip $DEVICE -y"  -n
+        test_it "restore gz -y"        "pisafe restore $OUTFILE.img.gz $DEVICE -y"  -n
+        test_it "restore xz -y"        "pisafe restore $OUTFILE.img.xz $DEVICE -y"  -n
+        test_it "restore zst -y"        "pisafe restore $OUTFILE.img.zst $DEVICE -y"  -n
+        test_it "details"     	        "pisafe details $DEVICE"
+    fi
+}
+
+
+DEVICE=${1:-/dev/sda} 
+OUTFILE=test
+
+echo_red  Warning, Test_pisafe will will overwrite $DEVICE
+echo ctrl-c to quit, or any other key to contiue
+read -n1 
+
+
+#shared
+
+
+test_it "VER"                   "bash pisafe -v"
+
+test_install  
+test_other
+test_backup
+test_format
+test_restore
+
+pisafe log
+echo_green  DONE TESTING
+
+
