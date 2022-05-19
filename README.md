@@ -16,7 +16,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
  
  - Supports USB storage devices.
  
- - Supports backing up the live boot media - but be careful, backing up media that is being written to can result in a courupted backup.  You have to turn off "hide root device" in "settings", "options" to enable this. 
+ - Supports backing up the live boot media - but be careful, backing up media that is being written to can result in a corrupted backup.  You have to turn off "hide root device" in "settings", "options" to enable this. 
  
     CAUTION: Reboot first, close everything and don't use the system while it is doing step 1 of backing up!  You must send your backup image to a different drive.
 
