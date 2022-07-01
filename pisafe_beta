@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5 m"   # 2022/05/10
+SCRIPTVER="1.2.5 n"   # 2022/06/30
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -123,32 +123,31 @@ notes_desktop_environment(){
 
 
 notes_performance(){
-    Creating image from new raspi-os image expanded on an 8GB SD card.  
-    Origional size=837mb
+    creating image from raspi-os image expanded on an 8GB SD card.  Size=837mb
     
-    Compression         SIZE        TIME
+    SETTING             SIZE        TIME
     
     img                 3.9gb       4:30   
     
-    zip 1               1.37g       8:16
-    pigz 1              1.37g       6:59         
-    xz 1                1.02g       12:54
-    zst 1               1.34g       6:28
+    zip 1               1.37        8:10
+    pigz 1              1.37        6:40         
+    xz 1                1.02        13:15
+    zst 1               1.34        6:21
     
-    zip 5               1.28g       10:27
-    pigz 5              1.28g       7:15
-    xz 5                912m        28:21
-    zst 5               1.17g       8:35
+    zip 5               1.28g       10:20
+    pigz 5              1.28g       6:52
+    xz 5                912m        28:41
+    zst 5               1.17g       8:53
     
-    zip 9               1.26g       23:04
-    pigz 9              1.26g       10:28
-    xz 9                849m        35:03
-    zst 9               1.13g       10:15
+    zip 9               1.26        23:15
+    pigz 9              1.26        10:12
+    xz 9                848         34:35
+    zst 9               1.13        10:15
     
-    pigz 9 --best       1.26g       11:07
-    pigz 11 --best      1.26g       10:43
-    xz 9 -e             848m        43:17           
-    zst 22 --ultra      922m        48:22
+    pigz --best -9      1.26g       10:07
+    pigz --best -11
+    xz  -e -9           848m        43:17           
+    zst 22              922         48:56
     
 }
 
@@ -524,7 +523,7 @@ config_var_set_defaults(){
     config_var_set shrink_fs on $FORCE
     config_var_set auto_expand_fs on $FORCE
     config_var_set default_extension zip $FORCE
-    config_var_set compression_level 1 $FORCE
+    config_var_set compression_level 5 $FORCE
     config_var_set parallel_compression on $FORCE
     config_var_set large_device_read_warning 16gb $FORCE
     config_var_set skip_freespace on $FORCE
@@ -1129,6 +1128,9 @@ media_backup(){
     echo Compression set to level $COMPRESSION_LEVEL of 9
     echo "$(file_size "$OUTFILE_BASE".img -h) to compress."
     
+    BEST_COMPRESSION=on
+    BEST_COMPRESSION_SETTING=
+    
     case $(file_ext "$OUTFILE") in
         img)
             echo Not compressing .img file ...
@@ -1154,29 +1156,33 @@ media_backup(){
             ;;
         
         xz)
-            #  -x for extreme
-            run_command "sudo xz -z -T0 -v  -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
+            if [[ $BEST_COMPRESSION = on ]]; then
+                BEST_COMPRESSION_SETTING="-e"
+            fi
+            run_command "sudo xz -z -T0 -v $BEST_COMPRESSION_SETTING -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
             ES=$? 
             ;;
         
         gz)
-            # --best for best compression
+            if [[ $BEST_COMPRESSION = on ]]; then
+                BEST_COMPRESSION_SETTING="--best"
+            fi
             if [[ ! -z $(which pv) ]]; then
-                run_command "pv '$OUTFILE_BASE.img' -p | pigz  -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+                run_command "pv '$OUTFILE_BASE.img' -p | pigz $BEST_COMPRESSION_SETTING= -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
                 ES=$? 
+                rm -f "$OUTFILE_BASE".img
             else
                 ui_echo "No progress bar installed.  Please wait..."
                 sudo chmod 777 '$OUTFILE_BASE.img'  
                 run_command "pigz -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
                 ES=$? 
             fi    
-            if [[ -e $OUTFILE ]]; then
-                rm -f "$OUTFILE_BASE".img
-            fi
             ;;
         
         zst)
-            # --ultra for ultra compression
+            if [[ $COMPRESSION_LEVEL -gt 19 ]]; then
+                COMPRESSION_LEVEL="-ultra -$COMPRESSION_LEVEL"
+            fi
             run_command "zstd -T0 -$COMPRESSION_LEVEL --rm '$OUTFILE_BASE.img'" $LINENO
             ES=$? 
             ;;
@@ -1295,7 +1301,6 @@ media_backup_check_outfile(){
     
     #Quit if outfile is blank
     if [[ -z $OUTFILE ]] ; then
-       # OUTFILE=$OUTFILEDEFAULT.img.$DEFAULT_EXTENSION
         ui_msg_error $LINENO "OutFile '$OUTFILE' can't be blank" 
         return 13   
     fi  
@@ -1394,16 +1399,12 @@ media_backup_checklist(){
         
     #get and check outfile
     if [[ -z $OUTFILE ]]; then
-        if [[ $INTERFACE = "cli" ]]; then
-            OUTFILE="$DEFAULT_PATH/$(date +%Y-%m-%d-pisafe).img.$DEFAULT_EXTENSION"
-        else
-            menu_get_outfile   # this includes media_backup_check_outfile
-            ES=$?
-            if (( $ES )); then
-                ui_msg_error $LINENO "Outfile '$OUTFILE' can't be blank" 
-                return $ES
-            fi
-        fi    
+        menu_get_outfile   # this includes media_backup_check_outfile
+        ES=$?
+        if (( $ES )); then
+            ui_msg_error $LINENO "Outfile '$OUTFILE' can't be blank" 
+            return $ES
+        fi
     else
         media_backup_check_outfile 
         ES=$?  
@@ -1775,7 +1776,8 @@ media_list() {
                 ;;
     esac
     
-    DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
+    # the 254 is for a QTM virtual machine on Mac 
+    DEVICES=$(lsblk -I 8,179,254 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
     ES=$?
     if (( $ES )); then
         return $ES
@@ -2592,23 +2594,17 @@ menu_select_device(){
 
 
 menu_set_compression(){
-    
-    # set all the buttons to off, then turn on one of them.
-    _1=off; _2=off; _3=OFF; _4=off; _5=off; _6=OFF; _7=off; _8=off; _9=OFF
-    eval "_${COMPRESSION_LEVEL}=on"
-
     CHOICE=$(whiptail --title "SETTINGS-COMPRESSION" --radiolist \
-    "Choose compression level ($COMPRESSION_LEVEL)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-    "1" "Fastest time (default)" $_1 \
-    "2" "" $_2 \
-    "3" "" $_3 \
-    "4" "" $_4 \
-    "5" "" $_5 \
-    "6" "" $_6 \
-    "7" "" $_7 \
-    "8" "" $_8 \
-    "9" "Smallest file (MUCH slower)" $_9 \
-    3>&1 1>&2 2>&3 )
+    "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+    "1" "Fastest time" off \
+    "2" "" off \
+    "3" "" off \
+    "4" "" off \
+    "5" "(default)" on \
+    "6" "" off \
+    "7" "" off \
+    "8" "" off \
+    "9" "Smallest file (MUCH slower)" off   3>&1 1>&2 2>&3 )
    
     if [[ ! -z $CHOICE ]]; then
         COMPRESSION_LEVEL=$CHOICE
@@ -2622,7 +2618,7 @@ menu_set_compression(){
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --cancel-button "Back" --menu " " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT  \
         "Default directory   " "$DEFAULT_PATH" \
         "Default extension   " "$DEFAULT_EXTENSION" \
-        "Compression level   " "'$COMPRESSION_LEVEL' of 9" \
+        "Compression level   " "$COMPRESSION_LEVEL of 9" \
         "Options             " "Several options to turn on/off " \
         "                    " "      " \
         "Settings file       " "Edit the settings file manually (pisafe.conf)" \
@@ -2658,19 +2654,14 @@ menu_set_compression(){
 
 
 menu_settings_default_extension(){
-    
-    # set all the buttons to off, then turn on one of them.
-    _zip=off; _xz=off; _gz=off; _img=off; _zst=off
-    eval "_${DEFAULT_EXTENSION}=on"
-    
-    CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS-EXTENSION" --radiolist \
-           "Choose default extension (compression format) " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-           "zip" "Default" $_zip \
-           "xz" "~25% smaller, 3x-4x more time" $_xz \
-           "gz" "~25% faster, same size as zip" $_gz  \
-           "img" "Twice the size, half the time (No compression)" $_img \
-           "zst" "Set compression level to 1-22 " $_zst \
-           3>&1 1>&2 2>&3 )
+     CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS-EXTENSION" --radiolist \
+            "Choose default extension (compression format)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
+            "zip" "Default" on \
+            "xz" "~25% smaller, 3x-4x more time" off \
+            "gz" "~25% faster, same size as zip" off  \
+            "img" "Twice the size, half the time (No compression)" off \
+            "zst" "Set compression level to 1-22 " off \
+            3>&1 1>&2 2>&3 )
     
     if [[ ! -z $CHOICE ]]; then
         DEFAULT_EXTENSION=$CHOICE
