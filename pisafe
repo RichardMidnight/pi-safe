@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5"   # 2022/02/21
+SCRIPTVER="1.2.6"   # 2022/09/29
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -24,7 +24,8 @@ USER=$(whoami)
 CONFIG="/home/$USER/.config/pisafe/pisafe.conf"
 LOG_FILE="/home/$USER/.config/pisafe/pisafe.log"
 LOG=on
-REQUIRED_TOOLS="dd pishrink.sh zip unzip pigz xz pv bc whiptail file"
+REQUIRED_TOOLS="dd pishrink.sh zip unzip pv bc whiptail file nano"
+OPTIONAL_TOOLS="pigz xz zstd"
 INDEV=
 OUTDEV=
 INFILE=
@@ -72,7 +73,7 @@ echo_green()    { (echo -e "${GREEN}$*${NC}") }
 # 
 
 
-desktop_environment_notes(){
+notes_desktop_environment(){
     # this is just a reference of tested OSs from 2021
 
     DISTRO                      TERMINAL            TEXT EDITOR         
@@ -121,6 +122,39 @@ desktop_environment_notes(){
 }
 
 
+notes_performance(){
+    creating image from raspi-os image expanded on an 8GB SD card.  Size=837mb
+    
+    SETTING             SIZE        TIME
+    
+    img                 3.9gb       4:30   
+    
+    zip 1               1.37        8:10
+    pigz 1              1.37        6:40         
+    xz 1                1.02        13:15
+    zst 1               1.34        6:21
+    
+    zip 5               1.28g       10:20
+    pigz 5              1.28g       6:52
+    xz 5                912m        28:41
+    zst 5               1.17g       8:53
+    
+    zip 9               1.26        23:15
+    pigz 9              1.26        10:12
+    xz 9                848         34:35
+    zst 9               1.13        10:15
+    
+    pigz --best -9      1.26g       10:07
+    pigz --best -11
+    xz  -e -9           848m        43:17           
+    zst 22              922         48:56
+    
+}
+
+
+
+
+
 run_command(){
     local CMD=$1
     local LINE=$2
@@ -148,7 +182,7 @@ pisafe_about(){
         "It was then renamed it 'PiSafe' which is a reference to the 'ventilated cupboards for storing"\
         "pies while protecting them from insects and vermin'. "
     echo
-    echo "It is pretty clean linux so it works on many debian and arch distros."
+    echo "It is pretty clean bash code so it works on many debian and arch distros."
     echo 
     echo "It's home is $PRODUCTHOME"
     echo
@@ -186,7 +220,7 @@ pisafe_help() {
     echo "  help | -h  | --h             - help"
     echo
     echo "Notes: "
-    echo " - Supports .img .zip .xz and .gz files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
+    echo " - Supports .img .zip .xz .gz and .zst files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
     echo " - Specifying an '.img' extension is faster but twice the size because it is not compressed."
     echo " - -y answers 'y' to prompts."
     echo " - There are a number of settings that can be changed in the settings file. "
@@ -266,10 +300,48 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 }
 
 
-pisafe_install_tools() {   
-    SILENT=${1:-"-n"}
-    MISSING_TOOLS=
-    INSTALL=$(env_installer)  
+pisafe_install_tool() {   
+    local TOOL=$1
+    #SILENT=${1:-"-n"}
+    local INSTALL=$(env_installer)  
+    
+    if [[ -z $(env_which $TOOL) ]] ; then
+        case $TOOL in
+        
+        xz)
+            ui_echo "Installing xz-utils..." white
+            sudo $INSTALL xz-utils
+            if [[ -z $(env_which xz) ]]; then
+                ui_msg_warning $LINENO "xz not installed."
+            fi
+            ;;
+        
+        pishrink.sh)
+            ui_echo "Installing pishrink..." white
+            wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
+            sudo chmod +x pishrink.sh
+            sudo mv pishrink.sh /usr/local/bin
+            
+            if [[ -z $(env_which pishrink.sh) ]] ; then
+                ui_msg_warning $LINENO "pishrink not installed."
+            fi
+            ;;
+        
+        *)
+            #echo_white Installing $TOOL ...
+            ui_echo "Installing $TOOL..." white
+            sudo $INSTALL $TOOL
+            if (( $? )); then
+                ui_msg_warning $LINENO "$TOOL not installed."
+            fi
+            ;;
+        esac    
+    fi
+}    
+
+
+pisafe_install_tools() { 
+    local MISSING_TOOLS=
     
     #scan for missing tools
     for TOOL in $REQUIRED_TOOLS ; do
@@ -288,47 +360,16 @@ pisafe_install_tools() {
     echo
     
     for TOOL in $REQUIRED_TOOLS ; do
-        if [[ -z $(env_which $TOOL) ]] ; then
-            case $TOOL in
-            
-            xz)
-                ui_echo "Installing xz-utils..." white
-                sudo $INSTALL xz-utils
-                if [[ -z $(env_which xz) ]]; then
-                    ui_msg_warning $LINENO "xz not installed."
-                fi
-                ;;
-            
-            pishrink.sh)
-                ui_echo "Installing pishrink..." white
-                wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
-                sudo chmod +x pishrink.sh
-                sudo mv pishrink.sh /usr/local/bin
-                
-                if [[ -z $(env_which pishrink.sh) ]] ; then
-                    ui_msg_warning $LINENO "pishrink not installed."
-                fi
-                ;;
-            
-            *)
-                #echo_white Installing $TOOL ...
-                ui_echo "Installing $TOOL..." white
-                sudo $INSTALL $TOOL
-                if (( $? )); then
-                    ui_msg_warning $LINENO "$TOOL not installed."
-                fi
-                ;;
-            esac    
-        fi
+        pisafe_install_tool $TOOL
     done
     
-    
-    # if whiptail did not install...
+    # if whiptail did not install then try installing newt...
     if ! [[ $(env_which whiptail) ]]; then
+        local INSTALL=$(env_installer) 
         run_command "sudo $INSTALL newt"        # for fedora
         run_command "sudo $INSTALL libnewt"     # for arch, manjaro
     fi
-}    
+}
 
 
 pisafe_update() {
@@ -482,7 +523,7 @@ config_var_set_defaults(){
     config_var_set shrink_fs on $FORCE
     config_var_set auto_expand_fs on $FORCE
     config_var_set default_extension zip $FORCE
-    config_var_set compression_level 1 $FORCE
+    config_var_set compression_level 5 $FORCE
     config_var_set parallel_compression on $FORCE
     config_var_set large_device_read_warning 16gb $FORCE
     config_var_set skip_freespace on $FORCE
@@ -567,7 +608,7 @@ env_terminal(){
     elif [ $(env_which mate-terminal) ];then
       TERMINAL1="mate-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
     elif [ $(env_which gnome-terminal) ];then
-      TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
+      TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -- bash -c "
     elif [ $(env_which xterm) ];then
       TERMINAL1="xterm -geometry 110x40 -T 'PiSafe' -e bash -c " 
     elif [ $(env_which terminator) ];then
@@ -598,7 +639,7 @@ env_texteditor(){
  
  
 env_which () {
-    #fixes manjaro's which command 
+    #fixes manjaro's 'which' command 
     local FILE=$1
     
     # if which not installed, try to install it
@@ -620,8 +661,16 @@ env_which () {
 }
 
 
-# ---------- Misc functions
+env_sysinfo(){
+    uname -a
+    echo $(env_terminal)
+    echo $(env_installer)
+    echo $(env_texteditor) 
+    echo $(env_root_device)
+}
 
+
+# ---------- Misc functions
 do_beep(){
     FREQ=${1:-600}
     TIME=${2:-.5}
@@ -772,7 +821,6 @@ get_bytes(){
 
 
 # ---------- file functions
-
 file_base(){
     #returns the path and filename minus all extensions
     local DIR=$(dirname "$1")
@@ -819,10 +867,12 @@ file_fs_freespace() {
     local FREESPACE
     
     if [[ -d $FILENAME ]]; then
-        FREESPACE=$(df "$FILENAME" -B1 --output=avail | grep -v Avail)
+        #FREESPACE=$(df "$FILENAME" -B1 --output=avail | grep -v Avail)
+        FREESPACE=$(df "$FILENAME" -B1 --output=avail | tr -cd '[[:digit:]]' )
         ES=$?
     else
-        FREESPACE=$(df $(dirname "$FILENAME") -B1 --output=avail | grep -v Avail)
+        #FREESPACE=$(df $(dirname "$FILENAME") -B1 --output=avail | grep -v Avail)
+        FREESPACE=$(df $(dirname "$FILENAME") -B1 --output=avail | tr -cd '[[:digit:]]' )
         ES=$?
     fi
 
@@ -847,6 +897,8 @@ file_image_size() {
         zip)            SIZE_BYTES=$(zipinfo -t "$INFILE" 2> /dev/null | grep "%" | cut -d, -f2 | cut -d" " -f2  )  ;;
         xz)             SIZE_BYTES=$(xz -l -v "$INFILE" 2> /dev/null | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g')  ;;  
         gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g')  ;;
+      #  gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 )  ;;
+        zst)            SIZE_BYTES=$(zstd -v -l "$INFILE" 2> /dev/null | grep Decompressed | cut -d"(" -f2 | cut -d" " -f1) ;;
         *)              echo 0
                         return 1 ;;
     esac
@@ -874,7 +926,7 @@ file_list_image_files(){
     FILES="FILE_NAME FILE_SIZE (IMAGE_SIZE) \n"
     IFS=$'\t\n'
     
-    for FILE in $(ls *.img *.zip *.xz *.gz *.iso 2>/dev/null) ; do
+    for FILE in $(ls *.img *.zip *.xz *.gz *.zst *.iso 2>/dev/null) ; do
         FILE_NS=$(echo "$FILE" | sed 's/ /_/g')
         FILES="$FILES $FILE_NS  $(file_size "$FILE" -h)  ($(file_image_size "$FILE" -h)) \n "
     done
@@ -889,7 +941,6 @@ file_list_image_files(){
 file_path(){
     dirname "$*"
 }
-
 
 
 file_size() {
@@ -935,9 +986,6 @@ do_list_info() {
     echo "~~~ IMAGE FILES in '$DEFAULT_PATH' ($(file_fs_freespace $DEFAULT_PATH -h) free) ~~~"
     file_list_image_files
 }    
-
-
-# --------------------------------------
 
 
 
@@ -1026,8 +1074,12 @@ media_backup(){
 		run_command "sudo pv $INDEV -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
        	ES=$?
     else
-        echo "Note: 'pv' is not installed so there is no progress bar."
-        run_command "sudo dd bs=$BS if=$INDEV of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock status=progress conv=fsync  " $LINENO
+        ui_echo "No progress bar installed.  Please wait..."
+        PROGRESS=
+        if (( $(dd --help | grep progress) )) ; then
+            PROGRESS="status=progress"
+        fi
+        run_command "sudo dd bs=$BS if=$INDEV of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock $PROGRESS conv=fsync " $LINENO
         ES=$?
     fi
     if (( $ES )); then
@@ -1076,6 +1128,9 @@ media_backup(){
     echo Compression set to level $COMPRESSION_LEVEL of 9
     echo "$(file_size "$OUTFILE_BASE".img -h) to compress."
     
+    BEST_COMPRESSION=on
+    BEST_COMPRESSION_SETTING=
+    
     case $(file_ext "$OUTFILE") in
         img)
             echo Not compressing .img file ...
@@ -1090,32 +1145,46 @@ media_backup(){
             ;;
         
         zip)
+            # not using pv because it supresses the name of the file in the archive.
             # added sudo to the command so manjaro can write to a network folder.
             local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
             local DOTSIZE=$(( $FILESIZE_M / 50 ))m
-            echo Each dot=$DOTSIZE 
             echo -n "                    $OUTFILE_BASE.img"
             echo " [........................|.........................] 100%"
             run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
-            #zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL "$OUTFILE" "$OUTFILE_BASE".img
             ES=$?
-            
-            #warning, with progress bar ZIP loses .img in the image name
-            #sudo pv "$OUTFILE_BASE".img | sudo zip -$COMPRESSION_LEVEL  > "$OUTFILE"
-            #EXIT_CODE=$? 
-            #sudo rm -f "$OUTFILE_BASE".img 
             ;;
         
         xz)
-            run_command "pv '$OUTFILE_BASE.img' -p | xz -z -c -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+            if [[ $BEST_COMPRESSION = on ]]; then
+                BEST_COMPRESSION_SETTING="-e"
+            fi
+            run_command "sudo xz -z -T0 -v $BEST_COMPRESSION_SETTING -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
             ES=$? 
-            rm -f "$OUTFILE_BASE".img
             ;;
         
         gz)
-            run_command "pv '$OUTFILE_BASE.img' -p | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+            if [[ $BEST_COMPRESSION = on ]]; then
+                BEST_COMPRESSION_SETTING="--best"
+            fi
+            if [[ ! -z $(which pv) ]]; then
+                run_command "pv '$OUTFILE_BASE.img' -p | pigz $BEST_COMPRESSION_SETTING= -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+                ES=$? 
+                rm -f "$OUTFILE_BASE".img
+            else
+                ui_echo "No progress bar installed.  Please wait..."
+                sudo chmod 777 '$OUTFILE_BASE.img'  
+                run_command "pigz -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
+                ES=$? 
+            fi    
+            ;;
+        
+        zst)
+            if [[ $COMPRESSION_LEVEL -gt 19 ]]; then
+                COMPRESSION_LEVEL="-ultra -$COMPRESSION_LEVEL"
+            fi
+            run_command "zstd -T0 -$COMPRESSION_LEVEL --rm '$OUTFILE_BASE.img'" $LINENO
             ES=$? 
-            rm -f "$OUTFILE_BASE".img
             ;;
         
         *)
@@ -1258,11 +1327,14 @@ media_backup_check_outfile(){
     fi
  
     # quit if unsupported extension
-    case $(file_ext "$OUTFILE") in 
-        img | zip | xz | gz | iso | "" )    
-            ;;
+    FILE_EXT=$(file_ext "$OUTFILE")
+    case $FILE_EXT in 
+        img | zip | iso | "" )              ;;
+        xz)     pisafe_install_tool xz     ;;
+        gz)     pisafe_install_tool pigz   ;;
+        zst)    pisafe_install_tool zstd   ;;
         *)  
-            ui_msg_error $LINENO "Unsupported file extension '$(file_ext $OUTFILE)'"
+            ui_msg_error $LINENO "Unsupported file extension '$FILE_EXT'"
             return 15 
             ;;
     esac        
@@ -1524,7 +1596,7 @@ media_restore(){
                 run_command "pv '$INFILE' -p | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
-                ui_echo "~ Running: pv '$INFILE' | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                ui_echo "~ Running: pv -n '$INFILE' | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
                 (pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 ES=$?
@@ -1536,12 +1608,25 @@ media_restore(){
                 run_command "pv '$INFILE' -p | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
-                ui_echo "~ Running: pv '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                ui_echo "~ Running: pv -n '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
                 (pv -n "$INFILE" | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 ES=$?
             fi    
             ;;
+            
+        zst)
+            if [[ $INTERFACE = cli ]]; then
+                run_command "pv '$INFILE' -p | zstd -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+              #  run_command "zstd -c -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                ES=$?
+            else
+                ui_echo "~ Running: pv -n '$INFILE' | zstd -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                (pv -n "$INFILE" | zstd -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
+                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
+                ES=$?
+            fi
+            ;;            
 
         *)
             echo
@@ -1584,11 +1669,25 @@ media_restore_checklist(){
         ui_msg_error $LINENO "File '$INFILE' not found" 
         return 1
     fi 
+
+    # quit if unsupported extension
+    FILE_EXT=$(file_ext "$INFILE")
+    case $FILE_EXT in 
+        img | zip | iso | "" )             ;;
+        xz)     pisafe_install_tool xz     ;;
+        gz)     pisafe_install_tool pigz   ;;
+        zst)    pisafe_install_tool zstd   ;;
+        *)  
+            ui_msg_error $LINENO "Unsupported file extension '$FILE_EXT'"
+            return 15 
+            ;;
+    esac   
     
     #Warning if image file size is 0
     if [[ $(file_image_size "$INFILE") = 0 ]]; then
         ui_msg_warning $LINENO "Image file size cannot be read"
     fi    
+
 
     # GET OUTDEV if missing #############################################
     if [[ -z $OUTDEV ]]; then
@@ -1677,7 +1776,8 @@ media_list() {
                 ;;
     esac
     
-    DEVICES=$(lsblk -I 8,179 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
+    # the 254 is for a QTM virtual machine on Mac 
+    DEVICES=$(lsblk -I 8,179,254 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
     ES=$?
     if (( $ES )); then
         return $ES
@@ -1932,6 +2032,10 @@ media_format(){
 
     case $FORMAT in
         fat16)  
+            if [[ -z $(which mkfs.vfat) ]] ; then
+                echo Installing vfat support ...
+                sudo $INSTALL dosfstools
+            fi
             run_command "sudo mkfs.vfat -F16 -v -I -n FAT16 $PARTITION" $LINENO
             ES=$?
             ;;
@@ -1949,7 +2053,8 @@ media_format(){
             #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
             if [[ -z $(which mkfs.exfat) ]] ; then
                 echo Installing exfat support ...
-                sudo $INSTALL exfat-utils exfat-fuse 
+                sudo $INSTALL exfat-utils 
+                sudo $INSTALL exfat-fuse 
                 #sudo modprobe fuse 
                 #echo "fuse" | sudo tee -a /etc/modules
             fi    
@@ -1961,9 +2066,11 @@ media_format(){
             if [[ -z $(which mkfs.ntfs) ]] ; then
                 #sudo apt-get install fuse ntfs-3g
                 echo Installing ntfs support...
-                sudo $INSTALL fuse ntfs-3g ntfsprogs  #ntfsprogs is for arch
-                sudo modprobe fuse 
-                echo "fuse" | sudo tee -a /etc/modules
+                sudo $INSTALL fuse 
+                sudo $INSTALL ntfs-3g 
+                sudo $INSTALL ntfsprogs  #ntfsprogs is for arch
+                #sudo modprobe fuse 
+                #echo "fuse" | sudo tee -a /etc/modules
             fi  
             run_command "sudo mkfs.ntfs -f -L NTFS $PARTITION" $LINENO
             ES=$?
@@ -2193,7 +2300,7 @@ whiptail_fselect() {
                 
     # Then add files                                
     for FILE in $(find $LOCAL_PATH -maxdepth 1 \
-        \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" \) \
+        \( -name "*.img" -o -name "*.zip" -o -name "*.xz" -o -name "*.gz" -o -name "*.iso" -o -name "*.zst" \) \
         -type f \
         -printf "%f\t     %s\n" | sort  2> /dev/null)                                                                  
     do
@@ -2326,6 +2433,8 @@ menu_cli(){
             echo beep ; do_beep ; sleep 2
             echo beep_down ; do_beep_down ; sleep 2
             echo beep_up ;  do_beep_up;;
+            
+        sysinfo)            env_sysinfo ;;
         
         
         about)              pisafe_about ;;
@@ -2362,7 +2471,7 @@ menu_get_outfile(){
         MSG="$MEDIA_OS \
         \n$ESTIMATES\n===== BACKUP FILENAME ===== \
         \nIf you don't include an extension '.img.$DEFAULT_EXTENSION' will be added \
-        \n\nSupported extensions are: .img .zip .xz .gz \
+        \n\nSupported extensions are: .img .zip .xz .gz .zst\
         \n.zip is the baseline \n.img is ~2x faster but twice the size (NOT compressed) \n.xz is ~25% smaller but takes 3x-4x longer \n.gz is ~25% faster \
         \n\nRecommended to have NO SPACES in the name \
         \n\nEnter the image filename (eg: 2020-12-15-buster32)"
@@ -2487,11 +2596,11 @@ menu_select_device(){
 menu_set_compression(){
     CHOICE=$(whiptail --title "SETTINGS-COMPRESSION" --radiolist \
     "Choose compression level (your milage may vary)" $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT \
-    "1" "Fastest time (default)" on \
+    "1" "Fastest time" off \
     "2" "" off \
     "3" "" off \
     "4" "" off \
-    "5" "" off \
+    "5" "(default)" on \
     "6" "" off \
     "7" "" off \
     "8" "" off \
@@ -2509,7 +2618,7 @@ menu_set_compression(){
         SELECTION=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --cancel-button "Back" --menu " " $WT_HEIGHT $WT_WIDTH $WT_MENU_HEIGHT  \
         "Default directory   " "$DEFAULT_PATH" \
         "Default extension   " "$DEFAULT_EXTENSION" \
-        "Compression         " "$COMPRESSION_LEVEL of 9" \
+        "Compression level   " "$COMPRESSION_LEVEL of 9" \
         "Options             " "Several options to turn on/off " \
         "                    " "      " \
         "Settings file       " "Edit the settings file manually (pisafe.conf)" \
@@ -2550,7 +2659,9 @@ menu_settings_default_extension(){
             "zip" "Default" on \
             "xz" "~25% smaller, 3x-4x more time" off \
             "gz" "~25% faster, same size as zip" off  \
-            "img" "Twice the size, half the time (No compression)" off 3>&1 1>&2 2>&3 )
+            "img" "Twice the size, half the time (No compression)" off \
+            "zst" "Set compression level to 1-22 " off \
+            3>&1 1>&2 2>&3 )
     
     if [[ ! -z $CHOICE ]]; then
         DEFAULT_EXTENSION=$CHOICE
