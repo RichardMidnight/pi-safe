@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.5 n"   # 2022/06/30
+SCRIPTVER="1.2.7"   # 2023/2/11
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -1128,8 +1128,8 @@ media_backup(){
     echo Compression set to level $COMPRESSION_LEVEL of 9
     echo "$(file_size "$OUTFILE_BASE".img -h) to compress."
     
-    BEST_COMPRESSION=on
-    BEST_COMPRESSION_SETTING=
+    BEST_COMPRESSION=off
+    #BEST_COMPRESSION_SETTING=
     
     case $(file_ext "$OUTFILE") in
         img)
@@ -1157,18 +1157,22 @@ media_backup(){
         
         xz)
             if [[ $BEST_COMPRESSION = on ]]; then
-                BEST_COMPRESSION_SETTING="-e"
+                #BEST_COMPRESSION_SETTING="-e"
+                COMPRESSION_LEVEL="-e"
             fi
-            run_command "sudo xz -z -T0 -v $BEST_COMPRESSION_SETTING -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
+            #run_command "sudo xz -z -T0 -v $BEST_COMPRESSION_SETTING -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
+            run_command "sudo xz -z -T0 -v -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
             ES=$? 
             ;;
         
         gz)
             if [[ $BEST_COMPRESSION = on ]]; then
-                BEST_COMPRESSION_SETTING="--best"
+                #BEST_COMPRESSION_SETTING="--best"
+                COMPRESSION_LEVEL="--best"
             fi
             if [[ ! -z $(which pv) ]]; then
-                run_command "pv '$OUTFILE_BASE.img' -p | pigz $BEST_COMPRESSION_SETTING= -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+                #run_command "pv '$OUTFILE_BASE.img' -p | pigz $BEST_COMPRESSION_SETTING -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+                run_command "pv '$OUTFILE_BASE.img' -p | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
                 ES=$? 
                 rm -f "$OUTFILE_BASE".img
             else
