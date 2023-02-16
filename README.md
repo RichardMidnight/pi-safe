@@ -121,7 +121,9 @@ v1.2.5 m (beta) Fixed issue with non-english languages.  Added support for zstd 
     - Note: Auto-expand may not work on an overlay filesystem.  Recommend turning off auto-expand in Settings/Options.  
    
  - Data compression
-    - Compressing the image file with zip, xz, or gz reduces the size of the image file to 1/2 or smaller.  
+    - Compressing the image file with zip, xz, gz, or zst reduces the size of the image file to around 1/2.  
+    - zst is the fastest.
+    - xz makes the smallest file. 
     - The default is the industry standard zip.
     - The default data compression level is set to 1 out of 9.  A higher setting will compress the file a bit more but can take a lot more time.
    
