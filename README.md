@@ -10,7 +10,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
  
  - Creates a compressed image-file that will resize to fill the new media to which it is restored.
  
- - Supports .img .zip .xz and .gz file formats.
+ - Supports .img .zip .xz .gz and .zst file formats.
 
  - Images are compatible with popular imaging software such as Raspberry PI Imager.
  
