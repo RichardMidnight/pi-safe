@@ -124,10 +124,10 @@ v.1.2.7 (beta) Fixed issue with pigz and xz.
    
  - Data compression
     - Compressing the image file with zip, xz, gz, or zst reduces the size of the image file to around 1/2.  
-    - zst is the fastest.
-    - xz makes the smallest file. 
-    - The default is the industry standard zip.
-    - The default data compression level is set to 1 out of 9.  A higher setting will compress the file a bit more but can take a lot more time.
+    - Standard compression levels are 1 through 9.  A higher number will compress the file a little more but take a lot more time.
+    - fastest is zst 1.
+    - smallest is xz 8 (or as high as memory allows).
+    - PiSafe default is industry standard zip 1.
    
  # References
  
