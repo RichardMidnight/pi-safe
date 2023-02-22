@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.7"   # 2023/2/11
+SCRIPTVER="1.2.8"   # 2023/02/20
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -523,7 +523,7 @@ config_var_set_defaults(){
     config_var_set shrink_fs on $FORCE
     config_var_set auto_expand_fs on $FORCE
     config_var_set default_extension zip $FORCE
-    config_var_set compression_level 5 $FORCE
+    config_var_set compression_level 1 $FORCE
     config_var_set parallel_compression on $FORCE
     config_var_set large_device_read_warning 16gb $FORCE
     config_var_set skip_freespace on $FORCE
@@ -699,7 +699,16 @@ get_elapsed_time() {
     local BEG=$1
     local END=$2
     
-    echo $(( $(( $END-$BEG ))/60)) min $(( $(( $END-$BEG ))%60 )) sec 
+    local SECONDS=$(( $END-$BEG ))
+    local MIN=$(( $SECONDS/60 ))
+    local SEC=$(( $SECONDS%60 ))
+#    local MIN_DEC=$(( $SEC * 100 / 60 ))
+    
+    #echo $(( $(( $END-$BEG ))/60)) min $(( $(( $END-$BEG ))%60 )) sec 
+    echo $MIN min $SEC sec 
+    
+    #minutes decimal
+   # echo $(($END-$BEG)) seconds
 }
 
 
@@ -1042,7 +1051,8 @@ media_backup(){
     INDEV=$1
     OUTFILE=$2
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
-
+    COMPRESSION_LEVEL=${4:-"$COMPRESSION_LEVEL"}   # optional compression level override 
+  
   
     # preflight checklist.  Be sure INDEV and OUTFILE are good. 
     ui_echo "$PRODUCTNAME $SCRIPTVER Backup... " white
@@ -1053,6 +1063,7 @@ media_backup(){
     fi
     
     ui_echo "~ $PRODUCTNAME $SCRIPTVER Backup '$INDEV' to '$OUTFILE'" white
+
  
     #################################################
     # Step 1 reads the media to a file
@@ -1128,9 +1139,6 @@ media_backup(){
     echo Compression set to level $COMPRESSION_LEVEL of 9
     echo "$(file_size "$OUTFILE_BASE".img -h) to compress."
     
-    BEST_COMPRESSION=off
-    #BEST_COMPRESSION_SETTING=
-    
     case $(file_ext "$OUTFILE") in
         img)
             echo Not compressing .img file ...
@@ -1156,20 +1164,11 @@ media_backup(){
             ;;
         
         xz)
-            if [[ $BEST_COMPRESSION = on ]]; then
-                #BEST_COMPRESSION_SETTING="-e"
-                COMPRESSION_LEVEL="-e"
-            fi
-            #run_command "sudo xz -z -T0 -v $BEST_COMPRESSION_SETTING -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
             run_command "sudo xz -z -T0 -v -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
             ES=$? 
             ;;
         
         gz)
-            if [[ $BEST_COMPRESSION = on ]]; then
-                #BEST_COMPRESSION_SETTING="--best"
-                COMPRESSION_LEVEL="--best"
-            fi
             if [[ ! -z $(which pv) ]]; then
                 #run_command "pv '$OUTFILE_BASE.img' -p | pigz $BEST_COMPRESSION_SETTING -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
                 run_command "pv '$OUTFILE_BASE.img' -p | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
@@ -1184,9 +1183,6 @@ media_backup(){
             ;;
         
         zst)
-            if [[ $COMPRESSION_LEVEL -gt 19 ]]; then
-                COMPRESSION_LEVEL="-ultra -$COMPRESSION_LEVEL"
-            fi
             run_command "zstd -T0 -$COMPRESSION_LEVEL --rm '$OUTFILE_BASE.img'" $LINENO
             ES=$? 
             ;;
@@ -1218,6 +1214,9 @@ media_backup(){
     
     do_beep_up
     ui_msg BACKUP "~ Backup complete. \n'$(media_name $INDEV)' backed up to \n'$OUTFILE' \n$(media_size $INDEV -h) reduced to $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4)." white "" log
+
+    # temp log entry for timing
+   # ui_log  timing, $(file_ext "$OUTFILE")-$COMPRESSION_LEVEL, $(file_size "$OUTFILE" -h), $(( $TIME4-$TIME1 ))
 }
 
 
@@ -1324,7 +1323,8 @@ media_backup_check_outfile(){
     fi
 
     # insert .img if missing
-    if [[ $(echo "$OUTFILE" | grep img) = "" ]] && [[ $(echo "$OUTFILE" | grep iso) = "" ]]; then
+#    if [[ $(echo "$OUTFILE" | grep ".img") = "" ]] && [[ $(echo "$OUTFILE" | grep ".iso") = "" ]]; then
+    if [[ $OUTFILE != *".img"* ]] && [[ $OUTFILE != *".iso"* ]]   ; then
         echo "Inserting .img"
         OUTFILE=$(file_base "$OUTFILE").img.$(file_ext "$OUTFILE")
         echo "OUT-FILE='$OUTFILE'" 
@@ -1333,7 +1333,7 @@ media_backup_check_outfile(){
     # quit if unsupported extension
     FILE_EXT=$(file_ext "$OUTFILE")
     case $FILE_EXT in 
-        img | zip | iso | "" )              ;;
+        img | zip | iso | "" )             ;;
         xz)     pisafe_install_tool xz     ;;
         gz)     pisafe_install_tool pigz   ;;
         zst)    pisafe_install_tool zstd   ;;
@@ -2410,7 +2410,7 @@ menu_cli(){
     INTERFACE="cli"
     case $1 in
         
-        backup)             media_backup "$2" "$3" $4  ;;
+        backup)             media_backup "$2" "$3" $4 $5 ;;
         
         restore)            media_restore "$2" "$3" $4  ;;
         
@@ -2847,4 +2847,4 @@ if [[ $CHECK_FOR_UPDATES_ON_STARTUP != off ]] && ! ( [[ $1 = backup ]] && [[ $4 
     pisafe_update cli no 
 fi
 
-menu_cli $1 "$2" "$3" $4
+menu_cli $1 "$2" "$3" $4 $5
