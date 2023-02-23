@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.8"   # 2023/02/20
+SCRIPTVER="1.2.9"   # 2023/02/23
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -32,6 +32,7 @@ INFILE=
 OUTFILE=
 BACKTITLE="$PRODUCTNAME ver $SCRIPTVER   === $PRODUCTCOMMENT === "
 INTERFACE="cli"
+YESNO=-n
 
 
 WHITE='\033[1;37m'
@@ -123,36 +124,27 @@ notes_desktop_environment(){
 
 
 notes_performance(){
-    creating image from raspi-os image expanded on an 8GB SD card.  Size=837mb
+    Creating image from raspi-os image expanded on an 8GB SD card.  Size=837mb
     
-    SETTING             SIZE        TIME
+    SETTING             SIZE GB     SECONDS     mb removed/sec
+    img                 3.99        210             
     
-    img                 3.9gb       4:30   
+    zip 1               1.71        511             4.59
+    pigz 1              1.71        340             6.90
+    xz 1                1.38        783             3.43
+    zst 1               1.68        321             7.40
     
-    zip 1               1.37        8:10
-    pigz 1              1.37        6:40         
-    xz 1                1.02        13:15
-    zst 1               1.34        6:21
+    zip 5               1.62        651             3.74
+    pigz 5              1.62        361             6.75
+    xz 5                1.24        1588            1.78
+    zst 5               1.52        407             6.24
     
-    zip 5               1.28g       10:20
-    pigz 5              1.28g       6:52
-    xz 5                912m        28:41
-    zst 5               1.17g       8:53
-    
-    zip 9               1.26        23:15
-    pigz 9              1.26        10:12
-    xz 9                848         34:35
-    zst 9               1.13        10:15
-    
-    pigz --best -9      1.26g       10:07
-    pigz --best -11
-    xz  -e -9           848m        43:17           
-    zst 22              922         48:56
+    zip 9               1.61        1446            1.69
+    pigz 9              1.61        586             4.18
+    xz 8                1.2         1990            1.44
+    zst 9               1.42        527             4.92
     
 }
-
-
-
 
 
 run_command(){
@@ -702,10 +694,9 @@ get_elapsed_time() {
     local SECONDS=$(( $END-$BEG ))
     local MIN=$(( $SECONDS/60 ))
     local SEC=$(( $SECONDS%60 ))
-#    local MIN_DEC=$(( $SEC * 100 / 60 ))
+    echo $MIN min $SEC sec 
     
     #echo $(( $(( $END-$BEG ))/60)) min $(( $(( $END-$BEG ))%60 )) sec 
-    echo $MIN min $SEC sec 
     
     #minutes decimal
    # echo $(($END-$BEG)) seconds
@@ -751,6 +742,61 @@ get_ver_to_int() {
 	echo $val
     unset IFS
 }
+
+
+get_args(){
+    #sets the local variables of the calling function 
+    
+    local ARGS=$*
+    
+    for ARG in $ARGS; do
+#echo_debug "$LINENO testing arg '$ARG'"    
+        case $ARG in
+            -y|--yes)           YESNO=-y    ;;
+      #      -v|--verbose)       VERBOSE=-v  ;;
+            
+            -1)                  COMPRESSION_LEVEL=1    ;;
+            -2)                  COMPRESSION_LEVEL=2    ;;
+            -3)                  COMPRESSION_LEVEL=3    ;;
+            -4)                  COMPRESSION_LEVEL=4    ;;
+            -5)                  COMPRESSION_LEVEL=5    ;;
+            -6)                  COMPRESSION_LEVEL=6    ;;
+            -7)                  COMPRESSION_LEVEL=7    ;;
+            -8)                  COMPRESSION_LEVEL=8    ;;
+            -9)                  COMPRESSION_LEVEL=9    ;;            
+            
+            --updates=on)           CHECK_FOR_UPDATES_ON_STARTUP=on      ;;
+            --updates=off)          CHECK_FOR_UPDATES_ON_STARTUP=off     ;;
+            
+            --dependencies=on)      CHECK_DEPENDENCIES_ON_STARTUP=on;;
+            --dependencies=off)     CHECK_DEPENDENCIES_ON_STARTUP=off;;
+            
+            --sound=on)             SOUND=on   ;;
+            --sound=off)            SOUND=off  ;;
+            
+            --log=on)               LOG=on     ;;
+            --log=off)              LOG=off    ;;
+            
+         #   --hide_root=on)         HIDE_ROOT_DEVICE=yes    ;;
+         #   --hide_root=off)        HIDE_ROOT_DEVICE=no     ;;
+            
+            --shrink=on)            SHRINK_FS=on            ;;
+            --shrink=off)           SHRINK_FS=off           ;;
+            
+            --auto_expand=on)       AUTO_EXPAND_FS=on       ;;
+            --auto_expand=off)      AUTO_EXPAND_FS=off      ;;
+            
+            --skip_freespace=on)    SKIP_FREESPACE=on       ;;
+            --skip_freespace=off)   SKIP_FREESPACE=off      ;;
+            
+            --debug=on)             DEBUG_MODE=on           ;;
+            --debug=off)            DEBUG_MODE=off          ;;
+
+       #     *)                              ;;
+            
+        esac
+    done
+} 
 
 
 get_bytes(){
@@ -906,7 +952,7 @@ file_image_size() {
         zip)            SIZE_BYTES=$(zipinfo -t "$INFILE" 2> /dev/null | grep "%" | cut -d, -f2 | cut -d" " -f2  )  ;;
         xz)             SIZE_BYTES=$(xz -l -v "$INFILE" 2> /dev/null | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g')  ;;  
         gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g')  ;;
-      #  gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 )  ;;
+     #  gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 )  ;;
         zst)            SIZE_BYTES=$(zstd -v -l "$INFILE" 2> /dev/null | grep Decompressed | cut -d"(" -f2 | cut -d" " -f1) ;;
         *)              echo 0
                         return 1 ;;
@@ -1051,7 +1097,7 @@ media_backup(){
     INDEV=$1
     OUTFILE=$2
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
-    COMPRESSION_LEVEL=${4:-"$COMPRESSION_LEVEL"}   # optional compression level override 
+   # COMPRESSION_LEVEL=${4:-"$COMPRESSION_LEVEL"}   # optional compression level override 
   
   
     # preflight checklist.  Be sure INDEV and OUTFILE are good. 
@@ -1170,7 +1216,6 @@ media_backup(){
         
         gz)
             if [[ ! -z $(which pv) ]]; then
-                #run_command "pv '$OUTFILE_BASE.img' -p | pigz $BEST_COMPRESSION_SETTING -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
                 run_command "pv '$OUTFILE_BASE.img' -p | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
                 ES=$? 
                 rm -f "$OUTFILE_BASE".img
@@ -1216,7 +1261,7 @@ media_backup(){
     ui_msg BACKUP "~ Backup complete. \n'$(media_name $INDEV)' backed up to \n'$OUTFILE' \n$(media_size $INDEV -h) reduced to $(file_size "$OUTFILE" -h) in $(get_elapsed_time $TIME1 $TIME4)." white "" log
 
     # temp log entry for timing
-   # ui_log  timing, $(file_ext "$OUTFILE")-$COMPRESSION_LEVEL, $(file_size "$OUTFILE" -h), $(( $TIME4-$TIME1 ))
+    # ui_log  timing, $(file_ext "$OUTFILE")-$COMPRESSION_LEVEL, $(file_size "$OUTFILE" -h), $(( $TIME4-$TIME1 ))
 }
 
 
@@ -2410,7 +2455,7 @@ menu_cli(){
     INTERFACE="cli"
     case $1 in
         
-        backup)             media_backup "$2" "$3" $4 $5 ;;
+        backup)             media_backup "$2" "$3" $4 ;;
         
         restore)            media_restore "$2" "$3" $4  ;;
         
@@ -2475,8 +2520,12 @@ menu_get_outfile(){
         MSG="$MEDIA_OS \
         \n$ESTIMATES\n===== BACKUP FILENAME ===== \
         \nIf you don't include an extension '.img.$DEFAULT_EXTENSION' will be added \
-        \n\nSupported extensions are: .img .zip .xz .gz .zst\
-        \n.zip is the baseline \n.img is ~2x faster but twice the size (NOT compressed) \n.xz is ~25% smaller but takes 3x-4x longer \n.gz is ~25% faster \
+        \n\nSupported extensions are: .img .zip .xz .gz .zst \
+        \n.zip is the baseline \
+        \n.img is ~2x faster but twice the size (NOT compressed) \
+        \n.xz is ~25% smaller but takes 3x-4x longer \
+        \n.gz is ~25% faster \
+        \n.zst is most efficient.  It compresses the most per second. \
         \n\nRecommended to have NO SPACES in the name \
         \n\nEnter the image filename (eg: 2020-12-15-buster32)"
         NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP '$(media_name $INDEV)'" --inputbox "$MSG" $WT_HEIGHT_TALL $WT_WIDTH_WIDE "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
@@ -2831,6 +2880,11 @@ fi
 config_var_init_configfile
 config_var_get_settings
 
+
+# read any comand line overrides
+get_args  $*
+
+
 # check dependencies
 if [[ $CHECK_DEPENDENCIES_ON_STARTUP != off ]]; then
     # if 'install -y' then install tools silently
@@ -2847,4 +2901,5 @@ if [[ $CHECK_FOR_UPDATES_ON_STARTUP != off ]] && ! ( [[ $1 = backup ]] && [[ $4 
     pisafe_update cli no 
 fi
 
-menu_cli $1 "$2" "$3" $4 $5
+
+menu_cli $1 "$2" "$3" $YESNO  
