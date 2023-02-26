@@ -103,9 +103,11 @@ v1.2.4 Cleaned up more code.  Backup with -y bypasses check_for_updates.
 
 v1.2.5 Improved support for Manjaro, Arch, Suse and Fedora.
 
-v1.2.5 m (beta) Fixed issue with non-english languages.  Added support for zstd compression.  Made gz, xz and zst only install as needed.
+v1.2.5m Fixed issue with non-english languages.  Added support for zstd compression.  Made gz, xz and zst only install as needed.
 
-v.1.2.7 (beta) Fixed issue with pigz and xz.
+v1.2.7 Fixed issue with pigz and xz.
+
+v 1.2.9 Started to add command-line settings-override options (undocumented at this point).
  
    
  # Tips
