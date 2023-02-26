@@ -52,7 +52,7 @@ Beta version:
     bash pisafe install
     
     
-Old Stable (in case current has issues)
+Old Stable (in case current ver has issues)
 
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.2.6 -O pisafe
     bash pisafe install
