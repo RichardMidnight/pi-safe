@@ -30,7 +30,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
 
  - Create a library of your own pi images, then restore them to whatever media you want, whenever you want.  
  
- - Can be run from the command line or use the easy menu interface.
+ - Can be run from the command line or use the easy menu-driven interface.
 
  - Should work with most debian and arch distros, see below.   
 
