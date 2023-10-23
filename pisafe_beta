@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.10 b"   # 2023/15/14
+SCRIPTVER="1.2.10 c"   # 2023/10/23
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -1812,7 +1812,7 @@ media_list() {
     esac
     
     # the 254 is for a QTM virtual machine on Mac 
-    DEVICES=$(lsblk -I 8,179,254 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
+    DEVICES=$(lsblk -I 8,179,254,259 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
     ES=$?
     if (( $ES )); then
         return $ES
