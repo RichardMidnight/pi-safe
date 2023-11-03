@@ -54,7 +54,7 @@ Beta version:
     
 Old Stable (in case current ver has issues)
 
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.2.6 -O pisafe
+    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.2.9 -O pisafe
     bash pisafe install
  
  
