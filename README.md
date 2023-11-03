@@ -108,6 +108,8 @@ v1.2.5m Fixed issue with non-english languages.  Added support for zstd compress
 v1.2.7 Fixed issue with pigz and xz.
 
 v 1.2.9 Started to add command-line settings-override options (undocumented at this point).
+
+v 1.2.10 Adds support for Bookworm and NVME media
  
    
  # Tips
