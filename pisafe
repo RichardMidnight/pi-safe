@@ -2,9 +2,9 @@
 
 COPYRIGHT="By Richard Reed 2018 - 2022" 
 
-# This script basically 
-# 1- copies a media-device with 'dd'
-# 2- shrinks the last partition with 'pishrink'
+# This script 
+# 1- copies a media-device to an image file with 'dd'
+# 2- shrinks the last partition on the image with 'pishrink'
 # 3- compresses with 'zip' 
 
 # references
@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.9"   # 2023/02/23
+SCRIPTVER="1.2.10"   # 2023/11/3
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -1128,8 +1128,9 @@ media_backup(){
 	echo Reading $(get_bytes $BYTES_TO_READ -h)...
 
     if [[ ! -z $(which pv) ]]; then
-		run_command "sudo pv $INDEV -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
-       	ES=$?
+		#run_command "sudo pv $INDEV -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
+        run_command "sudo dd if=$INDEV bs=$BS count=$BLOCKS_TO_READ | pv -s $BYTES_TO_READ $DEVICE | sudo dd of='$OUTFILE_BASE.img' conv=fsync " $LINENO
+        ES=$?
     else
         ui_echo "No progress bar installed.  Please wait..."
         PROGRESS=
@@ -1201,11 +1202,12 @@ media_backup(){
         zip)
             # not using pv because it supresses the name of the file in the archive.
             # added sudo to the command so manjaro can write to a network folder.
-            local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
-            local DOTSIZE=$(( $FILESIZE_M / 50 ))m
-            echo -n "                    $OUTFILE_BASE.img"
-            echo " [........................|.........................] 100%"
-            run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
+            #local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
+            #local DOTSIZE=$(( $FILESIZE_M / 50 ))m
+            #echo -n "                    $OUTFILE_BASE.img"
+            #echo " [........................|.........................] 100%"
+            #run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
+            run_command "pv '$OUTFILE_BASE.img' | sudo zip -$COMPRESSION_LEVEL '$OUTFILE' - "
             ES=$?
             ;;
         
@@ -1826,7 +1828,7 @@ media_list() {
     esac
     
     # the 254 is for a QTM virtual machine on Mac 
-    DEVICES=$(lsblk -I 8,179,254 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
+    DEVICES=$(lsblk -I 8,179,254,259 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
     ES=$?
     if (( $ES )); then
         return $ES
