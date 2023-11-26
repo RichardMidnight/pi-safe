@@ -30,7 +30,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
   
     - or
   
-    - sudo mount.cifs //omv/shared shared -o guest
+    - sudo mount.cifs //omv.local/shared shared -o guest
 
  - Create a library of your own pi images, then restore them to whatever media you want, whenever you want.  
  
