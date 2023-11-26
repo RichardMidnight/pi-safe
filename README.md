@@ -20,13 +20,17 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
  
     CAUTION: Reboot first, close everything and don't use the system while it is doing step 1 of backing up!  You must send your backup image to a different drive.
 
- - Supports storing the image files on a mounted network device (ie an SMB server). 
+ - Supports storing the image files on a mounted network device (ie an SMB server). Some help...
    
    -  sudo apt install cifs-utils 
    
     - mkdir shared
    
     - sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=1.0
+  
+    - or
+  
+    - sudo mount.cifs //omv/shared shared -o guest
 
  - Create a library of your own pi images, then restore them to whatever media you want, whenever you want.  
  
