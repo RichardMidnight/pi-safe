@@ -2,9 +2,9 @@
 
 COPYRIGHT="By Richard Reed 2018 - 2022" 
 
-# This script 
-# 1- copies a media-device to an image file with 'dd'
-# 2- shrinks the last partition on the image with 'pishrink'
+# This script basically 
+# 1- copies a media-device with 'dd'
+# 2- shrinks the last partition with 'pishrink'
 # 3- compresses with 'zip' 
 
 # references
@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.10"   # 2023/11/3
+SCRIPTVER="1.2.11"   # 2023/12/07
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -25,7 +25,7 @@ CONFIG="/home/$USER/.config/pisafe/pisafe.conf"
 LOG_FILE="/home/$USER/.config/pisafe/pisafe.log"
 LOG=on
 REQUIRED_TOOLS="dd pishrink.sh zip unzip pv bc whiptail file nano"
-OPTIONAL_TOOLS="pigz xz zstd"
+OPTIONAL_TOOLS="xz pigz zstd"
 INDEV=
 OUTDEV=
 INFILE=
@@ -45,33 +45,6 @@ echo_white()    { (echo -e "${WHITE}$*${NC}") }
 echo_red()      { (echo -e "${RED}$*${NC}") }
 echo_blue()     { (echo -e "${LTBLUE}$*${NC}") }  
 echo_green()    { (echo -e "${GREEN}$*${NC}") }
-
-
-
-#exit status map   1-255
-#  ($?) Expands to the exit status of the most recently executed foreground pipeline.
-
-#backup  start at 10
-# 10 no media exists
-# 11 indev is blank
-# 12 indev doesn't exist
-
-# 13 outfile is blank
-# 14 outfile path does not exist
-# 15 unsupported extension
-# 16 outfile exists
-# 17 outfile_base.img exists
-# 18 outfile_base.img.ext exists
-# 19 Media is bigger than freespace
-
-# 20 error in dd
-# 21 error in pishrink
-# 22 error in compression
-
-#restore  start at  
-# 20
-
-# 
 
 
 notes_desktop_environment(){
@@ -1112,7 +1085,7 @@ media_backup(){
 
  
     #################################################
-    # Step 1 reads the media to a file
+    # Step 1 read the media to a file
     #################################################
     OUTFILE_BASE=$(file_base "$OUTFILE")
 
@@ -1129,7 +1102,10 @@ media_backup(){
 
     if [[ ! -z $(which pv) ]]; then
 		#run_command "sudo pv $INDEV -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
-        run_command "sudo dd if=$INDEV bs=$BS count=$BLOCKS_TO_READ | pv -s $BYTES_TO_READ $DEVICE | sudo dd of='$OUTFILE_BASE.img' conv=fsync " $LINENO
+		# the 
+        #run_command "sudo dd if=$INDEV | pv -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " $LINENO
+       	run_command "sudo dd if=$INDEV bs=$BS count=$BLOCKS_TO_READ | pv -s $BYTES_TO_READ $DEVICE | sudo dd of='$OUTFILE_BASE.img' conv=fsync " $LINENO
+
         ES=$?
     else
         ui_echo "No progress bar installed.  Please wait..."
@@ -1152,7 +1128,7 @@ media_backup(){
     echo
    
     #################################################
-    # Step 2 shrinks the fs
+    # Step 2 shrink the fs
     #################################################
     ui_echo "~ Step 2 of 3 - Shrinking filesystem ..." white log
     if [[ ! $(file_ext "$OUTFILE") = iso ]]; then 
@@ -1178,7 +1154,7 @@ media_backup(){
         echo_white Step 2 took $(get_elapsed_time $TIME2 $TIME3)
     
     #################################################
-    # Step 3 compresses the file
+    # Step 3 compresse the file
     #################################################   
     echo
     ui_echo "~ Step 3 of 3 - Compressing '$OUTFILE_BASE.img' to '$OUTFILE' ... " white log
@@ -1202,36 +1178,42 @@ media_backup(){
         zip)
             # not using pv because it supresses the name of the file in the archive.
             # added sudo to the command so manjaro can write to a network folder.
-            #local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
-            #local DOTSIZE=$(( $FILESIZE_M / 50 ))m
-            #echo -n "                    $OUTFILE_BASE.img"
-            #echo " [........................|.........................] 100%"
-            #run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
-            run_command "pv '$OUTFILE_BASE.img' | sudo zip -$COMPRESSION_LEVEL '$OUTFILE' - "
+            #  local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
+            #  local DOTSIZE=$(( $FILESIZE_M / 50 ))m
+            #  echo -n "                    $OUTFILE_BASE.img"
+            #  echo " [........................|.........................] 100%"
+            #  run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" $LINENO
+            run_command "pv '$OUTFILE_BASE.img' | zip -$COMPRESSION_LEVEL '$OUTFILE' - "
             ES=$?
+            if (( ! $ES )); then rm -f "$OUTFILE_BASE".img; fi
             ;;
         
         xz)
-            run_command "sudo xz -z -T0 -v -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
+            #run_command "sudo xz -z -T0 -v -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
+            run_command "pv '$OUTFILE_BASE.img' | xz -z -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
             ES=$? 
+            if (( ! $ES )); then rm -f "$OUTFILE_BASE".img; fi
             ;;
         
         gz)
             if [[ ! -z $(which pv) ]]; then
-                run_command "pv '$OUTFILE_BASE.img' -p | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
+                run_command "pv '$OUTFILE_BASE.img' | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" $LINENO
                 ES=$? 
-                rm -f "$OUTFILE_BASE".img
+                if (( ! $ES )); then rm -f "$OUTFILE_BASE".img; fi
             else
                 ui_echo "No progress bar installed.  Please wait..."
                 sudo chmod 777 '$OUTFILE_BASE.img'  
                 run_command "pigz -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" $LINENO
                 ES=$? 
+                if (( ! $ES )); then rm -f "$OUTFILE_BASE".img; fi
             fi    
             ;;
         
         zst)
             run_command "zstd -T0 -$COMPRESSION_LEVEL --rm '$OUTFILE_BASE.img'" $LINENO
+            #run_command "pv '$OUTFILE_BASE.img' | zstd -T0 -$COMPRESSION_LEVEL -c -q -o '$OUTFILE' " $LINENO
             ES=$? 
+            #if (( ! $ES )); then rm -f "$OUTFILE_BASE".img; fi
             ;;
         
         *)
@@ -1340,8 +1322,6 @@ A good 8gb card with RaspiOS in a Raspberry Pi 4 takes about 10 minutes"
     
     
     # warning if unused space is > something or some percent.
-    
-    
 }
 
 
@@ -1616,23 +1596,24 @@ media_restore(){
     ui_echo "~ Erasing MBR, signature, and partition table from '$OUTDEV'..." 
 	run_command "sudo dd if=/dev/zero of=$OUTDEV bs=512 count=2 > /dev/null"  $LINENO
     
+    RESTORE_BYTES=$(file_image_size "$INFILE")
+    
     case $INFILEEXT in
         img | iso)
             if [[ $INTERFACE = cli ]]; then
-                run_command "pv '$INFILE' -p | sudo dd of=$OUTDEV bs=4M conv=fsync"
+                run_command "pv '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync"
                 ES=$?
             else
                 ui_echo "~ Running: sudo pv -n '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (sudo pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
+                (pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 ES=$?
             fi
             ;;
         
         zip)
-            RESTORE_BYTES=$(file_image_size "$INFILE")
             if [[ $INTERFACE = cli ]]; then
-                run_command "unzip -p '$INFILE' | pv -p -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                run_command "unzip -p '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
                 ui_echo "~ Running: unzip -p '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
@@ -1644,11 +1625,12 @@ media_restore(){
         
         xz)
             if [[ $INTERFACE = cli ]]; then
-                run_command "pv '$INFILE' -p | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                #run_command "pv '$INFILE' -p | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                run_command "xz -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
-                ui_echo "~ Running: pv -n '$INFILE' | xz -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (pv -n "$INFILE" | xz -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
+                ui_echo "~ Running: xz -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                (xz -d -c "$INFILE"  | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 ES=$?
             fi
@@ -1656,11 +1638,12 @@ media_restore(){
 
         gz)
             if [[ $INTERFACE = cli ]]; then
-                run_command "pv '$INFILE' -p | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                #run_command "pv '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                run_command "pigz -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
-                ui_echo "~ Running: pv -n '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (pv -n "$INFILE" | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync) 2>&1 | \
+                ui_echo "~ Running: pigz -p -k -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                (pigz -d -k -c "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 ES=$?
             fi    
@@ -1668,12 +1651,13 @@ media_restore(){
             
         zst)
             if [[ $INTERFACE = cli ]]; then
-                run_command "pv '$INFILE' -p | zstd -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+               # run_command "pv '$INFILE' -p | zstd -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
+                run_command "zstd -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
               #  run_command "zstd -c -d $INFILE | sudo dd of=$OUTDEV bs=4M conv=fsync" $LINENO
                 ES=$?
             else
-                ui_echo "~ Running: pv -n '$INFILE' | zstd -d -c | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (pv -n "$INFILE" | zstd -d -c | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
+                ui_echo "~ Running: zstd -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                (zstd -d -c "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name $OUTDEV)' ..." $WT_HEIGHT $WT_WIDTH 0
                 ES=$?
             fi
