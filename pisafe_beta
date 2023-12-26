@@ -15,7 +15,7 @@ COPYRIGHT="By Richard Reed 2018 - 2022"
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.12b"   # 2023/12/12
+SCRIPTVER="1.2.12c"   # 2023/12/24
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -46,6 +46,9 @@ echo_red()      { (echo -e "${RED}$*${NC}") }
 echo_blue()     { (echo -e "${LTBLUE}$*${NC}") }  
 echo_green()    { (echo -e "${GREEN}$*${NC}") }
 
+echo_debug() { 
+    echo_blue DEBUG:$* > /dev/stderr 
+    }
 
 notes_desktop_environment(){
     # this is just a reference of tested OSs from 2021
@@ -894,6 +897,7 @@ file_fs_freespace() {
     local FORMAT=${2:-"-B1"}   # -B1 for bytes    -h for humanreadable
     local FREESPACE
     
+    
     if [[ -d $FILENAME ]]; then
         #FREESPACE=$(df "$FILENAME" -B1 --output=avail | grep -v Avail)
         FREESPACE=$(df "$FILENAME" -B1 --output=avail | tr -cd '[[:digit:]]' )
@@ -914,6 +918,7 @@ file_fs_freespace() {
     
     echo $FREESPACE
 }   
+
 
 
 file_image_size() {
@@ -1061,6 +1066,39 @@ media_size() {
 }
 
 
+#media_freespace(){
+
+    
+#}
+
+
+media_fs_available_space() {
+    local PARTITION=$1
+    local AVAILABLESPACE
+    local WAS_MOUNTED
+    
+    WAS_MOUNTED=$(media_ismounted $PARTITION)
+
+    if [[ ! $WAS_MOUNTED ]]; then
+        media_mount $PARTITION
+        sleep 1
+    fi
+   
+
+    AVAILABLESPACE=$(lsblk -nbo fsavail $PARTITION)
+    if (( $? )); then
+        AVAILABLESPACE=0
+    fi
+   
+    if [[ ! $WAS_MOUNTED ]]; then
+        media_unmount $PARTITION
+        sleep 1
+    fi
+   
+    echo $AVAILABLESPACE
+}   
+
+
 media_backup(){
     #echo 1 - sudo dd bs=4M if=/dev/$INDEV of=$OUTFILE.img status=progress conv=fsync 
     #echo 2 - sudo pishrink.sh $OUTFILE.img
@@ -1071,7 +1109,7 @@ media_backup(){
     OUTFILE=$2
     local SILENT=${3:-"-n"}   # this lets us bypass some of the safety prompts
    # COMPRESSION_LEVEL=${4:-"$COMPRESSION_LEVEL"}   # optional compression level override 
-  
+
   
     # preflight checklist.  Be sure INDEV and OUTFILE are good. 
     ui_echo "$PRODUCTNAME $SCRIPTVER Backup... " white
@@ -1080,6 +1118,7 @@ media_backup(){
     if (( $ES )); then
         return $ES
     fi
+
     
     ui_echo "~ $PRODUCTNAME $SCRIPTVER Backup '$INDEV' to '$OUTFILE'" white
 
@@ -1254,11 +1293,13 @@ media_backup_bytes_to_read(){
     
     BYTES_TO_READ=$(media_size $INDEV)
 
-	if [[ $SKIP_FREESPACE = on ]]; then
+	if [[ $SKIP_FREESPACE = on ]]; then   
 		START_OF_FREESPACE=$(sudo parted -ms "$INDEV" unit B print free)
 		ES=$?
-		if (( $ES )); then
-			ui_msg_warning $LINENO "parted failed with es $ES"
+		if (( $ES )); then  
+echo_debug $LINENO "error: parted error code $ES"         
+        # dont know why but ui_msg_wrning locks up
+		#	ui_msg_warning $LINENO "parted failed with es $ES"
 			#exit 1
 		fi
 		START_OF_FREESPACE=$(tail -1 <<< "$START_OF_FREESPACE" | grep free | cut -d ':' -f 2 | tr -d 'B')
@@ -1381,9 +1422,11 @@ media_backup_check_outfile(){
         ui_msg_error $LINENO "File '$(file_base $OUTFILE).img' already exists"
         return 17 
     fi 
-    
+
+# coment 
+#echo_debug  commenting out parted_output    
     # Quit if media is bigger than freespace  
-    PARTED_OUTPUT=$(sudo parted $INDEV unit B print free )
+ #   PARTED_OUTPUT=$(sudo parted $INDEV -s unit B print free )
 
     MEDIA_SIZE=$(media_backup_bytes_to_read)
     echo "$(get_bytes $MEDIA_SIZE -h) to read from '$INDEV'"
@@ -1429,20 +1472,21 @@ media_backup_checklist(){
     fi     
         
     #get and check outfile
-    if [[ -z $OUTFILE ]]; then
+    if [[ -z $OUTFILE ]]; then 
         menu_get_outfile   # this includes media_backup_check_outfile
         ES=$?
         if (( $ES )); then
             ui_msg_error $LINENO "Outfile '$OUTFILE' can't be blank" 
             return $ES
         fi
-    else
+    else   
         media_backup_check_outfile 
         ES=$?  
         if (( $ES )); then
             return $ES
         fi      
     fi   
+       
     
     #confirm to continue
     if [[ $SILENT != -y ]]; then
@@ -1488,13 +1532,17 @@ Switch to terminal and create image-file now?"
         /dev/mmcblk*|/dev/nvme*)    MEDIA_LAST_PARTITION_NAME=$MEDIA"p"$MEDIA_LAST_PARTITION_NUMBER ;;
     esac
 
-    PARTED_OUTPUT=$(sudo parted $MEDIA unit B print free )
+    # calc freespace
+    PARTED_OUTPUT=$(sudo parted -s $MEDIA unit B print free)
+    
 
     MEDIA_FREESPACE_AT_END=$(echo "$PARTED_OUTPUT" | tail -1 | grep Free | sed 's/[ ]\+/ /g' | cut -d " " -f 4 | tr -d 'B' )
     if [[ -z $MEDIA_FREESPACE_AT_END ]]; then
         MEDIA_FREESPACE_AT_END=0
     fi
+    
 
+    # 
     if [[ -z $(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | grep primary) ]]; then
         MEDIA_LAST_PARTITION_TYPE=logical
     else
@@ -1517,19 +1565,20 @@ Switch to terminal and create image-file now?"
         MSG=$MSG"   Warning: Partitions=$MEDIA_PARTITION_COUNT.  This looks like a complex \n"
         MSG=$MSG"   partition structure and may not shrink. Pisafe will still work.\n"
     fi
-
+    
   
-    # 3 - ext and not logical?
+    # 3 - get shrink bytes?
     SHRINK_BYTES=0
     UNCOMPRESSED_BYTES=0
     case $MEDIA_LAST_PARTITION_FS in
     
         ext4|ext3|ext2)
             if [[ $MEDIA_PARTITION_TABLE = gpt ]] || ( [[ $MEDIA_PARTITION_TABLE = msdos ]] && [[ $MEDIA_LAST_PARTITION_TYPE = primary  ]] ) ; then
-                SHRINK_BYTES=$(sudo lsblk $MEDIA -lpbo name,fsavail | grep $MEDIA_LAST_PARTITION_NAME | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
+                SHRINK_BYTES="$(media_fs_available_space "$MEDIA$MEDIA_LAST_PARTITION_NUMBER")"
             else
                 MSG=$MSG"   Warning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This partition-type will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
             fi
+              
             ;;
 
         *)
@@ -1552,6 +1601,7 @@ Switch to terminal and create image-file now?"
 
     # 5 Compression
     MSG=$MSG"Compress about 2:1                 => $(get_bytes $((UNCOMPRESSED_BYTES / 2 )) -h) \n"
+
 
     echo "$MSG"
 }
@@ -1812,7 +1862,7 @@ media_list() {
     esac
     
     # the 254 is for a QTM virtual machine on Mac 
-    DEVICES=$(lsblk -I 8,179,254,259 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v "$ROOT_FILTER")
+    DEVICES=$(lsblk -I 8,179,254,259 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v $ROOT_FILTER)
     ES=$?
     if (( $ES )); then
         return $ES
@@ -1822,18 +1872,37 @@ media_list() {
 }
 
 
-media_mount(){
-    MEDIA=$1
-    PARTED_OUTPUT=$(sudo parted -ms $MEDIA print)  # no freespace
-    MEDIA_PARTITIONS=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1)
+media_ismounted(){
+    local PARTITION=$1
     
-    for PARTITION in $MEDIA_PARTITIONS; do
-        udisksctl mount -b $MEDIA$PARTITION
-        if (( $? )); then
-            echo error mounting $MEDIA$PARTITION
-        fi
-    done
+    if [[ -z $(sudo df | grep ^$PARTITION) ]]; then
+        # not mounted
+        #echo 1
+        return 
+    else
+        # it is mounted
+        echo 1
+        return 1
+    fi
 }
+    
+    
+media_mount(){
+    PARTITION=$1
+    
+    udisksctl mount -b $PARTITION > /dev/null
+    if (( $? )) ; then return 1; fi
+
+}
+
+
+media_unmount(){
+    local PARTITION=$1
+    
+    udisksctl unmount -b $PARTITION > /dev/null
+    if (( $? )) ; then return 1; fi
+          
+}     
 
 
 media_power_off(){
@@ -1896,6 +1965,7 @@ ui_log(){
 ui_msg() {
     #general message function.  Supports CLI whiptail and logging.
     # usage ui_msg INSTALL "$MSG" white OK log
+  
     TITLE="$1"
     MSG="${2:-no message}"
     COLOR="${3:-grey}"
@@ -1903,14 +1973,16 @@ ui_msg() {
     OK_BUTTON="${4:-OK}"
     local LOGIT="${5:-no}"   # or log
     
-    if [[ $LOGIT = log ]]; then
+    if [[ $LOGIT = log ]]; then   
         ui_log "$MSG"
     fi    
     
-    if [[ $INTERFACE = cli ]]; then
+    if [[ $INTERFACE = cli ]]; then   
         ui_echo "$PRODUCTNAME $TITLE: $MSG" $COLOR nolog 
     else
+#echo_debug $LINENO starting whipail $MSG
         whiptail --backtitle "$BACKTITLE" --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" $WT_HEIGHT_TALL  $WT_WIDTH_WIDE
+#echo_debug $LINENO done whipail
     fi
 }
 
@@ -1925,14 +1997,15 @@ ui_msg_error() {
 }
 
 
-ui_msg_warning(){
+ui_msg_warning() {
     # usage:  ui_msg_warning $LINENO "message"
+      
     LINE=$1
     shift
     do_beep
     do_beep
     MSG="$@"
-    ui_msg "WARNING" "~ $MSG" red "" nolog
+    ui_msg "WARNING" "~ Warning at line $LINE. $MSG" red "" nolog
 }
 
 
@@ -2499,6 +2572,7 @@ menu_get_outfile(){
            
   #  echo "Calculating backup estimates..."
     ESTIMATES=$(media_backup_estimate $INDEV)         
+       
            
      while true; do   
     
@@ -2536,6 +2610,7 @@ menu_get_outfile(){
             #return $ES
             break  # break out of the while loop
         fi
+      
     done
         
     # add .img.zip if no extension
