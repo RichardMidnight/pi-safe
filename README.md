@@ -66,9 +66,9 @@ Old Stable (in case current ver has issues)
   
    1) Install Raspberry PI OS and PiSafe on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This is your "Master" SD-card.  Set this aside.
    
-   2) Install Raspberry PI OS or whatever OS you want on the "Source" SD-card.  Use as small of an SD-card as you can because the entire card is read before it is shrunk and compressed.  I have been using Sandisk Industrial 8GB cards.  Make changes, install other software, change the desktop, whatever you want.
+   2) Install Raspberry PI OS or whatever OS you want on the "Project" SD-card.  Use as small of an SD-card as you can because the entire card is read before it is shrunk and compressed.  I have been using Sandisk Industrial 8GB cards.  Make changes, install other software, change the desktop, whatever you want.
 
-   3) To make an image of the "Source" (8GB) card that you can restore anytime in the future do the following...
+   3) To make an image of the "Project" (8GB) card that you can restore anytime in the future do the following...
   
   
   
@@ -76,7 +76,7 @@ Old Stable (in case current ver has issues)
    
    1) Boot your Pi with your "Master" SD-card as above.
    
-   2) Put your "Source" SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
+   2) Put your "Project" SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
    
    3) Startup pisafe from the menu.  Or in a terminal, type in 'pisafe'
         
