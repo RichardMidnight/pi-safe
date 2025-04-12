@@ -8,7 +8,7 @@ Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/f
 
  - Works entirely on a Raspberry Pi (or other linux).  No Windows or Mac needed. 
  
- - Creates a compressed image-file that will resize to fill the new media to which it is restored.
+ - Creates a shrunk, compressed image-file that will resize to fill the new media to which it is restored.
  
  - Supports .img .zip .xz .gz and .zst file formats.
 
