@@ -108,6 +108,23 @@ Standard compression levels are 1 through 9. A higher number will compress the f
 - **Default:** `zip 1` (industry-standard balance)
 ---
 
+### Overlay FS (Raspberry Pi Desktop x86 & Overlay Mode)
+
+PiSafe’s shrink/expand features are designed for a normal writable ext* root filesystem.  
+Systems that use an **overlay** root (e.g., Raspberry Pi Desktop for PC/Mac running as a live/persistent image, or Raspberry Pi OS with “Overlay FS” enabled in `raspi-config`) don’t work well with shrink/auto-expand and may produce incomplete or read-only restores.
+
+**Workarounds:**
+- Disable Overlay FS in `sudo raspi-config` and reboot before running PiSafe  
+- Or boot another Linux system and back up the target disk “cold” (not the live root)  
+- If you must stay on overlay, run PiSafe without shrink/auto-expand (raw image)  
+- Consider a file-level rsync backup as an alternative
+
+**Check if overlay is active:**
+```bash
+mount | grep -w overlay
+```
+---
+
 ## Example: mounting an SMB network share
 
 ```bash
@@ -121,7 +138,6 @@ sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=3.0
 sudo mount.cifs //omv.local/shared shared -o guest,vers=1.0
 ```
 
----
 
 ## References
 Thanks to the Raspberry Pi Foundation for instructions on reading/writing image files.  
