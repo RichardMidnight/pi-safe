@@ -1,17 +1,26 @@
-# PiSafe — Raspberry Pi imaging app
+# PiSafe – Raspberry Pi & Linux Imaging Utility
 
-Create and restore **compressed, shrink-to-fit images** of SD cards, USB sticks, SSDs, and NVMe drives **directly on your Raspberry Pi** — no Windows or Mac required.
+**Backup and restore Raspberry Pi systems — or almost any Linux install — quickly and easily.**
+PiSafe lets you create compressed image files from SD cards, USB drives, or SSDs, and restore them whenever you need. Great for creating restore points. 
+
+- 🐧 Designed for Raspberry Pi, **works with most Debian, Ubuntu, Arch, and other Linux distros**
+- 💻 Runs entirely on Linux — no Windows or macOS required
+- 🔄 Produces images compatible with Raspberry Pi Imager and similar tools
+- 🎛 Simple menu interface or command-line mode for automation
+
+---
 
 ## Features
 - **Backup → image** and **Restore → media** with a simple menu or CLI.
-- **Shrinks ext* filesystems** (ext4, ext3, ext2) on backup and **auto-expands on first boot** (when supported) so images restore to different-sized media.
+- **Shrinks ext* filesystems** (ext4, ext3, ext2) on backup and **auto-expands on first boot** (when supported) so images restore to different-sized media. 
 - **Compression:** zip, xz, gz, zst (installs tools on demand).
 - **Formats supported:** `.img`, `.zip`, `.xz`, `.gz`, `.zst`.
 - **USB & network storage:** save to external drives or mounted shares (SMB/NFS).
 - Works with most **Debian** and **Arch Linux** distros (see below).
 - Images are compatible with tools like **Raspberry Pi Imager**.
 - Create a library of your own Pi images, then restore them to whatever media you want, whenever you want.
-- [Leepspvideo review on YouTube](https://www.youtube.com/watch?v=XP6ycUR9Ih0) — “Very Impressive,” “Makes a nice small image,” “Really good all-in-one solution”
+- Ideal for creating restore points during Raspberry Pi or Linux development projects.
+- [Leepspvideo review on YouTube](https://www.youtube.com/watch?v=XP6ycUR9Ih0) — “Very Impressive,” “Makes a nice small image,” “Really good all-in-one solution”.
 
 ---
 
