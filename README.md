@@ -1,6 +1,6 @@
 # PiSafe – Raspberry Pi & Linux Imaging Utility
 
-**Backup and restore Raspberry Pi systems — or almost any Linux system — quickly and easily.**
+**Backup and restore Raspberry Pi systems — or many Linux systems — quickly and easily.**
 PiSafe lets you create compressed image files of SD cards, USB drives, HDDs, SSDs or NVMes, and restore them whenever you need. Great for creating restore points. 
 
 - 🍓 Designed for Raspberry Pi, **works with mamy Linux distros**
