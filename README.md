@@ -21,7 +21,6 @@ PiSafe lets you create compressed image files from SD cards, USB drives, or SSDs
 - Create a library of your own Pi images, then restore them to whatever media you want, whenever you want.
 - Ideal for creating restore points during Raspberry Pi or Linux development projects.
 - [Leepspvideo review on YouTube](https://www.youtube.com/watch?v=XP6ycUR9Ih0) — “Very Impressive,” “Makes a nice small image,” “Really good all-in-one solution”.
-
 ---
 
 ## Install
