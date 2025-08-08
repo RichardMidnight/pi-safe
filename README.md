@@ -5,7 +5,7 @@ PiSafe lets you create compressed image files from SD cards, USB drives, HDDs, o
 
 - 🍓 Designed for Raspberry Pi, **works with most Debian, Ubuntu, Arch, and other Linux distros**
 - 🐧 Runs entirely on Linux — no Windows or macOS required
-- 🔄 Produces images compatible with Raspberry Pi Imager and similar tools
+- 💾 Produces images compatible with Raspberry Pi Imager and similar tools
 - 🎛 Simple menu interface or command-line mode for automation
 
 ---
