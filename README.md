@@ -126,6 +126,4 @@ sudo mount.cifs //omv.local/shared shared -o guest,vers=1.0
 ## References
 Thanks to the Raspberry Pi Foundation for instructions on reading/writing image files.  
 Thanks to [PiShrink](https://github.com/Drewsif/PiShrink) for the shrink engine.  
-Thanks to all who posted code snippets on the web.
-
-    
+Thanks to the open-source community for inspiration and code snippets.
