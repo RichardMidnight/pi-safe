@@ -1,45 +1,31 @@
-# PiSafe  -  Raspberry Pi imaging app
+# PiSafe — Raspberry Pi imaging app
 
-Backup or Restore Raspberry Pi media (SD-cards, USB sticks, SSD drive, ...) to/from compressed image-files right on your Pi!
+Create and restore **compressed, shrink‑to‑fit images** of SD cards, USB sticks, SSDs, and NVMe drives **directly on your Pi** (no Windows or Mac required).
 
- - Backup an SD card (or other media) to an image-file.
-
- - Restore an image-file to an SD card (or other media).
-
- - Works entirely on a Raspberry Pi (or other linux).  No Windows or Mac needed. 
- 
- - Creates a shrunk, compressed image-file that will resize to fill the new media to which it is restored.
- 
- - Supports .img .zip .xz .gz and .zst file formats.
-
- - Images are compatible with popular imaging software such as Raspberry PI Imager.
- 
- - Supports USB storage devices.
- 
- - Supports backing up the live boot media - but be careful, backing up media that is being written to can result in a corrupted backup.  You have to turn off "hide root device" in "settings", "options" to enable this. 
- 
-    CAUTION: Reboot first, close everything and don't use the system while it is doing step 1 of backing up!  You must send your backup image to a different drive.
-
- - Supports storing the image files on a mounted network device (ie an SMB server). Some help...
-   
-   -  sudo apt install cifs-utils 
-   
-    - mkdir shared
-   
-    - sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=1.0
-  
-    - or
-  
-    - sudo mount.cifs //omv.local/shared shared -o guest
-
- - Create a library of your own pi images, then restore them to whatever media you want, whenever you want.  
- 
- - Can be run from the command line or use the easy menu-driven interface.
-
- - Should work with most debian and arch distros, see below.   
-
+## Features
+- **Backup → image** and **Restore → media** with a simple menu or CLI.
+- **Shrinks ext* filesystems on backup** and **auto‑expands on first boot** (when supported), so images restore to different‑sized media.
+- **Compression:** zip, xz, gz, zst (installs tools on demand).
+- **Formats supported:** `.img`, `.zip`, `.xz`, `.gz`, `.zst`.
+- **USB & network storage:** save to external drives or mounted shares (SMB/NFS).
+- Works with most debian and arch linux distros, see below.
+ - Create a library of your own pi images, then restore them to whatever media you want, whenever you want. 
  - See Leepspvideo nice review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0  -- "Very Impressive", "Makes a nice small image", "Really good all-in-one solution"
-   
+
+
+> [!NOTE]
+> Images are compatible with tools like **Raspberry Pi Imager** and use the **PiShrink** engine under the hood.
+
+---
+> [!NOTE]
+> - Some notes on setting up a mounted network device (ie an SMB server).
+>   -  sudo apt install cifs-utils 
+>    - mkdir shared
+ >   - sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=1.0
+ >   - or
+ >   - sudo mount.cifs //omv.local/shared shared -o guest
+
+
 
 # Install
 
