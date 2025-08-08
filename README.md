@@ -1,76 +1,60 @@
 # PiSafe — Raspberry Pi imaging app
 
-Create and restore **compressed, shrink‑to‑fit images** of SD cards, USB sticks, SSDs, and NVMe drives **directly on your Pi** (no Windows or Mac required).
+Create and restore **compressed, shrink-to-fit images** of SD cards, USB sticks, SSDs, and NVMe drives **directly on your Raspberry Pi** — no Windows or Mac required.
 
 ## Features
 - **Backup → image** and **Restore → media** with a simple menu or CLI.
-- **Shrinks ext* filesystems on backup** and **auto‑expands on first boot** (when supported), so images restore to different‑sized media.
+- **Shrinks ext* filesystems** (ext4, ext3, ext2) on backup and **auto-expands on first boot** (when supported) so images restore to different-sized media.
 - **Compression:** zip, xz, gz, zst (installs tools on demand).
 - **Formats supported:** `.img`, `.zip`, `.xz`, `.gz`, `.zst`.
 - **USB & network storage:** save to external drives or mounted shares (SMB/NFS).
-- Works with most debian and arch linux distros, see below.
- - Create a library of your own pi images, then restore them to whatever media you want, whenever you want. 
- - See Leepspvideo nice review on youtube:  https://www.youtube.com/watch?v=XP6ycUR9Ih0  -- "Very Impressive", "Makes a nice small image", "Really good all-in-one solution"
+- Works with most **Debian** and **Arch Linux** distros (see below).
+- Images are compatible with tools like **Raspberry Pi Imager** and use the **PiShrink** engine under the hood.
 
+- Create a library of your own Pi images, then restore them to whatever media you want, whenever you want.
+- [Leepspvideo review on YouTube](https://www.youtube.com/watch?v=XP6ycUR9Ih0) — “Very Impressive,” “Makes a nice small image,” “Really good all-in-one solution”
 
-> [!NOTE]
-> Images are compatible with tools like **Raspberry Pi Imager** and use the **PiShrink** engine under the hood.
-
----
-> [!NOTE]
-> - Some notes on setting up a mounted network device (ie an SMB server).
->   -  sudo apt install cifs-utils 
->    - mkdir shared
- >   - sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=1.0
- >   - or
- >   - sudo mount.cifs //omv.local/shared shared -o guest
-
-
-
-# Install
-
+## Install
 Paste or type this into a terminal window:
-
     
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
     bash pisafe install
  
  
-Beta version:
+ Beta Version
 
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_beta -O pisafe
     bash pisafe install
     
     
-Old Stable (in case current ver has issues)
+Old Stable (in case current version has issues)
 
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.2.9 -O pisafe
     bash pisafe install
  
  
-# Simple Setup
+# Quick Start
   
-   1) Install Raspberry PI OS and PiSafe on an SD card that is large enough to hold some SD image-files.  32GB or 64GB will do.  This is your "Master" SD-card.  Set this aside.
-   
-   2) Install Raspberry PI OS or whatever OS you want on the "Project" SD-card.  Use as small of an SD-card as you can because the entire card is read before it is shrunk and compressed.  I have been using Sandisk Industrial 8GB cards.  Make changes, install other software, change the desktop, whatever you want.
+**1) Prepair your master SD-card**
 
-   3) To make an image of the "Project" (8GB) card that you can restore anytime in the future do the following...
-  
-  
-  
-# Usage - make an image file 
+Install Raspberry Pi OS and PiSafe on an SD card that is large enough to hold images (32GB or 64GB is recommended).  This is your "Master" card.
    
-   1) Boot your Pi with your "Master" SD-card as above.
+**2) Prepare your “Project” card**
+      
+Install Raspberry Pi OS (or another OS) on a smaller SD card (e.g., 8GB SanDisk Industrial). Customize it.
+
+**3) Create an image**
+
+To make an image of the "Project" (8GB) card:
+   
+   1) Boot your Pi with your "Master" SD-card.
    
    2) Put your "Project" SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
    
-   3) Startup pisafe from the menu.  Or in a terminal, type in 'pisafe'
+   3) Startup PiSafe from the menu.  Or in a terminal, type in 'pisafe'
         
-   4) Use the menu to select BACKUP, select your SD-card and give the image-file a name.
-   
-   5) Watch your image-file get created, shrunk and compressed automatically.
+   4) Select Backup, choose the Project card, name the image, and let PiSafe create, shrink, and compress it automatically.
     
- 
    
    
 # Release notes   
@@ -103,7 +87,7 @@ v 1.2.10 Adds support for Bookworm and NVME media
  
    
  # Tips
- PiSafe is optimized for Raspberry Pis running Raspios around the year 2020.  It will work with many other linux distributions and other hardware but some features may not be optimized or may not work at all depending on the configuration.  The following tips can help you optimize PiSafe for your configuration.
+ PiSafe is optimized for Raspberry Pis running Raspberry Pi OS around the year 2020.  It will work with many other linux distributions and other hardware but some features may not be optimized or may not work at all depending on the configuration.  The following tips can help you optimize PiSafe for your configuration.
  
   - Ignore Freespace at end of media
     - PiSafe will ignore freespace at the end of the media, speeding up the backup process and using less working space.  
@@ -127,6 +111,15 @@ v 1.2.10 Adds support for Bookworm and NVME media
     - fastest is "zst 1".
     - smallest is "xz 8" (or as high as memory allows).
     - PiSafe default is industry standard "zip 1".
+  
+ 
+>## Example: mounting an SMB network share
+>   -  sudo apt install cifs-utils 
+>    - mkdir shared
+ >   - sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=1.0
+ >   - or
+ >   - sudo mount.cifs //omv.local/shared shared -o guest
+
    
  # References
  
