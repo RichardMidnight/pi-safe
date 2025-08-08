@@ -9,7 +9,7 @@ Create and restore **compressed, shrink-to-fit images** of SD cards, USB sticks,
 - **Formats supported:** `.img`, `.zip`, `.xz`, `.gz`, `.zst`.
 - **USB & network storage:** save to external drives or mounted shares (SMB/NFS).
 - Works with most **Debian** and **Arch Linux** distros (see below).
-- Images are compatible with tools like **Raspberry Pi Imager** and use the **PiShrink** engine under the hood.
+- Images are compatible with tools like **Raspberry Pi Imager**.
 - Create a library of your own Pi images, then restore them to whatever media you want, whenever you want.
 - [Leepspvideo review on YouTube](https://www.youtube.com/watch?v=XP6ycUR9Ih0) — “Very Impressive,” “Makes a nice small image,” “Really good all-in-one solution”
 
@@ -39,7 +39,7 @@ bash pisafe install
 
 ## Quick Start
 
-**1) Prepare your Master SD card**  
+**1) Prepare your "Master" SD card**  
 Install Raspberry Pi OS and PiSafe on an SD card that is large enough to hold images (32GB or 64GB recommended). This is your "Master" card.
 
 **2) Prepare your “Project” card**  
@@ -48,10 +48,7 @@ Install Raspberry Pi OS (or another OS) on a smaller SD card (e.g., 8GB SanDisk 
 **3) Create an image**
 1. Boot your Pi with your "Master" SD card.  
 2. Put your "Project" SD card in a USB SD reader and insert it into a Pi USB port.  
-3. Start PiSafe from the menu or in a terminal by typing:
-   ```bash
-   pisafe
-   ```
+3. Start PiSafe from the menu or in a terminal by typing: pisafe
 4. Select **Backup**, choose the Project card, name the image, and let PiSafe create, shrink, and compress it automatically.
 
 ---
