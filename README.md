@@ -10,123 +10,116 @@ Create and restore **compressed, shrink-to-fit images** of SD cards, USB sticks,
 - **USB & network storage:** save to external drives or mounted shares (SMB/NFS).
 - Works with most **Debian** and **Arch Linux** distros (see below).
 - Images are compatible with tools like **Raspberry Pi Imager** and use the **PiShrink** engine under the hood.
-
 - Create a library of your own Pi images, then restore them to whatever media you want, whenever you want.
 - [Leepspvideo review on YouTube](https://www.youtube.com/watch?v=XP6ycUR9Ih0) — “Very Impressive,” “Makes a nice small image,” “Really good all-in-one solution”
 
+---
+
 ## Install
 Paste or type this into a terminal window:
-    
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
-    bash pisafe install
- 
- 
- Beta Version
 
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_beta -O pisafe
-    bash pisafe install
-    
-    
-Old Stable (in case current version has issues)
+```bash
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
+bash pisafe install
+```
 
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.2.9 -O pisafe
-    bash pisafe install
- 
- 
-# Quick Start
-  
-**1) Prepair your master SD-card**
+**Beta Version**
+```bash
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_beta -O pisafe
+bash pisafe install
+```
 
-Install Raspberry Pi OS and PiSafe on an SD card that is large enough to hold images (32GB or 64GB is recommended).  This is your "Master" card.
-   
-**2) Prepare your “Project” card**
-      
+**Old Stable** (in case current version has issues)
+```bash
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.2.9 -O pisafe
+bash pisafe install
+```
+
+---
+
+## Quick Start
+
+**1) Prepare your Master SD card**  
+Install Raspberry Pi OS and PiSafe on an SD card that is large enough to hold images (32GB or 64GB recommended). This is your "Master" card.
+
+**2) Prepare your “Project” card**  
 Install Raspberry Pi OS (or another OS) on a smaller SD card (e.g., 8GB SanDisk Industrial). Customize it.
 
 **3) Create an image**
+1. Boot your Pi with your "Master" SD card.  
+2. Put your "Project" SD card in a USB SD reader and insert it into a Pi USB port.  
+3. Start PiSafe from the menu or in a terminal by typing:
+   ```bash
+   pisafe
+   ```
+4. Select **Backup**, choose the Project card, name the image, and let PiSafe create, shrink, and compress it automatically.
 
-To make an image of the "Project" (8GB) card:
-   
-   1) Boot your Pi with your "Master" SD-card.
-   
-   2) Put your "Project" SD-card (8GB) in the USB SD reader and insert it in a Pi USB port.
-   
-   3) Startup PiSafe from the menu.  Or in a terminal, type in 'pisafe'
-        
-   4) Select Backup, choose the Project card, name the image, and let PiSafe create, shrink, and compress it automatically.
-    
-   
-   
-# Release notes   
+---
 
-Originally developed and tested on Raspberry pi 4 running Raspberry Pi OS Buster.
+## Release notes
 
-Also tested on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.20 for Rpi, Linux Mint, LMDE.
+Originally developed and tested on Raspberry Pi 4 running Raspberry Pi OS Buster.  
+Also tested on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.04 for Raspberry Pi, Linux Mint, LMDE.
 
-v1.0.5 Added support for other terminals: lxterminal, gnome-terminal, xfce-terminal, mate-terminal, konsole, xterm, uxterm, qterminal.
+- **v1.2.10** — Adds support for Bookworm and NVMe media  
+- **v1.2.9** — Started adding command-line settings override options (undocumented)  
+- **v1.2.7** — Fixed issue with pigz and xz  
+- **v1.2.5m** — Fixed non-English language issue, added zstd compression, gz/xz/zst only install as needed  
+- **v1.2.5** — Improved support for Manjaro, Arch, SUSE, and Fedora  
+- **v1.2.4** — Backup with `-y` bypasses update check  
+- **v1.2.3** — Fixed bug with available space on network shares  
+- **v1.2.0** — Added `ignore_freespace_at_end`, added erase (FAT32, exFAT, NTFS, ext4)  
+- **v1.1.0** — Added support for Manjaro and other Arch-based distros  
+- **v1.0.5** — Added support for more terminals and text editors
 
-V1.0.5 Added support for other text editors: leafpad, mousepad, gedit, kwrite, pluma, featherpad, xed, geany, kate, nano.
+---
 
-V1.1.0 Added support for Manjaro and probably other Arch-based distros.
+## Tips
 
-v1.2.0 Cleaned up the code a lot, added "ignore_freespace_at_end", added erase (fat32, exfat, ntfs, ext4).  
+PiSafe is optimized for Raspberry Pi OS around 2020. It will work with many other Linux distributions and hardware, but some features may not be optimized. These tips can help you get the best results.
 
-v1.2.3 Cleaned up more code. Fixed bug in available-space on network-shares which halted backup.
+### Ignore freespace at end of media
+- PiSafe will ignore freespace at the end of the media, speeding up backups and using less working space.  
+- To take advantage of this, resize partitions with `gparted` and leave unallocated space at the end of the media.  
+- Freespace not at the end of the media cannot be ignored.
 
-v1.2.4 Cleaned up more code.  Backup with -y bypasses check_for_updates.
+### Shrinking the filesystem on backup
+- Creates a smaller image file and allows restores to different-size media.
+- Requires the main ext4/ext3/ext2 partition to be the last on the media.
+- Standard Debian installs often place swap last; remove/move swap to allow shrinking.
+- Optionally, zero out deleted files with `bleachbit` before shrinking for better compression.
 
-v1.2.5 Improved support for Manjaro, Arch, Suse and Fedora.
+### Auto-expand filesystem on restore
+- If your distro supports `rc.local`, PiSafe will auto-expand on first boot.  
+- If not, you can resize manually using `gparted` from another boot device.
+- Auto-expand may not work on overlay filesystems — turn it off in Settings/Options if needed.
 
-v1.2.5m Fixed issue with non-english languages.  Added support for zstd compression.  Made gz, xz and zst only install as needed.
+### Data compression
+Compressing the image file with zip, xz, gz, or zst reduces the size of the image file to around 1/2.
+Standard compression levels are 1 through 9. A higher number will compress the file a little more but take a lot more time.
+- **Fastest:** `zst 1`  
+- **Smallest:** `xz 8` (or higher, limited by memory)  
+- **Default:** `zip 1` (industry-standard balance)
+---
 
-v1.2.7 Fixed issue with pigz and xz.
+## Example: mounting an SMB network share
 
-v 1.2.9 Started to add command-line settings-override options (undocumented at this point).
+```bash
+sudo apt install cifs-utils
+mkdir shared
+sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=3.0
+```
 
-v 1.2.10 Adds support for Bookworm and NVME media
- 
-   
- # Tips
- PiSafe is optimized for Raspberry Pis running Raspberry Pi OS around the year 2020.  It will work with many other linux distributions and other hardware but some features may not be optimized or may not work at all depending on the configuration.  The following tips can help you optimize PiSafe for your configuration.
- 
-  - Ignore Freespace at end of media
-    - PiSafe will ignore freespace at the end of the media, speeding up the backup process and using less working space.  
-    - If you have a small amount of data on a large media (eg using 10GB of a 500GB drive), you can resize your partitions (with gparted) and leave freespace (unallocated) at the end of the media which PiSafe will ignore.  Note, freespace not at the end of the media cannot be ignored.
- 
-  - Shrinking the filesystem on backup  
-    - Shrinking the filesystem is VERY VALUABLE because it creates a smaller image file, and allows you to restore the image to a different size media.
-    - PiSafe will shrink your filesystem if your main partition is ext4 (or ext3 or ext2) and is the last partition on the media.
-    - If your install does not default to this partitioning setup you should be able to custom partition the media during your OS installation and put the main ext4 partition at the end.  This is needed with standard debian installations including RPD and Linux Mint because they put a swap partition at then end of the media which blocks PiSafe from shrinking the filesystem.
-    - Alternatively if your main partition is the second to last one and the last one is a swap partition, you may be able to simply delete the swap partition.
-    - Alternatively you can zero-out your deleted files with bleachbit to optimize compression and then shrink your partitions with gparted.
-    
- - Auto-expand filesystem on restore   
-    - PiSafe will setup the image file to auto-expand to fill the new media on first boot after restoring if your distro supports rc.local.  
-    - If not, you can resize your partition manual by booting from another media and using gparted.
-    - Note: Auto-expand may not work on an overlay filesystem.  Recommend turning off auto-expand in Settings/Options.  
-   
- - Data compression
-    - Compressing the image file with zip, xz, gz, or zst reduces the size of the image file to around 1/2.  
-    - Standard compression levels are 1 through 9.  A higher number will compress the file a little more but take a lot more time.
-    - fastest is "zst 1".
-    - smallest is "xz 8" (or as high as memory allows).
-    - PiSafe default is industry standard "zip 1".
-  
- 
->## Example: mounting an SMB network share
->   -  sudo apt install cifs-utils 
->    - mkdir shared
- >   - sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=1.0
- >   - or
- >   - sudo mount.cifs //omv.local/shared shared -o guest
+**Legacy SMB1 example** (only if required — insecure):
+```bash
+sudo mount.cifs //omv.local/shared shared -o guest,vers=1.0
+```
 
-   
- # References
- 
-Thanks to the Raspberry Pi foundation for instructions on how to read and write an image file.
+---
 
-Thanks to https://github.com/Drewsif/PiShrink for the PiShrink engine.
-
-Thanks to all the people who posted code snipets on the web.
+## References
+Thanks to the Raspberry Pi Foundation for instructions on reading/writing image files.  
+Thanks to [PiShrink](https://github.com/Drewsif/PiShrink) for the shrink engine.  
+Thanks to all who posted code snippets on the web.
 
     
