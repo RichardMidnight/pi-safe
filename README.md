@@ -93,6 +93,7 @@ PiSafe is optimized for Raspberry Pi OS around 2020. It will work with many othe
 
 ### Data compression
 Compressing the image file with zip, xz, gz, or zst reduces the size of the image file to around 1/2.
+
 Standard compression levels are 1 through 9. A higher number will compress the file a little more but take a lot more time.
 - **Fastest:** `zst 1`  
 - **Smallest:** `xz 8` (or higher, limited by memory)  
