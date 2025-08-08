@@ -3,24 +3,24 @@
 **Backup and restore Raspberry Pi systems — or many Linux systems — quickly and easily.**
 PiSafe lets you create compressed image files of SD cards, USB drives, HDDs, SSDs or NVMes, and restore them whenever you need. Great for creating restore points. 
 
-- 🍓 Designed for Raspberry Pi, **works with many Linux distros**
-- 🐧 Runs entirely on Linux — no Windows or macOS required
-- 💾 Produces images compatible with Raspberry Pi Imager and similar tools
-- 🎛 Simple menu interface or command-line mode for automation
+- 🍓 Designed for Raspberry Pi — works with most Linux distros  
+- 🐧 Runs entirely on Linux — no Windows or macOS required  
+- 💾 Compatible with Raspberry Pi Imager and other tools  
+- 🎛 Simple menu interface or command-line automation  
+- 📦 Creates compressed images that auto-expand on restore
 
 ---
 
 ## Features
-- **Backup → image** and **Restore → media** with a simple menu or CLI.
-- **Shrinks ext* filesystems** (ext4, ext3, ext2) on backup and **auto-expands on first boot** (when supported) so images restore to different-sized media. 
-- **Compression:** zip, xz, gz, zst (installs tools on demand).
-- **Formats supported:** `.img`, `.zip`, `.xz`, `.gz`, `.zst`.
-- **USB & network storage:** save to external drives or mounted shares (SMB/NFS).
-- Works with most **Debian** and **Arch Linux** distros (see below).
-- Images are compatible with tools like **Raspberry Pi Imager**.
-- Create a library of your own Pi images, then restore them to whatever media you want, whenever you want.
-- Ideal for creating restore points during Raspberry Pi or Linux development projects.
-- [Leepspvideo review on YouTube](https://www.youtube.com/watch?v=XP6ycUR9Ih0) — “Very Impressive,” “Makes a nice small image,” “Really good all-in-one solution”.
+- **Backup → image** and **Restore → media** with menu or CLI options  
+- Shrinks ext* filesystems (ext4, ext3, ext2) on backup and auto-expands on first boot (when supported)  
+- Multiple compression options: zip, xz, gz, zst (installs tools as needed)  
+- Supports `.img`, `.zip`, `.xz`, `.gz`, `.zst` formats  
+- Works with USB drives, network storage (SMB/NFS), and live boot media (with caution)  
+- Compatible with Raspberry Pi Imager and similar imaging tools  
+- Build a library of system images for fast restores  
+- Ideal for creating restore points during development projects  
+- [Leepspvideo review](https://www.youtube.com/watch?v=XP6ycUR9Ih0): “Very Impressive,” “Makes a nice small image,” “Really good all-in-one solution”
 ---
 
 ## Install
