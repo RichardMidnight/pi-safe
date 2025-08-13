@@ -13,11 +13,10 @@ PiSafe lets you create compressed image files of SD cards, USB drives, HDDs, SSD
 
 ## Features
 - **Backup → image** and **Restore → media** with menu or CLI options  
-- Shrinks ext* filesystems (ext4, ext3, ext2) on backup and auto-expands on first boot (when supported)  
-- Multiple compression options: zip, xz, gz, zst (installs tools as needed)  
-- Supports `.img`, `.zip`, `.xz`, `.gz`, `.zst` formats  
+- Shrinks ext* filesystems (ext4, ext3, ext2) on backup and auto-expands on first boot (when supported)    
+- Supports `.img`, `.zip`, `.xz`, `.gz`, `.zst` compression formats  
 - Works with USB drives and network storage (SMB/NFS)  
-- Compatible with Raspberry Pi Imager and similar imaging tools  
+- Compatible with Raspberry Pi Imager and other imaging tools  
 - Build a library of system images for fast restores  
 - Ideal for creating restore points during development projects  
 - [Leepspvideo review](https://www.youtube.com/watch?v=XP6ycUR9Ih0): “Very Impressive,” “Makes a nice small image,” “Really good all-in-one solution”
