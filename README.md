@@ -47,10 +47,10 @@ bash pisafe install
 ## Quick Start
 
 **1) Prepare your "Master" SD card**  
-Install your preferred OS and PiSafe on an SD card that is large enough to hold images (32GB or 64GB recommended).
+Install Raspberry Pi OS (or other OS) and PiSafe on an SD card that is large enough to hold images (32GB or 64GB recommended).
 
 **2) Prepare your “Project” card**  
-Install your OS (e.g., Raspberry Pi OS, Debian, Ubuntu, Manjaro) on a smaller SD card (e.g., 8GB SanDisk Industrial). Customize it.
+Install your OS (e.g. Raspberry Pi OS, Debian, Ubuntu, Manjaro) on a smaller SD card (e.g., 8GB SanDisk Industrial). Customize it.
 
 **3) Create an image**
 1. Boot your Pi with your "Master" SD card.  
