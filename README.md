@@ -4,7 +4,7 @@
 PiSafe lets you create compressed image files of SD cards, USB drives, HDDs, SSDs or NVMes, and restore them whenever you need. Great for creating restore points. 
 
 - 🍓 Designed for Raspberry Pi — works with most Linux distros  
-- 🐧 Runs entirely on Linux — no Windows or macOS required  
+- 🐧 Runs entirely on Linux — no Windows or Mac required  
 - 💾 Compatible with Raspberry Pi Imager and other imaging tools  
 - 🎛 Simple menu interface or command-line automation  
 - 📦 Creates compressed images that auto-expand on restore
