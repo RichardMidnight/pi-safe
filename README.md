@@ -132,6 +132,12 @@ mkdir shared
 sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=3.0
 ```
 
+```bash
+sudo apt install cifs-utils
+mkdir shared
+sudo mount.cifs //omv.local/shared shared -o guest,vers=3.0,uid=pi,gid=pi,file_mode=0777,dir_mode=0777 0 0
+```
+
 **Legacy SMB1 example** (only if required — insecure):
 ```bash
 sudo mount.cifs //omv.local/shared shared -o guest,vers=1.0
