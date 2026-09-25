@@ -112,6 +112,44 @@ Blast-radius check: `ui_log` (file write) untouched; no caller captures/pipes th
 
 ---
 
+## Shellcheck safe-bucket cleanup (post-R1; user-approved 2026-09-25, pre-R2)
+
+**Status: APPLIED to working tree on `dev` — pending user functional testing and commit approval (no commit yet).**
+Trigger: user asked which remaining shellcheck findings could be fixed automatically and safely. Ran `shellcheck 0.10.0` (`-s bash`) on the current file (post R1 + `ui_echo` fix + version bump): **353 findings / 32 codes**. Classified each bucket against the campaign's SAFE/RISKY rules; the 5 provably-equivalent, mechanical buckets were approved by the user (recommended scope). **Committed as part of the approved round when approved (commit message TBC with user — options: dedicated `shellcheck: …` message, or fold into R2 if R2 prompt asks).**
+
+### Scope applied (count-asserted transform `/tmp/opencode/scfix_transform.py`; 74 lines, 74 ins / 74 del)
+
+| Bucket | Finding | Change | Count |
+|---|---|---|---|
+| SC2004 | redundant `$`/`${}` in arithmetic | `(( $ES ))`→`(( ES ))`, `$(( $A-$B ))`→`$((A-B))`, `FILES[$i]`→`FILES[i]`, `for ((i=$MAX))`→`for ((i=MAX))`, `${arraylength}`→`arraylength`; applied at each exact flagged span (55 findings / 49 lines); the inner `$(media_size …)` at L1100 intentionally untouched | 55 |
+| SC2236 | `! -z` in `[[ ]]` | `[[ ! -z X ]]`→`[[ -n X ]]` (bash-equivalent) | 17 |
+| SC2062 | unquoted constant `grep` pattern | `grep ^[1-9]:`→`grep '^[1-9]:'` (strictly safer; output identical) | 4 |
+| SC2124 | `"$@"` joined in assignment | `MSG="$@"`→`MSG="$*"` in `ui_msg_error` / `ui_msg_warning` (identical joining) | 2 |
+| SC2235 | test-only subshell | `( [[ ]] && [[ ]] )`→`{ [[ ]] && [[ ]]; }` at L1536 and L2896 (no assignments inside) | 2 |
+
+Total: 80 findings; all other codes untouched. Pre-snapshot: `/tmp/opencode/pisafe.prescfix`.
+
+### Verification (agent-safe only)
+
+* `bash -n pisafe` — PASS pre/post.
+* `bash pisafe -v` — `1.2.12.beta1`.
+* `shellcheck --format=gcc` before/after: **353 → 273 findings (−80, exactly the 5 buckets; the 5 target codes all → 0)**. Line-level `comm` diff of the two reports: only removed lines are the 80 bucket findings (plus 5 findings at L2366 reappearing at ±1-column shifted positions after `FILES[$i]`→`FILES[i]`, and 2 `SC2143` notes whose messages reworded from `[ -z .. ]` to `[ -n .. ]` — same finding, still 3). **Zero new findings; zero unrelated removals.**
+* Spot-test harness `/tmp/opencode/scfix_spot.sh` (stubs UI/bell helpers; extracts the real `get_bytes`, `get_elapsed_time`, `ui_msg_error/warning` from the file under test): **run identical on BEFORE (`pisafe.prescfix`) and AFTER** — 23 PASS; the single FAIL is a harness-expectation arithmetic error (`599999÷1024` truncates to `585kb`, identical in both runs = pre-existing). Covers: all bc `-h` arms (kb/mb/gb/tb), the de-`$`ed case arms L841–844 (`10kb -b`→10240 … `3tb -b`→3298534883328), passthroughs, the `ui_msg_warning` path (`abcdef -h`), `get_elapsed_time` 4 inputs, both `MSG` joins (multi-word + inner double-space preserved).
+* Full `git diff` read-through: all 74 line-pairs belong to the 5 buckets; no other change; no lines added/removed.
+
+### Deliberately NOT applied (logged; user decides per item)
+
+* **SC2086 (126) / SC2046 (37):** residue of the R1 leave-list — echo/printf flags, `for in $(lists)`, `grep $VAR`, `cd $DIR`, `printf $FILES`, `local ARGS=$*`, `get_args $*`, `media_format $2 $3 $4`, `sed` programs, `PARTITION=$DEVICE\1`, `ls`-loops (SC2045/SC2035). Quoting any of these can change behavior (flag semantics, word-splitting, glob-RHS) — RISKY by rule.
+* **SC2053 (2):** `[[ … = $OUTDEV ]]` / `[[ $1 = $ROOT ]]` — quoting `=`-RHS is the glob-pattern-RHS class the campaign classifies RISKY.
+* **SC2155 (13)** local+assign (forbidden), **SC2181 (18)** `if (( $? ))` family (flow), **SC2034 (15)** mostly dynamic-scope false positives (`MEDIA_*` set for callers, `BLUE` via subshell echoes, config values), **SC2162 (5)** `read -r`, **SC2001 (5)** echo→printf, **SC2005/SC2116 (9+5)** `echo $(…)` idiom (trailing-newline/flag semantics — behavior-adjacent), **SC2143 (3)** `! grep -q` (exit-code subtlety), **SC2002 (5)**, **SC2012 (2)** ls→find, **SC2206/SC2207 (3)** array/list splitting, **SC2219 (1)** `let` (already the `get_ver_to_int` backlog item), **SC2116 `$(echo …)` in `MSG=$(echo "$MSG.$i")`** — echo-flag class.
+* **SC2021 `tr` sets (L781–782, 899, 903) — potential real quirk, NOT applied:** L782 `tr -cd '[[kmgtbKMGTB]]'` — in `tr`, `[[` is the escape for a *literal* `[`, so the suffix set (and possibly the result) is muddled; `[[:digit:]]` (781/899/903) is the standard form. Changing these alters displayed suffixes → needs a dedicated fix + test, user decides.
+* **SC2125 (L805–808) — works as-is, NOT applied:** `local m_ega=$k_ilo*$k_ilo` et al. assign **strings** (`1024*1024`); functional only because `bc` evaluates the parenthesized expressions (`…/(1024*1024*1024)`). Every "fix" would change the values → left.
+* **SC2215 (L79/87) + dead code — NOT applied:** `notes_desktop_environment()` (L50–95) is **defined but never called**; its body is an unquoted OS reference table (`RaspberryPiOS-stretch lxterminal …`, `--- ARM ---`, `arch / manjaro - pacman -S`, …) that, if ever invoked, would run `arch` and friends as **real commands**. Pre-existing since v1.2.11 (dormant — zero callers). User chose: **leave it** (deletion = RISKY; backlog).
+* **SC1001 (L2070):** `PARTITION=$DEVICE\1` — `\1` is an intentional literal `1` (e.g. `/dev/sda1`); informational, untouched.
+* Residual shellcheck state after this cleanup: **273 findings / 27 codes**, all in the RISKY/backlog classes above (plus the pre-existing quirks) — nothing auto-fixable within the campaign's SAFE bar remains.
+
+---
+
 ## Open items across rounds
 
 | Item | Location | Round |
@@ -123,5 +161,8 @@ Blast-radius check: `ui_log` (file write) untouched; no caller captures/pipes th
 | `sudo $INSTALL …` unquoted | `pisafe` fat16/fat32/exfat/ntfs arms | R2+ |
 | Stale `test_pisafe` harness | `test_pisafe` | later, user decides |
 | Cosmetic double-space sites (`else  #`, `[[ … = primary  ]]`) | `pisafe` 838, 1536 | R2+ |
-| Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (own commit pending) |
+| Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
+| **Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked** | `pisafe` L50–95 | R2+ (user: leave for now) |
+| `tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk (tr `[[` = literal-`[` escape) | `pisafe` L782 (cf. 899, 903) | R2+ (needs care + test) |
+| 273 residual shellcheck findings, all RISKY-class (SC2086/2046 lists & echo-flags, SC2155 locals, SC2181 `$?`, …) | `pisafe` (breakdown in shellcheck section) | R2+ per-item if user wants |
 | Copyright header `2018 - 2022` | `pisafe`:3 | release round |

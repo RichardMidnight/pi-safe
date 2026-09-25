@@ -128,7 +128,7 @@ run_command(){
     ui_echo "~ Running: $CMD" blue
     eval $CMD
     ES=$?
-    if (( $ES )); then
+    if (( ES )); then
         ui_echo "~ Exit_Status $ES running '$CMD'" red log
         return "$ES"
     fi
@@ -349,7 +349,7 @@ pisafe_update() {
     local SERVER_VER=
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/$SCRIPTNAME -O $SCRIPTNAME.tmp 2> /dev/null
     ES=$?
-    if (( $ES )); then
+    if (( ES )); then
         echo_if_cli "ERROR: Can't connect to server..."
         return "$ES"
     fi
@@ -438,7 +438,7 @@ config_var_set() {
     local FORCE=${3:-true}      # if false, will only update if var not set.
 
     #dont update the setting if thre is a value and we are not forcing new values
-    if [[ "$FORCE" = false ]] && [[ ! -z $(config_var_get "$SETTING") ]]; then
+    if [[ "$FORCE" = false ]] && [[ -n $(config_var_get "$SETTING") ]]; then
         return
     fi
 
@@ -664,9 +664,9 @@ get_elapsed_time() {
     local BEG=$1
     local END=$2
 
-    local SECONDS=$(( $END-$BEG ))
-    local MIN=$(( $SECONDS/60 ))
-    local SEC=$(( $SECONDS%60 ))
+    local SECONDS=$(( END-BEG ))
+    local MIN=$(( SECONDS/60 ))
+    local SEC=$(( SECONDS%60 ))
     echo "$MIN" min "$SEC" sec
 
     #echo $(( $(( $END-$BEG ))/60)) min $(( $(( $END-$BEG ))%60 )) sec
@@ -686,9 +686,9 @@ do_countdown(){
     echo -n "$MAX"
     sleep 1
     for number in $(seq 1 "$MAX"); do
-        echo -n ".$(($MAX-$number))"
+        echo -n ".$((MAX-number))"
         read -s -t 1 -N 1 INPUT
-        if [[ ! -z "$INPUT" ]]; then
+        if [[ -n "$INPUT" ]]; then
             if [[ "$INPUT" = y ]]; then
                 echo Continuing...
                 return
@@ -792,7 +792,7 @@ get_bytes(){
         return
     fi
 
-    if [[ "$OUTPUT" = -h ]] && [[ ! -z "$SUFFIX" ]]; then
+    if [[ "$OUTPUT" = -h ]] && [[ -n "$SUFFIX" ]]; then
         echo $BYTES
         return
     fi
@@ -838,10 +838,10 @@ get_bytes(){
     else  # translate to bytes
         case $SUFFIX in
         b|B|"")     echo "$BASE"                                    ;;
-        k|K|kb|KB)  echo $(($BASE*1024))                            ;;
-        m|M|mb|MB)  echo $(($BASE*1024*1024))                       ;;
-        g|G|gb|GB)  echo $(($BASE*1024*1024*1024))                  ;;
-        t|T|tb|TB)  echo $(($BASE*1024*1024*1024*1024))             ;;
+        k|K|kb|KB)  echo $((BASE*1024))                            ;;
+        m|M|mb|MB)  echo $((BASE*1024*1024))                       ;;
+        g|G|gb|GB)  echo $((BASE*1024*1024*1024))                  ;;
+        t|T|tb|TB)  echo $((BASE*1024*1024*1024*1024))             ;;
         *)          ui_msg_error $LINENO "bad byte suffix 'SUFFIX'" ;;
         esac
     fi
@@ -880,7 +880,7 @@ file_folder_size() {
     if [[ -d $FOLDER ]]; then
         sudo du -sh "$FOLDER" | cut -d'/' -f1 | sed 's/\s\s*/ /g'
         ES=$?
-        if (( $ES )); then
+        if (( ES )); then
             return "$ES"
         fi
     else
@@ -904,7 +904,7 @@ file_fs_freespace() {
         ES=$?
     fi
 
-    if (( $ES )); then
+    if (( ES )); then
         return "$ES"
     fi
 
@@ -1022,7 +1022,7 @@ do_list_info() {
 media_name(){
     local VEN_MOD=$(lsblk -dpnlo VENDOR,MODEL "$1" 2> /dev/null | sed 's/  */ /g')
     ES=$?
-    if (( $ES )); then
+    if (( ES )); then
         return "$ES"
     fi
     local SIZE=$(lsblk -dpnlo SIZE "$1" 2> /dev/null | sed 's/[ ]\+//g')
@@ -1044,7 +1044,7 @@ media_size() {
 
     SIZE_BYTES=$(lsblk "$DEV" -dnbo size 2> /dev/null)
     ES=$?
-    if (( $ES )); then
+    if (( ES )); then
         echo 0
         return "$ES"
     fi
@@ -1077,7 +1077,7 @@ media_backup(){
     ui_echo "$PRODUCTNAME $SCRIPTVER Backup... " white
     media_backup_checklist $SILENT
     ES=$?
-    if (( $ES )); then
+    if (( ES )); then
         return "$ES"
     fi
 
@@ -1095,12 +1095,12 @@ media_backup(){
 
     BS=$(( 4 * 1024 * 1024 ))
     BYTES_TO_READ=$(media_backup_bytes_to_read)
-    BLOCKS_TO_READ=$(( $BYTES_TO_READ / $BS +1 ))
+    BLOCKS_TO_READ=$(( BYTES_TO_READ / BS +1 ))
     echo Media size=$(media_size "$INDEV" -h)
-    echo Skipping $(get_bytes $(( $(media_size "$INDEV") - $BYTES_TO_READ )) -h ) of freespace at end of media.
+    echo Skipping $(get_bytes $(( $(media_size "$INDEV") - BYTES_TO_READ )) -h ) of freespace at end of media.
     echo Reading $(get_bytes $BYTES_TO_READ -h)...
 
-    if [[ ! -z $(which pv) ]]; then
+    if [[ -n $(which pv) ]]; then
         #run_command "sudo pv $INDEV -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " "$LINENO"
         # the
         #run_command "sudo dd if=$INDEV | pv -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " "$LINENO"
@@ -1116,7 +1116,7 @@ media_backup(){
         run_command "sudo dd bs=$BS if=$INDEV of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock $PROGRESS conv=fsync " "$LINENO"
         ES=$?
     fi
-    if (( $ES )); then
+    if (( ES )); then
         do_beep_down
         return 20
     fi
@@ -1185,7 +1185,7 @@ media_backup(){
             #  run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" "$LINENO"
             run_command "pv '$OUTFILE_BASE.img' | zip -$COMPRESSION_LEVEL '$OUTFILE' - "
             ES=$?
-            if (( ! $ES )); then
+            if (( ! ES )); then
                 rm -f "$OUTFILE_BASE".img
             fi
  ;;
@@ -1194,16 +1194,16 @@ media_backup(){
             #run_command "sudo xz -z -T0 -v -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" "$LINENO"
             run_command "pv '$OUTFILE_BASE.img' | xz -z -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
             ES=$?
-            if (( ! $ES )); then
+            if (( ! ES )); then
                 rm -f "$OUTFILE_BASE".img
             fi
  ;;
 
         gz)
-            if [[ ! -z $(which pv) ]]; then
+            if [[ -n $(which pv) ]]; then
                 run_command "pv '$OUTFILE_BASE.img' | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
                 ES=$?
-                if (( ! $ES )); then
+                if (( ! ES )); then
                     rm -f "$OUTFILE_BASE".img
                 fi
             else
@@ -1211,7 +1211,7 @@ media_backup(){
                 sudo chmod 777 '$OUTFILE_BASE.img'
                 run_command "pigz -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" "$LINENO"
                 ES=$?
-                if (( ! $ES )); then
+                if (( ! ES )); then
                     rm -f "$OUTFILE_BASE".img
                 fi
             fi
@@ -1231,7 +1231,7 @@ media_backup(){
  ;;
     esac
 
-    if (( $ES )); then
+    if (( ES )); then
         do_beep_down
         return 22
     fi
@@ -1265,12 +1265,12 @@ media_backup_bytes_to_read(){
     if [[ "$SKIP_FREESPACE" = on ]]; then
         START_OF_FREESPACE=$(sudo parted -ms "$INDEV" unit B print free)
         ES=$?
-        if (( $ES )); then
+        if (( ES )); then
             ui_msg_warning $LINENO "parted failed with es $ES"
             #exit 1
         fi
         START_OF_FREESPACE=$(tail -1 <<< "$START_OF_FREESPACE" | grep free | cut -d ':' -f 2 | tr -d 'B')
-        if (( $START_OF_FREESPACE )); then
+        if (( START_OF_FREESPACE )); then
             BYTES_TO_READ=$START_OF_FREESPACE
         fi
     fi
@@ -1311,7 +1311,7 @@ media_backup_check_indev(){
 
     # Warning if device filesystem has an overlay
     OVERLAY=$(media_os "$INDEV" | grep OVERLAY)
-    if [[ ! -z "$OVERLAY" ]] && [[ "$AUTO_EXPAND_FS" = on ]]; then
+    if [[ -n "$OVERLAY" ]] && [[ "$AUTO_EXPAND_FS" = on ]]; then
         if [[ $(ui_yesno WARNING "'$(media_name "$INDEV")' filesystem has an overlay and cannot auto-expand. Turn off auto-expand?" ) = y ]]; then
             echo
             AUTO_EXPAND_FS=off
@@ -1407,7 +1407,7 @@ $(get_bytes $AVAILABLE_SPACE -h) available space on '$(file_path "$OUTFILE")' "
     fi
 
     # Warning if one and a half times the media is bigger than freespace
-    SPACENEEDED=$(( $MEDIA_SIZE + $(( $MEDIA_SIZE / 2 )) ))
+    SPACENEEDED=$(( MEDIA_SIZE + $(( MEDIA_SIZE / 2 )) ))
     if [[ $SPACENEEDED -gt $AVAILABLE_SPACE ]]; then
         MSG="Might not be enough free space for backup.
 $(get_bytes $MEDIA_SIZE -h) to backup on '$(media_name "$INDEV")'
@@ -1424,7 +1424,7 @@ media_backup_checklist(){
     if [[ -z "$INDEV" ]]; then
         INDEV=$(menu_select_device "BACKUP")
         ES=$?
-        if (( $ES )); then
+        if (( ES )); then
             # ui_msg_error $LINENO "No media found."
             ui_msg_error $LINENO "Media '$INDEV' can't be blank."
             return 10
@@ -1432,7 +1432,7 @@ media_backup_checklist(){
     fi
     media_backup_check_indev
     ES=$?
-    if (( $ES )); then
+    if (( ES )); then
         return "$ES"
     fi
 
@@ -1440,14 +1440,14 @@ media_backup_checklist(){
     if [[ -z "$OUTFILE" ]]; then
         menu_get_outfile   # this includes media_backup_check_outfile
         ES=$?
-        if (( $ES )); then
+        if (( ES )); then
             ui_msg_error $LINENO "Outfile '$OUTFILE' can't be blank"
             return "$ES"
         fi
     else
         media_backup_check_outfile
         ES=$?
-        if (( $ES )); then
+        if (( ES )); then
             return "$ES"
         fi
     fi
@@ -1486,8 +1486,8 @@ Switch to terminal and create image-file now?"
     MEDIA_SIZE=$(media_size "$MEDIA")
     PARTED_OUTPUT=$(sudo parted -ms "$MEDIA" print)  # no freespace
     MEDIA_PARTITION_TABLE=$(echo "$PARTED_OUTPUT" | head -n 2 | tail -n 1 | cut -d: -f6)   # msdos, gpt, other
-    MEDIA_PARTITION_COUNT=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1 | wc -l)
-    MEDIA_PARTITION_LIST=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1)
+    MEDIA_PARTITION_COUNT=$(echo "$PARTED_OUTPUT" | grep '^[1-9]:' | grep -v ":::;" | cut -d: -f1 | wc -l)
+    MEDIA_PARTITION_LIST=$(echo "$PARTED_OUTPUT" | grep '^[1-9]:' | grep -v ":::;" | cut -d: -f1)
     MEDIA_LAST_PARTITION_NUMBER=$(echo "$PARTED_OUTPUT" | tail -1 | cut -d: -f1)
     MEDIA_LAST_PARTITION_FS=$(echo "$PARTED_OUTPUT" | tail -1 | cut -d: -f5)
 
@@ -1517,7 +1517,7 @@ Switch to terminal and create image-file now?"
 
     #1 - free space
     MSG=$MSG$(printf '%-35.34s' "Remove '$(get_bytes $MEDIA_FREESPACE_AT_END -h)' of freespace")
-    MSG=$MSG"=> $(get_bytes $(($MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) -h ) \n"
+    MSG=$MSG"=> $(get_bytes $((MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) -h ) \n"
 
 
     # 2 - is it a complex file system?
@@ -1533,7 +1533,7 @@ Switch to terminal and create image-file now?"
     case $MEDIA_LAST_PARTITION_FS in
 
         ext4|ext3|ext2)
-            if [[ $MEDIA_PARTITION_TABLE = gpt ]] || ( [[ $MEDIA_PARTITION_TABLE = msdos ]] && [[ $MEDIA_LAST_PARTITION_TYPE = primary  ]] ); then
+            if [[ $MEDIA_PARTITION_TABLE = gpt ]] || { [[ $MEDIA_PARTITION_TABLE = msdos ]] && [[ $MEDIA_LAST_PARTITION_TYPE = primary  ]]; }; then
                 SHRINK_BYTES=$(sudo lsblk $MEDIA -lpbo name,fsavail | grep $MEDIA_LAST_PARTITION_NAME | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
             else
                 MSG=$MSG"   Warning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This partition-type will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
@@ -1553,7 +1553,7 @@ Switch to terminal and create image-file now?"
 
 
     # 4 Shrink Filesystem
-    UNCOMPRESSED_BYTES=$(( $MEDIA_SIZE - $MEDIA_FREESPACE_AT_END - $SHRINK_BYTES ))
+    UNCOMPRESSED_BYTES=$(( MEDIA_SIZE - MEDIA_FREESPACE_AT_END - SHRINK_BYTES ))
     MSG=$MSG$(printf '%-35.34s' "Shrink filesystem by $(get_bytes $SHRINK_BYTES -h) ")
     MSG=$MSG"=> $(get_bytes $UNCOMPRESSED_BYTES -h) \n"
 
@@ -1680,7 +1680,7 @@ media_restore(){
     TIME2=$(date +%s)
     echo
 
-    if (( $ES )); then
+    if (( ES )); then
         echo
         ui_msg_error $LINENO "Restore failed. ES=$ES"
         return "$ES"
@@ -1822,7 +1822,7 @@ media_list() {
     # the 254 is for a QTM virtual machine on Mac
     DEVICES=$(lsblk -I 8,179,254,259 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v "$ROOT_FILTER")
     ES=$?
-    if (( $ES )); then
+    if (( ES )); then
         return "$ES"
     fi
 
@@ -1833,7 +1833,7 @@ media_list() {
 media_mount(){
     MEDIA=$1
     PARTED_OUTPUT=$(sudo parted -ms "$MEDIA" print)  # no freespace
-    MEDIA_PARTITIONS=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1)
+    MEDIA_PARTITIONS=$(echo "$PARTED_OUTPUT" | grep '^[1-9]:' | grep -v ":::;" | cut -d: -f1)
 
     for PARTITION in $MEDIA_PARTITIONS; do
         udisksctl mount -b $MEDIA$PARTITION
@@ -1928,7 +1928,7 @@ ui_msg_error() {
     LINE=$1
     shift
     do_beep_down
-    MSG="$@"
+    MSG="$*"
     ui_msg "ERROR" "~ Error at line $LINE. $MSG" red "" log
 }
 
@@ -1939,7 +1939,7 @@ ui_msg_warning(){
     shift
     do_beep
     do_beep
-    MSG="$@"
+    MSG="$*"
     ui_msg "WARNING" "~ $MSG" red "" nolog
 }
 
@@ -1968,7 +1968,7 @@ ui_yesno(){
     else
         whiptail --backtitle "$BACKTITLE" --title "$TITLE" $DEFAULT --yesno "$MSG" "$WT_MB_HEIGHT" "$WT_MB_WIDTH" 3>&1 1>&2 2>&3
         ES=$?
-        if (( $ES )); then
+        if (( ES )); then
             echo n
         else
             echo y
@@ -2129,7 +2129,7 @@ media_format(){
 
     esac
 
-    if (( $ES)); then
+    if (( ES)); then
   #      ui_msg_error $LINENO "mkfs failed"
         return 1
     else
@@ -2211,9 +2211,9 @@ media_partition_info() {
         OS="$(cat "$MOUNTDIR/etc/os-release" | grep PRETTY_NAME | cut -d= -f2)"
         ARCH="$(file "$MOUNTDIR/bin/bash" | cut -d, -f2)"
         BITS="$(file "$MOUNTDIR/bin/bash" | cut -d, -f1)"
-        if [[ ! -z $(echo "$BITS" | grep 32) ]]; then
+        if [[ -n $(echo "$BITS" | grep 32) ]]; then
             BITS=32
-        elif [[ ! -z $(echo "$BITS" | grep 64) ]]; then
+        elif [[ -n $(echo "$BITS" | grep 64) ]]; then
             BITS=64
         fi
         if [[ ! "$ARCH" =~ $BITS ]]; then
@@ -2230,7 +2230,7 @@ media_partition_info() {
     # look for read-only partition (may not be needed)
     if [[ -e "$MOUNTDIR/etc/fstab" ]]; then
         ROOTREADONLY="$(cat "$MOUNTDIR/etc/fstab" | grep /boot | grep ,ro )"
-        if [[ ! -z "$ROOTREADONLY" ]]; then
+        if [[ -n "$ROOTREADONLY" ]]; then
             ROOTREADONLY="(READONLY)"
         fi
     fi
@@ -2238,7 +2238,7 @@ media_partition_info() {
     # look for overlay file system
     if [[ -e "$MOUNTDIR/cmdline.txt" ]]; then
         OVERLAY="$(cat "$MOUNTDIR/cmdline.txt" | grep boot=overlay )"
-        if [[ ! -z "$OVERLAY" ]]; then
+        if [[ -n "$OVERLAY" ]]; then
             OVERLAY="(OVERLAY file system)"
         fi
     fi
@@ -2256,13 +2256,13 @@ media_os() {
     local MSG=
 
     PARTED_OUTPUT=$(sudo parted -ms "$MEDIA" print)  # no freespace
-    MEDIA_PARTITIONS=$(echo "$PARTED_OUTPUT" | grep ^[1-9]: | grep -v ":::;" | cut -d: -f1)
+    MEDIA_PARTITIONS=$(echo "$PARTED_OUTPUT" | grep '^[1-9]:' | grep -v ":::;" | cut -d: -f1)
 
     # echo Looking for operating systems on partitions...
     for PARTITION in $MEDIA_PARTITIONS; do
         OS=$(media_partition_info "$MEDIA" "$PARTITION")
         ES=$?
-        if [[ "$ES" = 0 ]] && [[ ! -z "$OS" ]]; then
+        if [[ "$ES" = 0 ]] && [[ -n "$OS" ]]; then
             echo " - '$OS' found on Partition $PARTITION"
         fi
     done
@@ -2294,8 +2294,8 @@ whiptail_calc_wt_size() {
         WT_WIDTH=80
     fi
 
-    WT_MENU_HEIGHT=$(($WT_HEIGHT-7))
-    WT_MENU_HEIGHT_TALL=$(($WT_HEIGHT_TALL-7))
+    WT_MENU_HEIGHT=$((WT_HEIGHT-7))
+    WT_MENU_HEIGHT_TALL=$((WT_HEIGHT_TALL-7))
 
     WT_MB_HEIGHT=$WT_HEIGHT
     WT_MB_WIDTH=$WT_WIDTH
@@ -2359,11 +2359,11 @@ whiptail_fselect() {
         FILES=(no files)
     fi
 
-    for (( i=0; i<${arraylength}; i++ )); do
+    for (( i=0; i<arraylength; i++ )); do
         arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
         if [[ "$arrayelement" =~ $num ]]; then
            # FILES[$i]=$(echo "    " $(get_bytes "$arrayelement" -h))
-            FILES[$i]=$(echo "    " $(get_bytes "$arrayelement" -h) \($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h)\))
+            FILES[i]=$(echo "    " $(get_bytes "$arrayelement" -h) \($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h)\))
         else
             PREVIOUS_ELEMENT=$(echo "${FILES[$i]}")
         fi
@@ -2413,10 +2413,10 @@ whiptail_countdown(){
     local TITLE=${2:-"COUNTDOWN... press any key to stop or 'y' to continue now"}
     local MSG="${3:-Countdown for $MAX seconds.\n\n}"
 
-    for ((i=$MAX; i>=0; i--)); do
+    for ((i=MAX; i>=0; i--)); do
         TERM=vt220 whiptail --backtitle "$BACKTITLE" --title "$TITLE" --infobox "$MSG" "$WT_MB_HEIGHT" "$WT_MB_WIDTH"
         read -s -t 1 -N 1 INPUT
-        if [[ ! -z "$INPUT" ]]; then
+        if [[ -n "$INPUT" ]]; then
             if [[ "$INPUT" = y ]]; then
                 echo Continuing...
                 return 0
@@ -2527,7 +2527,7 @@ menu_get_outfile(){
         \n\nEnter the image filename (eg: 2020-12-15-buster32)"
         NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP '$(media_name "$INDEV")'" --inputbox "$MSG" $WT_HEIGHT_TALL $WT_WIDTH_WIDE "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
         ES=$?
-        if (( $ES )); then
+        if (( ES )); then
             return "$ES"
         fi
 
@@ -2535,7 +2535,7 @@ menu_get_outfile(){
         #fill out variables based on selected filename
         OUTFILEDEFAULT="$NEWFILE"
         OUTFILE="$NEWFILE"
-        if [[ ! -z $(file_ext "$OUTFILE") ]]; then
+        if [[ -n $(file_ext "$OUTFILE") ]]; then
             EXT=$(file_ext "$OUTFILE")
         else
             EXT=$DEFAULT_EXTENSION
@@ -2543,14 +2543,14 @@ menu_get_outfile(){
 
         media_backup_check_outfile
         ES=$?
-        if ! (( $ES )); then
+        if ! (( ES )); then
             #return "$ES"
             break  # break out of the while loop
         fi
     done
 
     # add .img.zip if no extension
-    if [[ ! -z "$OUTFILE" ]] && [[ -z $(file_ext "$OUTFILE") ]]; then
+    if [[ -n "$OUTFILE" ]] && [[ -z $(file_ext "$OUTFILE") ]]; then
          echo "Adding '.img.$DEFAULT_EXTENSION'"
          OUTFILE=$OUTFILE.img.$DEFAULT_EXTENSION
          #echo "added ext '$OUTFILE'"
@@ -2617,7 +2617,7 @@ menu_select_device(){
     IFS=$'\n'
     options=($(media_list $2 | sed 's/ / '$FIELD_SEPERATOR' /'))
     ES=$?
-    if (( $ES )); then
+    if (( ES )); then
         return "$ES"
     fi
     unset IFS
@@ -2633,7 +2633,7 @@ menu_select_device(){
         "$WT_MB_HEIGHT" "$WT_MB_WIDTH" 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
     ES=$?
     unset IFS
-    if (( $ES )); then
+    if (( ES )); then
         return "$ES"
     fi
 
@@ -2656,7 +2656,7 @@ menu_set_compression(){
     "8" "" off \
     "9" "Smallest file (MUCH slower)" off   3>&1 1>&2 2>&3 )
 
-    if [[ ! -z "$CHOICE" ]]; then
+    if [[ -n "$CHOICE" ]]; then
         COMPRESSION_LEVEL=$CHOICE
         config_var_set compression_level "$CHOICE"
     fi
@@ -2676,7 +2676,7 @@ menu_set_compression(){
         3>&1 1>&2 2>&3)
 
         ES=$?
-        if (( $ES )); then
+        if (( ES )); then
             return "$ES"
         else
             case "$SELECTION" in
@@ -2713,7 +2713,7 @@ menu_settings_default_extension(){
             "zst" "Set compression level to 1-22 " off \
             3>&1 1>&2 2>&3 )
 
-    if [[ ! -z "$CHOICE" ]]; then
+    if [[ -n "$CHOICE" ]]; then
         DEFAULT_EXTENSION=$CHOICE
         config_var_set default_extension "$CHOICE"
     fi
@@ -2726,11 +2726,11 @@ menu_settings_default_path(){
     while true; do
         NEWPATH=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS" --inputbox "$MSG" "$WT_HEIGHT" "$WT_WIDTH" "$TEMP_PATH" 3>&1 1>&2 2>&3)
         ES=$?
-        if (( $ES )); then
+        if (( ES )); then
             return "$ES"
         fi
 
-        if [[ ! -z "$NEWPATH" ]]; then
+        if [[ -n "$NEWPATH" ]]; then
             if [[ -d "$NEWPATH" ]]; then
                 DEFAULT_PATH=$(echo "$NEWPATH" | sed 's/[/\t]*$//')
                 config_var_set default_path "$DEFAULT_PATH"
@@ -2801,7 +2801,7 @@ menu_tools(){
         3>&1 1>&2 2>&3)
 
         ES=$?
-        if (( $ES )); then
+        if (( ES )); then
             return "$ES"
         else
             case "$SELECTION" in
@@ -2835,7 +2835,7 @@ menu_tools(){
                             "ntfs"      "     Native Windows format" \
                             "ext4"      "     Native Linux format" 3>&1 1>&2 2>&3)
                 ES=$?
-                if (( $ES )); then
+                if (( ES )); then
                     return "$ES"
                 fi
                 media_format "$DEVICE" "$FORMAT"
@@ -2893,7 +2893,7 @@ if [[ "$CHECK_DEPENDENCIES_ON_STARTUP" != off ]]; then
 fi
 
 # check-for-updates if not "backup and -y"
-if [[ "$CHECK_FOR_UPDATES_ON_STARTUP" != off ]] && ! ( [[ $1 = backup ]] && [[ $4 = -y ]] ); then
+if [[ "$CHECK_FOR_UPDATES_ON_STARTUP" != off ]] && ! { [[ $1 = backup ]] && [[ $4 = -y ]]; }; then
     ui_echo "Checking for $PRODUCTNAME updates..." "" nolog
     pisafe_update cli no
 fi
