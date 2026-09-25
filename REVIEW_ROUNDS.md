@@ -460,7 +460,7 @@ Baseline: `87b6a38` (R6), 2936 lines, **44 findings / 10 codes**, `1.2.12.beta1`
 
 ## Round 8 — final decision round: `local ROOTREADONLY` + stale open-item correction (prompt: `REVIEW_ROUND_8.md`)
 
-**Status: APPLIED + VERIFIED (changes on `dev`, uncommitted — commit pending user approval).**
+**Status: COMMITTED — `c4aca2b` on `dev` (2026-09-25).**
 User approval 2026-09-25: R8.1 approve · R8.2 approve (docs only).
 Baseline: `8c42bd2` (R7), 2917 lines, **26 findings / 8 codes**, `1.2.12.beta1`.
 
@@ -487,7 +487,7 @@ Pending user approval. Candidate message: `review R8: local ROOTREADONLY (fix cr
 
 ## Round 9 — verification round: pv/compression syntax (user item #3) + global-leak audit + 2 small fixes (prompt: `REVIEW_ROUND_9.md`)
 
-**Status: APPLIED + VERIFIED (changes on `dev`, uncommitted — commit pending user approval).**
+**Status: COMMITTED — `3119819` on `dev` (2026-09-25, user commit).**
 User decision 2026-09-25: R9.0 docs ✓ · R9.1 (L1659 log `-p`→`-d`) ✓ · R9.1b (user's own menu_cli SAFE quotes) ✓ · R9.2 (raw-img restore `-s`) **deferred**.
 Baseline: `c4aca2b` (R8), 2918 lines, **26 findings / 8 codes**, `1.2.12.beta1`.
 
@@ -515,7 +515,71 @@ Systematic scan of every function for "read while only conditionally written + n
 
 ### Commit
 
-Pending user approval. Candidate message: `review R9: verify pv/tool syntax (item #3 closure), fix pigz log -p→-d, quote menu_cli args (26→17 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_9.md`; untracked user files excluded). **No push, no tag, no version bump.**
+✅ Committed on `dev` as **`3119819`** (2026-09-25, user commit): `review R9: verify pv/tool syntax (item #3 closure), fix pigz log -p→-d, quote menu_cli args (26→17 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_9.md`; untracked user files excluded). **No push, no tag, no version bump.**
+
+---
+
+## Round 10 — full shellcheck processing: 17 findings → **0** + beta lock-in (prompt: `REVIEW_ROUND_10.md`)
+
+**Status: ✅ COMMITTED on `dev` (2026-09-25, user-approved; history option 1 — soft-reset to `3119819`, single clean R10 commit).**
+User approval 2026-09-25: **Full A+B+lint (recommended)**; **A2+A3 approved as drafted**; `notes_performance` (also dead raw-text, not flagged) left as-is per user.
+Baseline: `3119819` (R9), 2918 lines, **17 findings / 8 codes**, `1.2.12.beta1`.
+
+### All 17 findings dispositioned (per-item equivalence proofs in `REVIEW_ROUND_10.md`)
+
+**Group B — behavior-preserving, equivalence-proven (SAFE):**
+
+| # | Site | Code | Change |
+|---|---|---|---|
+| B1 | `run_command` L125 | SC2086 | `eval $CMD` → `eval "$CMD"` (A/B + all 34 call sites scanned; sole theoretical edge — double space inside a *quoted* CMD region — proven absent) |
+| B2–B4 | L777 / L897 / L901 | SC2021 | `tr -cd '[[:digit:]]'` → `tr -cd '0123456789'` (×3; output A/B-identical for all test inputs) |
+| B5 | `media_format` `NAME` | SC2027 | `(" "$DEVICE")"` nested-quote unquoting → `($DEVICE)` — identical string for any single-token device |
+| B6 | `media_mount` | SC2086 | `sudo umount $DEVICE?` → `sudo umount "$DEVICE"?` — legacy `?`-glob kept (`sda1`–`sda9` unmount, `sda10` not); A/B with matched/unmatched CWD fixtures |
+| B7 | `media_format` | SC1001 | `PARTITION=$DEVICE\1` → `PARTITION="${DEVICE}1"` |
+| B8 | dispatch | SC2086 | `pisafe_uninstall $2` → `pisafe_uninstall "$2"` (receiver's `${1:--n}` makes missing≡empty) |
+| B9 | `menu_cli` final line | SC2086 | `menu_cli $1 …` → `menu_cli "$1" …` (empty matches the same `*` case) |
+
+**Group A — RISKY, user-approved per item (dead-code removals + rewrites):**
+
+| # | Site | Codes | Change |
+|---|---|---|---|
+| A1 | L3 | SC2034 | dead `COPYRIGHT=` var → header comment `# By Richard Reed 2018 - 2022` (notice preserved verbatim; was the var's only content) |
+| A2 | L47–92 | SC2215×2 | `notes_desktop_environment` (zero call sites) → fully commented reference block, header `— DEAD FUNCTION (zero call sites); body kept as reference documentation:` |
+| A3 | `media_power_off` L1855–1860 | SC2086 (in its body) | **deleted** — zero call sites *and* its `umount $MEDIA?` was broken (relative-path glob); −6 lines |
+| A4 | `ui_yesno` | SC2086 | `$DEFAULT` → `YT_FLAGS=()` + `[[ -n "$DEFAULT" ]] && YT_FLAGS+=("$DEFAULT")` → `whiptail … "${YT_FLAGS[@]}" --yesno …` (empty → zero words; `--defaultno` → exactly one word; no `set -u` in file) |
+| A5 | `menu_select_device` | SC2207 | `options=($(…))` → `mapfile -t options < <(…)` (line-based; the `ES=$?` guard is now inert by design — the empty case is still caught by the `arraylength = 0` check, A/B-verified N=0 → rc=1 both) |
+| A6 | `menu_select_device` | SC2068 + SC2027 | 3 continuation lines joined to 1; `""${options[@]}""` → `${options[@]}` + rationale comments + bare `# shellcheck disable=SC2068` directly above |
+
+**A6 mechanism (the one that mattered):** the `IFS=$FIELD_SEPERATOR` (`|`) set immediately before the call plus the *unquoted* `@` split each `name ⎮ desc` option into exactly the `[tag item]` word pair whiptail's menu needs (tag = `sda␣` — the trailing space the function's own strip comment documents). The old `""…""` contexts contributed zero words, so removal is a byte-identical argv change (A/B: stub argv vectors equal, N=0…3). Quoting would pass each whole line as one tag and break the menu — hence the sanctioned, one-off, documented directive.
+
+**Lock-in:** new `lint.sh` at repo root (approved, `chmod +x`) — the shellcheck gate: pass iff `shellcheck -s bash -f gcc pisafe` returns **0 findings**; else print findings and exit 1. One directive in the tree = the lock.
+
+### Verification (agent-safe, stubs only — battery green)
+
+1. A/B harness `/tmp/opencode/r10_ab.sh` (true pre baseline `git show 3119819:pisafe` vs live; whiptail/media_list/ui_echo stubbed): **23/23 PASS** — covers tr (B2–B4), `run_command` eval (B1), `ui_yesno` argv both DEFAULT states (A4), `menu_select_device` N∈{0,1,2,3} incl. `declare -p options` + whiptail argv pairs (A5+A6), umount-`?` glob both worlds (B6), PARTITION/SILENT/menu_cli/NAME equivalence (B7/B8/B9/B5).
+2. Final battery: `bash -n` PASS · `bash pisafe -v` → `1.2.12.beta1`, **no stderr noise** · `shellcheck -s bash -f gcc pisafe` → **0 findings** · `./lint.sh` → `shellcheck: CLEAN (0 findings)` rc=0 · file **2913 lines** (2918 − A2×2, − A3×6, + A4×2, + A6×1, rest line-neutral).
+3. `git diff` of the uncommitted remainder maps exactly to A2-fix + A4 + A5 + A6; nothing else touched.
+
+### ⚠ Two incidents, caught and fixed this round (full record in `REVIEW_ROUND_10.md`)
+
+1. **First-pass A2 was broken and briefly landed in `45870c1`.** The comment-out sed (`s/^\(\S\)/# \1/`) only matched **column-0** lines, so only the signature and `}` got `#`-prefixed; the 45-line indented OS table became **top-level executable code** — a `bash pisafe -v` smoke test exposed ~30 `command not found` lines and one real `arch -S` execution. Fixed same round: indented body commented, stray `# }` deleted, `bash pisafe -v` verified clean before continuing.
+2. **shellcheck 0.10 directive format.** Free-form text on the directive line is rejected (inline `IFS="|"` produced SC1125; earlier inline prose silently failed to suppress). Final form = rationale in plain comment lines, bare `# shellcheck disable=SC2068` immediately above the command.
+
+### Commit — history note (race with user commit)
+
+Timeline: user committed R9 as `3119819` (17:08:19, clean — exactly R9's content). My commit `45870c1` (17:10:52, **R9's message but R10's content**: A1, A3, B1–B9, and a partially-applied A2) landed immediately after, so the R10 baseline is now `45870c1`; the remaining R10 work (A2-fix, A4–A6, `lint.sh`, this documentation) is in the working tree, uncommitted.
+
+**Decision (user, 2026-09-25): option 1 — adopted.**
+1. ✅ **(clean history — ADOPTED)** `git reset --soft 3119819` → one commit `review R10: zero shellcheck findings (17→0): quotes/rewrites, dead-code comment-out/removal, ui_yesno args array, mapfile menu (beta lock-in)` — the broken A2 intermediate never enters history; `45870c1` becomes an unreferenced (dangling) object.
+2. (append) commit the working tree on top as R10 — would have left `45870c1` (R9 message, R10 content) in history. Not used.
+
+Staged either way: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_10.md`, `lint.sh`. **No push, no tag, no version bump.**
+
+### Beta lock-in (user directive) — **IN EFFECT since R10 commit**
+
+**Code changes are frozen** until `things to fix.md` is explicitly re-scoped into post-beta feature rounds. Version stays `1.2.12.beta1` (bump + tag remain a separate explicit release action). The `lint.sh` gate + the zero-finding baseline + the single documented `SC2068` directive are the regression re-ignition lock.
+
+---
 
 | Item | Location | Round |
 |---|---|---|
@@ -533,7 +597,8 @@ Pending user approval. Candidate message: `review R9: verify pv/tool syntax (ite
 | Stale `test_pisafe` harness | `test_pisafe` | later, user decides |
 | ~~Cosmetic double-space sites (`else  #`, `[[ … = primary  ]]`)~~ — **closed in R4** (R4.3) | `pisafe` 838, 1537 | ✅ R4 |
 | Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
-| **Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked** | `pisafe` L50–95 | R2+ (user: leave for now) |
+| ~~**Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked**~~ — **closed in R10** (A2, user-approved: fully commented reference block with `— DEAD FUNCTION (zero call sites)` header; SC2215×2 gone; `notes_performance` sibling left as-is per user) | `pisafe` L47–92 pre-R10 | ✅ R10 |
+| **Dead function `media_power_off` — zero call sites AND broken umount (`umount $MEDIA?`, relative path)** | `pisafe` L1855–1860 pre-R10 | **closed in R10** (A3: deleted, −6 lines) |
 | ~~`tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk~~ — **closed in R8 as stale/mis-diagnosed**: the kmgtb set was **already fixed in R3** (R3.1 → `tr -cd 'kmgtbKMGTB'`); the remaining SC2021×3 are shellcheck FPs on the correct `[[:digit:]]` POSIX-class form (L777, L897, L901) and stay on the file as known FPs | `pisafe` L779 (cf. L777, L897, L901) | ✅ R3 (fix) / R8 (row closed) |
-| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → ~~**62 findings / 11 codes**~~ → ~~**44 findings / 10 codes**~~ → ~~**26 findings / 8 codes**~~ → **17 findings / 8 codes** (SC2086×6 keep-list at 125, 1857, 1976, 2066, 2889, 2918; SC2034×1 = L3 `COPYRIGHT` deferred to release; SC2021×3 (FPs); SC2027×2 (1 FP); SC2215×2 (dead fn); SC2207×1 (menu idiom); SC2068×1; SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5**; **SC2181×18 closed in R6**; **SC2034×14 + SC2059×1 + SC2048×1 + SC2086×2 closed in R7**; **SC2086×9 (menu_cli cluster) closed in R9** (user SAFE quotes) | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 / 6 / 7 / 9 sections) | R10+ per-item if user wants |
-| Copyright header `2018 - 2022` (L3 dead `COPYRIGHT` var — the only place the notice lives) | `pisafe`:3 | **release round** (R7 user decision B2: kept out of R7; delete/rehome + date then) |
+| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → ~~**62 findings / 11 codes**~~ → ~~**44 findings / 10 codes**~~ → ~~**26 findings / 8 codes**~~ → **17 findings / 8 codes** (SC2086×6 keep-list at 125, 1857, 1976, 2066, 2889, 2918; SC2034×1 = L3 `COPYRIGHT` deferred to release; SC2021×3 (FPs); SC2027×2 (1 FP); SC2215×2 (dead fn); SC2207×1 (menu idiom); SC2068×1; SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5**; **SC2181×18 closed in R6**; **SC2034×14 + SC2059×1 + SC2048×1 + SC2086×2 closed in R7**; **SC2086×9 (menu_cli cluster) closed in R9** (user SAFE quotes) → ~~**17 findings / 8 codes**~~ → **0 findings (R10 — all 17 processed: 9 SAFE rewrites + 8 user-approved dead-code/removal/rewrite items)** — the SC2086 keep-list is retired (every one of its 15 then-6 sites closed in R7/R9/R10; `media_power_off` deleted in R10); the single remaining sanctioned directive in the file is `# shellcheck disable=SC2068` on the `menu_select_device` whiptail line (documented; the only place unquoted `@` is semantically required); locked in by the new `lint.sh` gate | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 / 6 / 7 / 9 / 10 sections) | ✅ R10 — **0 findings** |
+| Copyright notice `2018 - 2022` (was the L3 dead `COPYRIGHT` var — the only place the notice lives) | `pisafe`:3 | **R10 (code side)**: dead var → header comment `# By Richard Reed 2018 - 2022`, notice preserved verbatim, SC2034 closed. **Remaining at release**: update the date range (release-time decision, separate explicit user action) |

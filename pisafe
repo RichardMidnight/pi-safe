@@ -1,6 +1,6 @@
 #!/bin/bash
 
-COPYRIGHT="By Richard Reed 2018 - 2022"
+# By Richard Reed 2018 - 2022
 
 # This script basically
 # 1- copies a media-device with 'dd'
@@ -44,53 +44,51 @@ echo_blue()     { (echo -e "${LTBLUE}$*${NC}") }
 echo_green()    { (echo -e "${GREEN}$*${NC}") }
 
 
-notes_desktop_environment(){
-    # this is just a reference of tested OSs from 2021
+# notes_desktop_environment — DEAD FUNCTION (zero call sites); body kept as reference documentation:
 
-    DISTRO                      TERMINAL            TEXT EDITOR
-    RaspberryPiOS-stretch       lxterminal          leafpad?
-    RaspberrypiOS-buster        lxterminal          mousepad
-    Debian-GNOME                gnome-terminal      gedit
-    Debian Xfce                 xfce4-terminal      mousepad
-    Debian KDE Plasma           konsole             kwrite
-    Debian Cinnamon             xterm / uxterm      gedit
-    Debian MATE                 mate-terminal       pluma
-    Debian LXDE                 lxterminal          mousepad
-    Debian LXQt                 qterminal           featherpad
-    ubuntu gnome                gnome-terminal      gedit
-    lubuntu LXQt                qterminal           featherpad
-    LMDE-4 Cinnamon             gnome-terminal      xed
-    mint cinnamon               gnome-terminal      xed
-    mint MATE                   mate-terminal       xed
-    Mint Xfce                   xfce4-terminal      Xed
+# DISTRO                      TERMINAL            TEXT EDITOR
+# RaspberryPiOS-stretch       lxterminal          leafpad?
+# RaspberrypiOS-buster        lxterminal          mousepad
+# Debian-GNOME                gnome-terminal      gedit
+# Debian Xfce                 xfce4-terminal      mousepad
+# Debian KDE Plasma           konsole             kwrite
+# Debian Cinnamon             xterm / uxterm      gedit
+# Debian MATE                 mate-terminal       pluma
+# Debian LXDE                 lxterminal          mousepad
+# Debian LXQt                 qterminal           featherpad
+# ubuntu gnome                gnome-terminal      gedit
+# lubuntu LXQt                qterminal           featherpad
+# LMDE-4 Cinnamon             gnome-terminal      xed
+# mint cinnamon               gnome-terminal      xed
+# mint MATE                   mate-terminal       xed
+# Mint Xfce                   xfce4-terminal      Xed
 
-    bionic puppy    - ppm       lxterminal          geany
-    arch / manjaro  - pacman -S
-    zorin - ubuntu based
-    manjaro kde                 konsole             kate
-    manjaro xfce                xfce-terminal       mousepad
-    kali 2022 -apt              xterm               mousepad   -ver 1.2.5
+# bionic puppy    - ppm       lxterminal          geany
+# arch / manjaro  - pacman -S
+# zorin - ubuntu based
+# manjaro kde                 konsole             kate
+# manjaro xfce                xfce-terminal       mousepad
+# kali 2022 -apt              xterm               mousepad   -ver 1.2.5
 
 
-    Tested with
-    --- ARM ---
-    Raspios Buster      good
-    Raspbian Stretch    good
-    Raspbian Jessy      can work with limitations
-    Manjaro             good    no whiptail on lite ver
-    Ubuntu              good
-    Note: overlay filesystem cannot be turned on
+# Tested with
+# --- ARM ---
+# Raspios Buster      good
+# Raspbian Stretch    good
+# Raspbian Jessy      can work with limitations
+# Manjaro             good    no whiptail on lite ver
+# Ubuntu              good
+# Note: overlay filesystem cannot be turned on
 
-    --- x86-64 ---
-    debian Strech, Buster           no shrink, last is logical swap.
-    RPD Buster                      no shrink, last is logical swap.
-    mint  20.1                      no shrink, last is ext logical.
-    LMDE 4                          good
-    ubuntu                          good
-    lubuntu                         good
-    kali 2022                       good, noshrink, swap
-    Note: if you custom partition with ext4 as last, it shrinks.
-}
+# --- x86-64 ---
+# debian Strech, Buster           no shrink, last is logical swap.
+# RPD Buster                      no shrink, last is logical swap.
+# mint  20.1                      no shrink, last is ext logical.
+# LMDE 4                          good
+# ubuntu                          good
+# lubuntu                         good
+# kali 2022                       good, noshrink, swap
+# Note: if you custom partition with ext4 as last, it shrinks.
 
 
 notes_performance(){
@@ -122,7 +120,7 @@ run_command(){
     local LINE=$2
 
     ui_echo "~ Running: $CMD" blue
-    eval $CMD
+    eval "$CMD"
     ES=$?
     if (( ES )); then
         ui_echo "~ Exit_Status $ES running '$CMD'" red log
@@ -774,7 +772,7 @@ get_bytes(){
     local OUTPUT=${2:-"-h"};  #human or bytes
 
     local BASE
-    BASE=$(printf '%s\n' "$BYTES" | tr -cd '[[:digit:]]' )
+    BASE=$(printf '%s\n' "$BYTES" | tr -cd '0123456789' )
     local SUFFIX
     SUFFIX=$(printf '%s\n' "$BYTES" | tr -cd 'kmgtbKMGTB' )
 
@@ -894,11 +892,11 @@ file_fs_freespace() {
 
     if [[ -d $FILENAME ]]; then
         #FREESPACE=$(df "$FILENAME" -B1 --output=avail | grep -v Avail)
-        FREESPACE=$(df "$FILENAME" -B1 --output=avail | tr -cd '[[:digit:]]' )
+        FREESPACE=$(df "$FILENAME" -B1 --output=avail | tr -cd '0123456789' )
         ES=$?
     else
         #FREESPACE=$(df $(dirname "$FILENAME") -B1 --output=avail | grep -v Avail)
-        FREESPACE=$(df "$(dirname "$FILENAME")" -B1 --output=avail | tr -cd '[[:digit:]]' )
+        FREESPACE=$(df "$(dirname "$FILENAME")" -B1 --output=avail | tr -cd '0123456789' )
         ES=$?
     fi
 
@@ -1852,12 +1850,6 @@ media_mount(){
 }
 
 
-media_power_off(){
-    MEDIA=$1
-    umount $MEDIA?
-    udisksctl power-off "$MEDIA"
-}
-
 
 # ---------- UI functions
 ui_countdown(){
@@ -1958,6 +1950,8 @@ ui_yesno(){
     TITLE="$1"
     MSG="$2"
     DEFAULT="${3:-""}"   # defaults to Yes.  can specify --defaultno
+    YT_FLAGS=()
+    [[ -n "$DEFAULT" ]] && YT_FLAGS+=("$DEFAULT")
    # COLOR="${4:-white}"  color does not work with the 'read' command
 
     if [[ "$INTERFACE" = cli ]]; then
@@ -1973,7 +1967,7 @@ ui_yesno(){
             esac
         done
     else
-        whiptail --backtitle "$BACKTITLE" --title "$TITLE" $DEFAULT --yesno "$MSG" "$WT_MB_HEIGHT" "$WT_MB_WIDTH" 3>&1 1>&2 2>&3
+        whiptail --backtitle "$BACKTITLE" --title "$TITLE" "${YT_FLAGS[@]}" --yesno "$MSG" "$WT_MB_HEIGHT" "$WT_MB_WIDTH" 3>&1 1>&2 2>&3
         ES=$?
         if (( ES )); then
             echo n
@@ -1998,7 +1992,7 @@ media_format(){
     local TYPE
     TYPE="$(lsblk "$DEVICE" -dnpo TYPE)"
     local NAME
-    NAME="$(lsblk "$DEVICE" -dnpo VENDOR,MODEL,SIZE,TYPE) ("$DEVICE")"
+    NAME="$(lsblk "$DEVICE" -dnpo VENDOR,MODEL,SIZE,TYPE) ($DEVICE)"
     local PARTITION=$DEVICE
 
     if [[ $FORMAT = fat32 ]]; then
@@ -2063,7 +2057,7 @@ media_format(){
 
     echo "Unmounting '$DEVICE'..."
     sudo umount "$DEVICE" 2> /dev/null
-    sudo umount $DEVICE? 2> /dev/null
+    sudo umount "$DEVICE"? 2> /dev/null
 
 
     # if selected whole disk... wipe the partition table and make a new partition table.
@@ -2078,7 +2072,7 @@ media_format(){
         echo "Creating empty partition on '$DEVICE'..."
         run_command "sudo parted -s -a opt $DEVICE mkpart $PART_TYPE $PART_NAME $FS_TYPE 2M 100%" "$LINENO"
 
-        PARTITION=$DEVICE\1
+        PARTITION="${DEVICE}1"
     fi
 
     sleep 2
@@ -2625,7 +2619,7 @@ menu_select_device(){
 
     #get list of sd devices and add a field seperator |
     IFS=$'\n'
-    options=($(media_list "$2" | sed 's/ / '"$FIELD_SEPERATOR"' /'))
+    mapfile -t options < <(media_list "$2" | sed 's/ / '"$FIELD_SEPERATOR"' /')
     ES=$?
     if (( ES )); then
         return "$ES"
@@ -2638,9 +2632,10 @@ menu_select_device(){
     fi
 
     IFS=$FIELD_SEPERATOR
-    DEVICE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE"\
-        --menu "Select media (Hide root = $HIDE_ROOT_DEVICE)" \
-        "$WT_MB_HEIGHT" "$WT_MB_WIDTH" 10 ""${options[@]}"" 3>&1 1>&2 2>&3)
+    # Intentional unquoted @: IFS="|" (set above) splits each option into [tag item] words for
+    # whiptail --menu. Quoting "${options[@]}" would pass each whole line as one tag and break the menu.
+    # shellcheck disable=SC2068
+    DEVICE_SELECTED=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE" --menu "Select media (Hide root = $HIDE_ROOT_DEVICE)" "$WT_MB_HEIGHT" "$WT_MB_WIDTH" 10 ${options[@]} 3>&1 1>&2 2>&3)
     ES=$?
     unset IFS
     if (( ES )); then
@@ -2886,7 +2881,7 @@ echo "$PRODUCTNAME $SCRIPTVER"
 
 # if uninstall then uninstall and exit
 if [[ $1 = uninstall ]]; then
-    pisafe_uninstall $2
+    pisafe_uninstall "$2"
     exit
 fi
 
@@ -2915,4 +2910,4 @@ if [[ "$CHECK_FOR_UPDATES_ON_STARTUP" != off ]] && ! { [[ $1 = backup ]] && [[ $
 fi
 
 
-menu_cli $1 "$2" "$3" "$YESNO"
+menu_cli "$1" "$2" "$3" "$YESNO"
