@@ -15,7 +15,7 @@
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.12-beta.2"   # 2026/09/25
+SCRIPTVER="1.2.12-beta.3"   # 2026/09/25
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -33,15 +33,9 @@ INTERFACE="cli"
 YESNO=-n
 
 
-WHITE='\033[1;37m'
-RED='\033[1;31m'
-GREEN='\033[0;32m'
-LTBLUE='\033[1;34m'
-NC='\033[0m'    # No Color, standard text
-echo_white()    { (echo -e "${WHITE}$*${NC}") }
-echo_red()      { (echo -e "${RED}$*${NC}") }
-echo_blue()     { (echo -e "${LTBLUE}$*${NC}") }
-echo_green()    { (echo -e "${GREEN}$*${NC}") }
+echo_white() { echo -e "\033[1;37m$*\033[0m"; }
+echo_red()   { echo -e "\033[1;31m$*\033[0m"; }
+echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 
 
 # notes_desktop_environment — DEAD FUNCTION (zero call sites); body kept as reference documentation:

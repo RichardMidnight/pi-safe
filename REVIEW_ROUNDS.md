@@ -587,6 +587,14 @@ Staged either way: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_10.md`, `lint.sh`
 * **Tag:** annotated `v1.2.12-beta.2` (message `PiSafe 1.2.12-beta.2`, matching the existing `v1.2.12-beta.1` tag style, which is the repo's only annotated tag).
 * **Not done (remain separate explicit user actions):** `main` untouched, nothing pushed, old `dev_old` line + `v1.2.12-beta.1` tag left in place, copyright header still `2018 - 2022` (update at final release).
 
+## Release — `1.2.12-beta.3` (2026-09-25, user-approved release action)
+
+* **Context:** beta.2 (`9233ae3`, tag `v1.2.12-beta.2`) is pushed and immutable; per the naming rule (one version number = one body of code, forever), new changes land on a new pre-release number → **`1.2.12-beta.3`**.
+* **Changes (user-initiated, `things to fix.md` #6 "simplify echo color codes"):** deleted dead `echo_green` + `GREEN` (verified zero call sites anywhere in the file); dropped the pointless `( … )` subshells; inlined the four color variables (`WHITE`/`RED`/`LTBLUE`/`NC` — verified used nowhere else) into three self-contained one-line functions. Color block 10 lines → 3; net `+4/−10` including the version line.
+* **Verification:** `bash -n` OK; `bash pisafe -v` → `1.2.12-beta.3`; `lint.sh` → shellcheck 0 findings; A/B color output (white/red/blue) **byte-identical** to the original beta.2 code.
+* **Commit (on `dev`, after `9233ae3`):** `version 1.2.12-beta.3 — color cleanup: bake codes into echo functions, delete dead echo_green/GREEN`.
+* **Tag / push:** pending as separate explicit user actions (annotated `v1.2.12-beta.3`, then branch+tag push to `origin`).
+
 ---
 
 | Item | Location | Round |
