@@ -779,7 +779,7 @@ get_bytes(){
     local OUTPUT=${2:-"-h"};  #human or bytes
 
     local BASE=$(printf '%s\n' "$BYTES" | tr -cd '[[:digit:]]' )
-    local SUFFIX=$(printf '%s\n' "$BYTES" | tr -cd '[[kmgtbKMGTB]]' )
+    local SUFFIX=$(printf '%s\n' "$BYTES" | tr -cd 'kmgtbKMGTB' )
 
     if ! [[ "$BASE" =~ ^[0-9]+$ ]]; then   # not a number
         ui_msg_warning $LINENO "$BASE not a number"
@@ -802,10 +802,10 @@ get_bytes(){
         if [[ -z "$SUFFIX" ]]; then
             local LEN=${#BYTES}
             local k_ilo=1024;
-            local m_ega=$k_ilo*$k_ilo;
-            local g_iga=$m_ega*$k_ilo;
-            local t_era=$g_iga*$k_ilo;
-            local p_eta=$t_era*$k_ilo;
+            local m_ega="$k_ilo*$k_ilo";
+            local g_iga="$m_ega*$k_ilo";
+            local t_era="$g_iga*$k_ilo";
+            local p_eta="$t_era*$k_ilo";
 
             [[ -z "$BYTES" ]] && return               # null, so exit
 
@@ -949,7 +949,7 @@ file_list_image_files(){
     local DIR=$DEFAULT_PATH
 
     OLD_PWD=$(pwd)
-    cd "$DIR"
+    cd "$DIR" || return 1
 
     FILES="FILE_NAME FILE_SIZE (IMAGE_SIZE) \n"
     IFS=$'\t\n'
@@ -963,7 +963,7 @@ file_list_image_files(){
     printf $FILES | column -t
     unset IFS
 
-    cd "$OLD_PWD"
+    cd "$OLD_PWD" || true
 }
 
 
@@ -1768,7 +1768,7 @@ media_restore_checklist(){
     fi
 
     # Stop if INFILE is on OUTDEV
-    if [[ $(file_device "$INFILE") = $OUTDEV ]]; then
+    if [[ $(file_device "$INFILE") = "$OUTDEV" ]]; then
         ui_msg_error $LINENO "Restore to same device as '$INFILE' not allowed"
         return 1
     fi
@@ -2020,7 +2020,7 @@ media_format(){
         return 2
     fi
 
-    if [[ $1 = $ROOT ]]; then
+    if [[ $1 = "$ROOT" ]]; then
         ui_msg_error $LINENO "Can not format root device"
         return 3
     fi
@@ -2212,9 +2212,9 @@ media_partition_info() {
         OS="$(cat "$MOUNTDIR/etc/os-release" | grep PRETTY_NAME | cut -d= -f2)"
         ARCH="$(file "$MOUNTDIR/bin/bash" | cut -d, -f2)"
         BITS="$(file "$MOUNTDIR/bin/bash" | cut -d, -f1)"
-        if [[ -n $(echo "$BITS" | grep 32) ]]; then
+        if echo "$BITS" | grep -q 32; then
             BITS=32
-        elif [[ -n $(echo "$BITS" | grep 64) ]]; then
+        elif echo "$BITS" | grep -q 64; then
             BITS=64
         fi
         if [[ ! "$ARCH" =~ $BITS ]]; then

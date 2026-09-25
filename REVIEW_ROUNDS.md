@@ -239,6 +239,85 @@ Sweeps performed to bound the regression set:
 
 ---
 
+## Post-R2 safe cleanup — `get_bytes` bc-string multipliers (SC2125)
+
+**Status: APPLIED + VERIFIED (change on `dev`, uncommitted — commit pending user approval).**
+User-approved 2026-09-25, after the R2 regression fix.
+
+### Scope applied (4 lines, `get_bytes` `-h` arm)
+
+Quote the four `bc`-string multipliers so the literal `*` is unambiguously not a glob — this is exactly what SC2125 asks for:
+
+| line | before | after |
+|---|---|---|
+| 805 | `local m_ega=$k_ilo*$k_ilo;`  | `local m_ega="$k_ilo*$k_ilo";`  |
+| 806 | `local g_iga=$m_ega*$k_ilo;` | `local g_iga="$m_ega*$k_ilo";` |
+| 807 | `local t_era=$g_iga*$k_ilo;` | `local t_era="$g_iga*$k_ilo";` |
+| 808 | `local p_eta=$t_era*$k_ilo;` | `local p_eta="$t_era*$k_ilo";` |
+
+**Why SAFE (provably value-neutral):** an assignment performs no glob or word-splitting expansion, quoted or not, so the value is unchanged — `1024*1024`, `1024*1024*1024`, etc. Subshell A/B confirmed: `unquoted=[1024*1024]  quoted=[1024*1024]  -> IDENTICAL`. The strings are interpolated **verbatim** into `bc` expressions (`echo "scale=2; $BYTES/($m_ega)" | bc`), where `bc` does the arithmetic — quoting the *assignment* cannot affect that. The earlier 5-bucket "don't apply" note was about the *numeric* fix (`$((k_ilo*k_ilo))`), which would have broken `bc`; quoting is the neutral fix.
+
+### Verification (agent-safe only)
+
+* `bash -n pisafe` PASS; `bash pisafe -v` → `1.2.12.beta1`.
+* Subshell A/B: quoted vs unquoted assignment value byte-identical; `bc` demo `123456/(1024*1024)` = `.11`.
+* `get_bytes` functional spot-test (stubbed UI helpers, all arms): human `1024→1.00kb`, `1048576→1.00mb`, `1073741824→1.00gb`, `1099511627776→1.00tb`; byte `10kb→10240`, `5mb→5242880`, `2gb→2147483648`, `1tb→1099511627776`; pass-through `100 -h→100`, `1024kb -h→1024kb`, `300 -h→300`. **All correct.**
+* shellcheck: **SC2125 ×4 → 0**; total findings **102 → 98** (19 → 18 codes).
+* `git diff --stat`: `pisafe | 8 +++++----` — exactly the 4 intended lines, nothing else.
+
+### Commit
+
+Pending user approval (SAFE, verified). Candidate message: `review cleanup: quote get_bytes bc-string multipliers (SC2125×4 → 0)`.
+
+---
+
+## Round 3 — small, testable shellcheck fixes (all 7 approved)
+
+**Status: APPLIED + VERIFIED (changes on `dev`, uncommitted — commit pending user approval).**
+User-approved 2026-09-25 (all of R3.1–R3.7; R3.5 chosen as `cd || true`).
+Prompt: `REVIEW_ROUND_3.md`.
+
+### Scope applied (7 lines)
+
+| item | Finding (line) | before | after |
+|---|---|---|---|
+| R3.1 | SC2021 (782) `get_bytes` | `tr -cd '[[kmgtbKMGTB]]'` | `tr -cd 'kmgtbKMGTB'` |
+| R3.2 | SC2053 (1771) `media_restore_checklist` | `[[ $(file_device "$INFILE") = $OUTDEV ]]` | `… = "$OUTDEV" ]]` |
+| R3.3 | SC2053 (2023) `media_format` | `[[ $1 = $ROOT ]]` | `… = "$ROOT" ]]` |
+| R3.4 | SC2164 (952) `file_list_image_files` (entry `cd`) | `cd "$DIR"` | `cd "$DIR" \|\| return 1` |
+| R3.5 | SC2164 (966) restore `cd` | `cd "$OLD_PWD"` | `cd "$OLD_PWD" \|\| true` |
+| R3.6 | SC2143 (2215) `media_partition_info` | `[[ -n $(echo "$BITS" \| grep 32) ]]` | `echo "$BITS" \| grep -q 32` |
+| R3.7 | SC2143 (2217) `media_partition_info` | `[[ -n $(echo "$BITS" \| grep 64) ]]` | `echo "$BITS" \| grep -q 64` |
+
+### Rationale / why each is safe
+
+* **R3.1** — tr parsed `[[kmgtb…]]` as literal `[` + set + literal `]`, so the set *accidentally* also kept `[`/`]`. Proven identical: for every realistic size input (`1024kb`, `5mb`, …) both forms return the **same** suffix; only diverges if a size string ever contains a bracket (it never does). The `[[:digit:]]` cases (781/899/903) are *correct* POSIX classes — left untouched (shellcheck FPs).
+* **R3.2 / R3.3** — `[[ a = b ]]` matches `b` as a *pattern*; quoting forces a literal. Both operands are device paths (`/dev/sda`), never globs → quoting only makes the equality check more correct. (AGENTS.md lists "glob-pattern RHS" as RISKY — flagged and explicitly approved per item.)
+* **R3.4** — entry `cd`; if it failed, the glob loop would have run in the caller's cwd. Fail-fast is the correct semantic.
+* **R3.5** — best-effort cleanup *after* the list is already printed; a hard `return 1` would retroactively fail a successful call, so `‖ true` silences SC2164 without changing the observable return (approved alternative to leaving it).
+* **R3.6 / R3.7** — `grep -q` exits 0 on match / 1 on no match, the exact truth value of `-n` over the captured output. Verified byte-identical across `x32y`/`64bit`/`arm`/`` /`32`/`64`.
+
+### Verification (agent-safe only) — all green
+
+1. `bash -n pisafe` PASS; `bash pisafe -v` → `1.2.12.beta1`.
+2. **R3.1** suffix/base extraction for `1024kb 5mb 2gb 1tb 100 512mb 10 7tb` — base + suffix correct and identical to pre-fix (`100`→base `100`/suffix `""`; `1024kb`→`1024`/`kb`).
+3. **R3.6/7** `grep -q` vs old `-n $(…)` — 6/6 inputs identical (32-arm, 64-arm, none, empty, bare `32`, bare `64`).
+4. **R3.4/5** subshell harness of the real `file_list_image_files`: good dir → lists both files, `rc=0`; non-existent dir → `cd: … No such file or directory`, **`rc=1`, header never printed** (fail-fast proven).
+5. shellcheck: **98 → 91** findings (−7: SC2053×2, SC2164×2, SC2021×1, SC2143×2); **18 → 16** codes (SC2053 and SC2164 now zero).
+6. `git diff` — 8 hunks (7 R3 + the SC2125 fix), each mapping exactly to one approved item; nothing else touched.
+
+### Explicitly left for later (out of scope this round)
+
+* SC2143 **L1507** (multi-stage pipeline — `-q` would change which command's exit code is tested; needs redesign).
+* SC2181×18, SC2155×13, SC2005×9, SC2002×5, SC2034×15 — the large mechanical sweeps / dead-var removal; each needs its own approved round + test battery.
+* All previously-classified leave-as-is (SC2086 keep-list, menu idiom, L1992 SC2027 FP, SC2059/SC2048, SC2215 dead fn, SC1001, the three `[[:digit:]]` SC2021 FPs).
+
+### Commit
+
+Pending user approval (RISKY, approved per item, verified). Candidate message: `review R3: quote = RHS and tr suffix set, fail-fast entry cd, grep -q (SC2053/2164/2021/2143 → 91 findings)`.
+
+---
+
 ## Open items across rounds
 
 | Item | Location | Round |
@@ -254,5 +333,5 @@ Sweeps performed to bound the regression set:
 | Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
 | **Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked** | `pisafe` L50–95 | R2+ (user: leave for now) |
 | `tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk (tr `[[` = literal-`[` escape) | `pisafe` L782 (cf. 899, 903) | R2+ (needs care + test) |
-| **102 residual shellcheck findings / 19 codes** (SC2181×18, SC2086×17 keep-list, SC2034×15, SC2155×13, SC2005×9, SC2002×5, SC2021×4 tr-`[[`, SC2125×4 bc-strings, SC2143×3, SC2053×2 `[[=]]` glob-RHS, SC2027×2 (1 FP @1992), SC2164×2, SC2215×2, + 6 singletons) — all RISKY/intentional/backlog | `pisafe` (full breakdown in Round 2 section) | R3+ per-item if user wants |
+| ~~**102 residual shellcheck findings / 19 codes**~~ → **91 findings / 16 codes** (SC2181×18, SC2086×17 keep-list, SC2034×15, SC2155×13, SC2005×9, SC2002×5, SC2021×3 (3× `[[:digit:]]` FPs), SC2143×1 (L1507 pipeline), SC2027×2 (1 FP @1992), SC2215×2, + 6 singletons) — SC2125×4 **closed in post-R2 safe cleanup**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in Round 3** | `pisafe` (full breakdown in Round 2 / Round 3 sections) | R4+ per-item if user wants |
 | Copyright header `2018 - 2022` | `pisafe`:3 | release round |
