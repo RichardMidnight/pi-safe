@@ -297,7 +297,8 @@ pisafe_install_tool() {
             #echo_white Installing $TOOL ...
             ui_echo "Installing $TOOL..." white
             sudo "$INSTALL" "$TOOL"
-            if (( $? )); then
+            ES=$?
+            if (( ES )); then
                 ui_msg_warning $LINENO "$TOOL not installed."
             fi
  ;;
@@ -611,14 +612,16 @@ env_which () {
 
     # if which not installed, try to install it
     which which 1>/dev/null 2>/dev/null
-    if (( $? )); then
+    ES=$?
+    if (( ES )); then
         sudo apt install which -y
         sudo pacman -S which --noconfirm
         sudo dnf install which -y
     fi
 
     which "$FILE" 1>/dev/null 2>/dev/null
-    if (( $? )); then
+    ES=$?
+    if (( ES )); then
         #echo false
         return 1
     else
@@ -984,7 +987,8 @@ file_size() {
 
     if [[ -f "$FILE" ]]; then
         SIZE_BYTES="$(stat -c%s -- "$FILE")"
-        if (( $? )); then
+        ES=$?
+        if (( ES )); then
             return 1
         fi
         if [[ "$HUMAN" = -h ]]; then
@@ -1149,7 +1153,8 @@ media_backup(){
             ui_echo "~ Filesystem not shrunk.  Setting is 'off'." red log
         else
             run_command "sudo pishrink.sh $PI_SHRINK_OPTS '$OUTFILE_BASE.img' " "$LINENO"
-            if (( $? )); then
+            ES=$?
+            if (( ES )); then
                 ui_echo "~ Continuing without shrinking the file system..." red log
             fi
         fi
@@ -1583,14 +1588,16 @@ media_restore(){
 
     # preflight checklist.  Be sure INFILE and OUTDEV are good.
     media_restore_checklist
-    if (( $? )); then
+    ES=$?
+    if (( ES )); then
         return 1
     fi
 
 
     echo
     ui_countdown 10 "RESTORE" # "Overwriting '$(media_name "$OUTDEV")' in 10 seconds...\n\n"
-    if (( $? )); then
+    ES=$?
+    if (( ES )); then
         ui_msg RESTORE "~ Restore stopped." "" "" log
         return 2
     fi
@@ -1745,7 +1752,8 @@ media_restore_checklist(){
     # GET OUTDEV if missing #############################################
     if [[ -z $OUTDEV ]]; then
         OUTDEV=$(menu_select_device "RESTORE"  y )    # this sets global variable OUTDEV
-        if (( $? )); then
+        ES=$?
+        if (( ES )); then
             ui_msg_error $LINENO "No media found."
             return 1
         fi
@@ -1847,7 +1855,8 @@ media_mount(){
 
     for PARTITION in $MEDIA_PARTITIONS; do
         udisksctl mount -b "$MEDIA""$PARTITION"
-        if (( $? )); then
+        ES=$?
+        if (( ES )); then
             echo "error mounting $MEDIA$PARTITION"
         fi
     done
@@ -2057,7 +2066,8 @@ media_format(){
     fi
 
     ui_countdown 10 "ERASE MEDIA"  # "Erasing Media '$(media_name "$DEVICE")' in 10 seconds...\n\n"
-    if (( $? )); then
+    ES=$?
+    if (( ES )); then
     # ui_msg "INSTALL:" "$MSG" "white" "OK" "log"
         ui_msg "ERASE MEDIA" "~ Erase Media stopped." "" "" log
         return 2
@@ -2154,7 +2164,8 @@ media_format(){
         echo "Mounting the drive..."
         sleep 2
         run_command "udisksctl mount -b $PARTITION" "$LINENO"
-        if (( $? )); then
+        ES=$?
+        if (( ES )); then
             ui_msg_warning $LINENO "mount failed"
             #return 1
         fi
@@ -2197,24 +2208,28 @@ media_partition_info() {
     local OVERLAY=
 
     PARTED_OUTPUT=$(sudo parted -ms "$MEDIA" unit B print)
-    if (( $? )); then
+    ES=$?
+    if (( ES )); then
       return 1
     fi
 
     # mount the filesystem
     PARTSTART="$(echo "$PARTED_OUTPUT" | grep "^$PARTITION:" | cut -d ':' -f 2 | tr -d 'B')"
     LOOPBACK="$(sudo losetup -f --show -o "$PARTSTART" "$MEDIA")"
-    if (( $? )); then
+    ES=$?
+    if (( ES )); then
         echo ...retrying...
         sleep 2
         LOOPBACK="$(sudo losetup -f --show -o "$PARTSTART" "$MEDIA")"
-        if (( $? )); then
+        ES=$?
+        if (( ES )); then
             return 3
         fi
     fi
     MOUNTDIR=$(mktemp -d)
     sudo mount "$LOOPBACK" "$MOUNTDIR"
-    if (( $? )); then
+    ES=$?
+    if (( ES )); then
         sudo losetup -d "$LOOPBACK"
         return 4
     fi
@@ -2774,7 +2789,8 @@ menu_settings_options(){
     "debug_mode"        " " "$DEBUG_MODE" \
     3>&1 1>&2 2>&3)
 
-    if (( $? )); then
+    ES=$?
+    if (( ES )); then
         return
     fi
 
@@ -2829,7 +2845,8 @@ menu_tools(){
 
             DETAILS)
                 DEVICE=$(menu_select_device "MEDIA DETAILS")
-                if (( $? )); then
+                ES=$?
+                if (( ES )); then
                     ui_msg_error $LINENO "No media found."
                     #ui_msg BACKUP "No media found."
                     return 2
@@ -2839,7 +2856,8 @@ menu_tools(){
 
             ERASE)
                 DEVICE=$(menu_select_device "ERASE MEDIA" "y")
-                if (( $? )); then
+                ES=$?
+                if (( ES )); then
                     ui_msg_error $LINENO "No media found."
                     #ui_msg BACKUP "No media found."
                     return 2

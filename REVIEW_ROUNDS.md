@@ -379,7 +379,41 @@ Baseline: `00b05fc` (R4), 2918 lines, **77 findings / 14 codes**, `1.2.12.beta1`
 
 ### Commit
 
-Pending user approval. Candidate message: `review R5: drop useless echo/cat, grep files directly, -q emptiness test (SC2005/2002/2143 → 62 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_5.md`). **No push, no tag, no version bump.**
+✅ Committed `f6cb58d` `review R5: drop useless echo/cat, grep files directly, -q emptiness test (SC2005/2002/2143 → 62 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_5.md`). **No push, no tag, no version bump.**
+
+---
+
+## Round 6 — SC2181: capture `$?` into `ES` before testing (18 sites)
+
+**Status: APPLIED + VERIFIED (changes on `dev`, uncommitted — commit pending user approval).**
+User-approved 2026-09-25 ("Approve all (recommended)"). Prompt: `REVIEW_ROUND_6.md`.
+Baseline: `f6cb58d` (R5), 2918 lines, **62 findings / 11 codes**, `1.2.12.beta1`.
+
+### Change applied (uniform, 18 sites in 10 functions)
+
+Every `if (( $? )); then` → insert `ES=$?` on the line after the tested command + `if (( ES )); then`.
+Sites: `pisafe_install_tool` 300 · `env_which` 614/621 · `file_size` 987 · `media_backup` 1152 · `media_restore` 1586/1593 · `media_restore_checklist` 1748 · `media_mount` 1850 · `media_format` 2060/2157 · `media_partition_info` 2200/2207/2211/2217 · `menu_settings_options` 2777 · `menu_tools` 2832/2842.
+
+**Why SAFE:** `$?` is captured immediately after the command with nothing executable in between; `(( ES ))` tests the identical truth value; the file's **own idiom** — bare `ES=$?` already appears **47×** elsewhere (no function declares `local ES`/`local RC`, so scoping untouched); no rename/reorder/deletion/string/exit-code/signature change; nested losetup sites (2207/2211) each re-capture before their own test.
+
+### Verification (agent-safe) — all green
+
+1. `bash -n` PASS; `bash pisafe -v` → `1.2.12.beta1`; `grep -c 'if (( $? ))'` → **0**.
+2. **A/B battery `/tmp/opencode/r6_ab.sh` — 5/5 PASS** (pristine `f6cb58d` vs live): `env_which` hit+miss identical (sudo arm provably never fires), `file_size` hit-`-h` / hit-bytes / stat-fail identical. The 14 sudo/parted/losetup/udisksctl/whiptail/menu sites: proven by the equivalence argument + hunk read-through (not agent-runnable).
+3. shellcheck (`-f gcc`): **62 → 44 findings, 11 → 10 codes**; site-diff = exactly the 18 SC2181 lines removed, everything else line-shifted only; **0 new, 0 unrelated removals**.
+4. SC2086 keep-list: **17/17** at 129, 971, 1868, 1988, 2078, 2480, 2482, 2486, 2488, 2490, 2501, 2503×3, 2907, 2916, 2936.
+5. File 2918 → **2936 lines** (+18 exactly). `git diff --stat`: **36 ins / 18 del** — 18 hunks, each = one `ES=$?` + one `if` rewrite; full read-through clean.
+
+### Residual classes (all classified leave/RISKY-decided)
+
+* SC2086×17 keep-list (campaign policy: never quote — flag/list/eval/`for-in` RHS semantics)
+* SC2034×15 (mostly dynamic-scope false positives; deletion = RISKY)
+* SC2207×1 (menu `""${options[@]}""` idiom — R2-regression-fix territory), SC2215×2 (dead `notes_desktop_environment` — user: leave), SC2068×1 + SC2027×2 (one FP) same `""…""` idiom, SC2059×1 `printf $FILES`, SC2048×1, SC1001×1 (intentional), SC2021×3 `[[:digit:]]` FPs
+* **`media_name` dead error check** (pre-existing; logic change — user decides)
+
+### Commit
+
+Pending user approval. Candidate message: `review R6: capture $? into ES before testing (SC2181×18 → 44 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_6.md`). **No push, no tag, no version bump.**
 
 ---
 
@@ -399,5 +433,5 @@ Pending user approval. Candidate message: `review R5: drop useless echo/cat, gre
 | Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
 | **Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked** | `pisafe` L50–95 | R2+ (user: leave for now) |
 | `tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk (tr `[[` = literal-`[` escape) | `pisafe` L782 (cf. 899, 903) | R2+ (needs care + test) |
-| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → **62 findings / 11 codes** (SC2181×18, SC2086×17 keep-list, SC2034×15, SC2021×3 (3× `[[:digit:]]` FPs), SC2027×2 (1 FP), SC2215×2 (dead fn), SC2207×1 (menu idiom), SC2068×1, SC2059×1, SC2048×1, SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5** | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 sections) | R6+ per-item if user wants |
+| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → ~~**62 findings / 11 codes**~~ → **44 findings / 10 codes** (SC2086×17 keep-list, SC2034×15, SC2021×3 (3× `[[:digit:]]` FPs), SC2027×2 (1 FP), SC2215×2 (dead fn), SC2207×1 (menu idiom), SC2068×1, SC2059×1, SC2048×1, SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5**; **SC2181×18 closed in R6** | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 / 6 sections) | R7+ per-item if user wants |
 | Copyright header `2018 - 2022` | `pisafe`:3 | release round |
