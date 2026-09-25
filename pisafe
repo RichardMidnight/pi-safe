@@ -1869,8 +1869,8 @@ ui_countdown(){
 ui_echo(){
     # used to notify on the terminal what is going on.  optionally log it.
     # ui_echo "msg" red log
-    MSG="$1"
-    COLOR="${2:-grey}"
+    local MSG="$1"
+    local COLOR="${2:-grey}"
     local LOGIT="${3:-log}"   # or nolog
 
     if [[ "$LOGIT" = log ]]; then
@@ -1878,10 +1878,10 @@ ui_echo(){
     fi
 
     case $COLOR in
-        red)        echo_red "$MSG"   ;;
-        white)      echo_white "$MSG" ;;
-        blue)       echo_blue "$MSG"  ;;
-        *)          echo -e "$MSG"    ;;
+        red)        echo_red "$MSG" >&2   ;;
+        white)      echo_white "$MSG" >&2 ;;
+        blue)       echo_blue "$MSG" >&2  ;;
+        *)          echo -e "$MSG" >&2    ;;
     #    *)          echo  "$MSG"     ;;
     esac
 }
