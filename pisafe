@@ -2640,6 +2640,9 @@ menu_select_device(){
 
   #  OUTDEV=$DEVICE_SELECTED
   #  INDEV=$DEVICE_SELECTED
+    # The menu separator ' | ' is split only on '|', so the returned tag carries one trailing space
+    # (e.g. 'sda '). Strip it so device names are clean for [[ -e ]] / path checks downstream.
+    DEVICE_SELECTED="${DEVICE_SELECTED% }"
     echo "$DEVICE_SELECTED"
 }
 

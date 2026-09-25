@@ -192,6 +192,53 @@ Count-asserted transform `/tmp/opencode/sc_round2_transform.py`; **134 line-pair
 
 ---
 
+## Round 2 regression fix — device-selector trailing space (found in user functional testing 2026-09-25)
+
+**Status: DONE — committed (see below).**
+
+User testing `1.2.12.beta1` hit: `~ Error at line 1304. IN-DEV '/dev/sda' not found` — backup → pick `/dev/sda`. Repro signature: a **trailing space** inside the quotes. 1.2.11 (same action) worked.
+
+### Root cause (proven, not guessed)
+
+The whiptail menu tags built by `menu_select_device` **always** carry exactly one trailing space: `media_list`'s line is `sed 's/ / | /'`-ed (space-pipe-space) and then split on the pipe **only** (`""${options[@]}""` with `IFS='|'` field-splitting), so tag = `sda␣`, text = `␣SanDisk …`. True since v1.2.11 — but 1.2.11 ended the function with **unquoted** `echo $DEVICE_SELECTED`, whose word-splitting accidentally stripped the space and **masked** the dirty tag.
+
+R2 class-1's quoting of that line (`echo "$DEVICE_SELECTED"`) is the *correct* change (no flag-eating) but unmasked the latent quirk: `INDEV`/`OUTDEV`/`DEVICE` = `sda␣` → `[[ ! -e "/dev/sda " ]]` → error. Affects **all four** TUI device pickers (backup L1426, restore L1738→L1754, media-details L2816, erase L2826) — they all consume this single `echo`.
+
+Sweeps performed to bound the regression set:
+* **every** R1/R2 `echo $VAR` → `echo "$VAR"` change re-audited (via the 1.2.11 pristine, `9bab5f9`): this one is the only value-capture from a `|`-split menu; the rest are printf-in-pipe to `sed`/`tr` on numbers/messages — all verified equivalent in the R2 battery.
+* **every** `""…@…""` splitter idiom: only `menu_select_device` (plus one `"$MEDIA""$PARTITION"` concatenation, not a list).
+* **every** `for X in $LIST` loop: still unquoted / word-splitting intact (only `seq 1 "$MAX"`, R2 glob rewrite, `find "$LOCAL_PATH"` changed — all fine).
+
+→ **No other regression of this class.**
+
+### Applied (Fix C — user-chosen; keeps correct quoting, zero display change)
+
+```diff
+   #  OUTDEV=$DEVICE_SELECTED
+   #  INDEV=$DEVICE_SELECTED
++    # The menu separator ' | ' is split only on '|', so the returned tag carries one trailing space
++    # (e.g. 'sda '). Strip it so device names are clean for [[ -e ]] / path checks downstream.
++    DEVICE_SELECTED="${DEVICE_SELECTED% }"
+     echo "$DEVICE_SELECTED"
+```
+
+* `${var% }` strips **at most one** trailing space — exactly the space the ` | ` separator always inserts; no-op if absent; device names contain no spaces so nothing legitimate is lost.
+* No unquoted-echo reintroduced, no word-splitting reliance, menu display identical to 1.2.11.
+* Considered alternatives: A = revert to `echo $DEVICE_SELECTED` (pure 1.2.11, but re-introduces the anti-pattern and leans on word-splitting); B = change the separator sed to a bare `|` (root-cause, but changes visible menu text — out of SAFE scope). C restores identical behavior with the cleaner mechanism.
+
+### Verification
+
+* `bash -n pisafe` PASS; `bash pisafe -v` → `1.2.12.beta1`.
+* End-to-end harness `/tmp/opencode/run_seldev.sh`: drives the **real live** `menu_select_device` (extracted from the file) with a stubbed `media_list` and a fake `whiptail` honoring the real `3>&1 1>&2 2>&3` convention (tag → fd3/capture pipe, dialog → fd1/terminal) that returns the first tag exactly as the menu built it (`sda␣`). **BEFORE fix:** returned `sda␣` → `/dev/sda␣` FAILS `[[ -e ]]` (reproduces the user's error verbatim). **AFTER fix:** returns clean `sda` → `/dev/sda` OK.
+* `git diff`: +3 lines (2 comment + 1 trim) inside `menu_select_device` only; nothing else touched.
+
+### Commit (approved by user 2026-09-25)
+
+`review R2: fix device-selector trailing-space regression (menu tag 'sda ' -> 'sda')`
+— covering `pisafe` + `REVIEW_ROUNDS.md`. **No push, no tag, no version bump.**
+
+---
+
 ## Open items across rounds
 
 | Item | Location | Round |
@@ -201,6 +248,7 @@ Count-asserted transform `/tmp/opencode/sc_round2_transform.py`; **134 line-pair
 | ~~`cd $DIR` unquoted~~ — **closed in R2** (class 1: `cd "$DIR"`) | (was ~952) | ✅ R2 |
 | ~~`FILES+=($FILE)` unquoted~~ — **closed in R2** (class 5: `FILES+=("$FILE")`) | (was 2350) | ✅ R2 |
 | ~~`sudo $INSTALL …` unquoted~~ — **closed in R2** (class 1: all bare `sudo "$INSTALL" …` arms quoted) | `pisafe` 278/298/2080–2115 | ✅ R2 |
+| ~~`echo $DEVICE_SELECTED` trailing-space regression~~ (menu tag `sda␣`; R2 quoting unmasked latent ` | ` separator quirk; broke all 4 TUI device pickers in 1.2.12.beta1) — **closed** (Fix C: `DEVICE_SELECTED="${DEVICE_SELECTED% }"` before the quoted `echo`; see Round 2 regression section) | `pisafe` ~2643 | ✅ R2-regression-fix |
 | Stale `test_pisafe` harness | `test_pisafe` | later, user decides |
 | Cosmetic double-space sites (`else  #`, `[[ … = primary  ]]`) | `pisafe` 838, 1536 | R2+ |
 | Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
