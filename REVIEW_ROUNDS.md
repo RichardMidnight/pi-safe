@@ -385,7 +385,7 @@ Baseline: `00b05fc` (R4), 2918 lines, **77 findings / 14 codes**, `1.2.12.beta1`
 
 ## Round 6 — SC2181: capture `$?` into `ES` before testing (18 sites)
 
-**Status: APPLIED + VERIFIED (changes on `dev`, uncommitted — commit pending user approval).**
+**Status: COMMITTED as `87b6a38` on `dev` (user approved 2026-09-25).**
 User-approved 2026-09-25 ("Approve all (recommended)"). Prompt: `REVIEW_ROUND_6.md`.
 Baseline: `f6cb58d` (R5), 2918 lines, **62 findings / 11 codes**, `1.2.12.beta1`.
 
@@ -413,7 +413,48 @@ Sites: `pisafe_install_tool` 300 · `env_which` 614/621 · `file_size` 987 · `m
 
 ### Commit
 
-Pending user approval. Candidate message: `review R6: capture $? into ES before testing (SC2181×18 → 44 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_6.md`). **No push, no tag, no version bump.**
+Committed on `dev` as **`87b6a38`** (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_6.md`). No push, no tag, no version bump.
+
+---
+
+## Round 7 — decision round: dead variables (SC2034×15) + 2 flagged idioms
+
+**Status: APPLIED + VERIFIED (changes on `dev`, uncommitted — commit pending user approval).**
+Per-item user approval 2026-09-25: B1 approve · B2 **defer to release** · B3 approve · B4 approve · B5 approve · B6 leave + document. Prompt: `REVIEW_ROUND_7.md`.
+Baseline: `87b6a38` (R6), 2936 lines, **44 findings / 10 codes**, `1.2.12.beta1`.
+
+### Changes applied (19 line deletions + 2 line rewrites; every item RISKY per campaign rules, all evidence-backed)
+
+* **B1 — 13 dead variables/locals deleted** (zero reads file-wide; no `export` anywhere in the file; no caller passes the affected positional args): `CURRENT_DIR` (22), `OPTIONAL_TOOLS` (28), `BLUE` (41), `run_command` `QUIET` (126), `SETTINGS_SCRIPT_VER` (506), `VERIFY` (515), `SAFETY` (528), `env_root_device` `ROOT_PARTITION`+`ROOT_DRIVE` (557/558), `get_bytes` `p_eta` (814), `MEDIA_PARTITION_LIST` (1504), `ui_yesno` `TIMEOUT` (1972), `media_partition_info` `READONLY` (2207). (pre-R7 line numbers)
+* **B3 — dead `EXT` store block in `menu_get_outfile` deleted** (3 writes, 0 reads file-wide; the real extension handling is the final `file_ext` check + append) — 6 lines.
+* **B4 — `printf $FILES | column -t` → `printf '%b' "$FILES" | column -t`** (L971). **Fixed a real bug**: the data string was the printf *format*, so any `%` or `\` in a filename was interpreted as a conversion — A/B fixture `gamma 50%.xz` rendered as `gamma_50z` under the old code; new code renders it cleanly and is byte-identical for sane filenames.
+* **B5 — `get_args $*` → `get_args "$@"`** (L2916) — strictly safer positional-arg forwarding (no re-split of space-containing args).
+* **B2 — DEFERRED TO RELEASE**: L3 `COPYRIGHT="By Richard Reed 2018 - 2022"` kept; delete/rehome + date is a release-time decision (text preserved in `REVIEW_ROUND_7.md`).
+* **B6 — left as-is, documented**: `media_name` dead error check — return code is swallowed at **all 5 call sites** (each embedded in a `$(…)` string), so a `PIPESTATUS[0]` fix would change no user-visible behavior; the real fix (empty-output check + callers surfacing the error) is feature work beyond the campaign.
+
+### Verification (agent-safe) — all green
+
+1. `bash -n` **PASS**; `bash pisafe -v` → `1.2.12.beta1`; file 2936 → **2917 lines** (−19).
+2. **A/B battery `/tmp/opencode/r7_ab.sh` — ALL PASS** (pristine `87b6a38` `/tmp/opencode/pisafe_preR7.txt` vs live): `get_bytes` lens 1–18 + suffix/invalid/empty arms byte-identical; `file_list_image_files` clean-dir byte-identical + **% fixture documents the B4 bug fix (live rc 0)**; `run_command` ok/fail/compound/3-arg identical; `ui_yesno` y/n/stray-then-y/4th-arg identical; `env_root_device` real read-only `findmnt`/`lsblk` identical; `get_args` `$*` vs `"$@"` identical globals incl. space-token; `config_var_get_settings` shared globals identical.
+3. shellcheck (`-f gcc`): **44 → 26 findings, 10 → 8 codes**; site-diff = exactly **18 removed** (SC2034×14, SC2059×1, SC2048×1, SC2086×2) and **0 added, 0 unrelated**. Note: the two B4/B5 lines carried a double SC2086 flag, so SC2086 went 17 → 15.
+4. SC2086 keep-list: **15/15** at 125, 1857, 1976, 2066, 2467, 2469, 2473, 2475, 2477, 2488, 2490×3, 2888, 2917.
+5. `git diff --stat`: **2 ins / 21 del** — 19 pure deletions + 2 line rewrites (B4/B5); full read-through clean, nothing else touched.
+
+### Residual classes (all classified leave/RISKY-decided, unchanged)
+
+* SC2086×15 keep-list (campaign policy: never quote — flag/list/eval/`for-in`/menu semantics)
+* **SC2034×1 = L3 `COPYRIGHT` — deferred to release round (user decision B2)**
+* SC2021×3 `[[:digit:]]` FPs, SC2027×2 (1 FP, L2013 nested-quote), SC2215×2 (dead `notes_desktop_environment` — user: leave), SC2207×1 + SC2068×1 (menu `""${options[@]}""` idiom, R2-regression territory), SC1001×1 (intentional `$DEVICE\1`)
+
+### New backlog items (from the R7 audit)
+
+* `media_partition_info` builds `ROOTREADONLY` **without `local`** → leaks into the global namespace (hygiene; user decides) — `pisafe` ~2224.
+* `media_name` known-limitation noted (B6 above).
+* R7's B4 documents+fixes the `%`-filename mangling in `file_list_image_files` (was silent in v≤1.2.12.beta1).
+
+### Commit
+
+Pending user approval. Candidate message: `review R7: delete dead vars/locals (SC2034×14), printf %b, get_args "$@" (44→26 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_7.md`). **No push, no tag, no version bump.**
 
 ---
 
@@ -422,7 +463,8 @@ Pending user approval. Candidate message: `review R6: capture $? into ES before 
 | Item | Location | Round |
 |---|---|---|
 | ~~`get_ver_to_int` (no locals, global `parts`, `let`)~~ — **closed in R4** (locals added; `let`→`(( ))`; **pre-existing dotted-version bug fixed** via `IFS='.' read -r -a parts <<< "$1"` — "UPDATE AVAILABLE" check now functional; A/B-proven) | `pisafe` ~710 | ✅ R4 |
-| **`media_name` dead error check** — `lsblk | sed` pipeline swallows lsblk failure; `ES=$?`/`if (( ES ))` can never fire; bad device → silent ` -  ()`. Needs `PIPESTATUS[0]` or empty-output check (logic change) | `pisafe` ~1031 | R6+, user decides |
+| **`media_name` dead error check** — `lsblk | sed` pipeline swallows lsblk failure; `ES=$?`/`if (( ES ))` can never fire; bad device → silent ` -  ()`. **R7: left as-is + documented** — return code is swallowed at all 5 call sites (embedded in `$(…)` strings), so an idiom fix changes no visible behavior; real fix (empty-output check + caller surfacing) = feature work | `pisafe` ~1024 | R7 (user: leave) |
+| **`ROOTREADONLY` not `local` in `media_partition_info`** — built as a bare global (sibling vars ARE local); discovered in the R7 SC2034 audit (dead `local READONLY=` was its sibling). Hygiene item, user decides | `pisafe` ~2224 | R8+, user decides |
 | ~~`echo $INPUT` unquoted~~ — **closed in R2** (class 3: `printf '%s\n' "$INPUT"`) | (was ~1237) | ✅ R2 |
 | ~~`cd $DIR` unquoted~~ — **closed in R2** (class 1: `cd "$DIR"`) | (was ~952) | ✅ R2 |
 | ~~`FILES+=($FILE)` unquoted~~ — **closed in R2** (class 5: `FILES+=("$FILE")`) | (was 2350) | ✅ R2 |
@@ -433,5 +475,5 @@ Pending user approval. Candidate message: `review R6: capture $? into ES before 
 | Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
 | **Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked** | `pisafe` L50–95 | R2+ (user: leave for now) |
 | `tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk (tr `[[` = literal-`[` escape) | `pisafe` L782 (cf. 899, 903) | R2+ (needs care + test) |
-| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → ~~**62 findings / 11 codes**~~ → **44 findings / 10 codes** (SC2086×17 keep-list, SC2034×15, SC2021×3 (3× `[[:digit:]]` FPs), SC2027×2 (1 FP), SC2215×2 (dead fn), SC2207×1 (menu idiom), SC2068×1, SC2059×1, SC2048×1, SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5**; **SC2181×18 closed in R6** | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 / 6 sections) | R7+ per-item if user wants |
-| Copyright header `2018 - 2022` | `pisafe`:3 | release round |
+| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → ~~**62 findings / 11 codes**~~ → ~~**44 findings / 10 codes**~~ → **26 findings / 8 codes** (SC2086×15 keep-list, SC2034×1 = L3 `COPYRIGHT` deferred to release, SC2021×3 (FPs), SC2027×2 (1 FP), SC2215×2 (dead fn), SC2207×1 (menu idiom), SC2068×1, SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5**; **SC2181×18 closed in R6**; **SC2034×14 + SC2059×1 + SC2048×1 + SC2086×2 closed in R7** | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 / 6 / 7 sections) | R8+ per-item if user wants |
+| Copyright header `2018 - 2022` (L3 dead `COPYRIGHT` var — the only place the notice lives) | `pisafe`:3 | **release round** (R7 user decision B2: kept out of R7; delete/rehome + date then) |
