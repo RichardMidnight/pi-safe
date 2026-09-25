@@ -419,7 +419,7 @@ Committed on `dev` as **`87b6a38`** (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVI
 
 ## Round 7 — decision round: dead variables (SC2034×15) + 2 flagged idioms
 
-**Status: APPLIED + VERIFIED (changes on `dev`, uncommitted — commit pending user approval).**
+**Status: COMMITTED — `8c42bd2` on `dev` (2026-09-25).**
 Per-item user approval 2026-09-25: B1 approve · B2 **defer to release** · B3 approve · B4 approve · B5 approve · B6 leave + document. Prompt: `REVIEW_ROUND_7.md`.
 Baseline: `87b6a38` (R6), 2936 lines, **44 findings / 10 codes**, `1.2.12.beta1`.
 
@@ -448,23 +448,46 @@ Baseline: `87b6a38` (R6), 2936 lines, **44 findings / 10 codes**, `1.2.12.beta1`
 
 ### New backlog items (from the R7 audit)
 
-* `media_partition_info` builds `ROOTREADONLY` **without `local`** → leaks into the global namespace (hygiene; user decides) — `pisafe` ~2224.
+* `media_partition_info` builds `ROOTREADONLY` **without `local`** → leaks into the global namespace (hygiene; user decides) — `pisafe` ~2224. **→ resolved in R8 (R8.1).**
 * `media_name` known-limitation noted (B6 above).
 * R7's B4 documents+fixes the `%`-filename mangling in `file_list_image_files` (was silent in v≤1.2.12.beta1).
 
 ### Commit
 
-Pending user approval. Candidate message: `review R7: delete dead vars/locals (SC2034×14), printf %b, get_args "$@" (44→26 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_7.md`). **No push, no tag, no version bump.**
+**`8c42bd2`** on `dev` (2026-09-25, user-approved): `review R7: delete dead vars/locals (SC2034×14), printf %b, get_args "$@" (44→26 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_7.md`; untracked user files excluded). **No push, no tag, no version bump.**
 
 ---
 
-## Open items across rounds
+## Round 8 — final decision round: `local ROOTREADONLY` + stale open-item correction (prompt: `REVIEW_ROUND_8.md`)
+
+**Status: APPLIED + VERIFIED (changes on `dev`, uncommitted — commit pending user approval).**
+User approval 2026-09-25: R8.1 approve · R8.2 approve (docs only).
+Baseline: `8c42bd2` (R7), 2917 lines, **26 findings / 8 codes**, `1.2.12.beta1`.
+
+### Changes applied (1 line added; R8.1 is RISKY class — "adding `local`" — user-approved)
+
+* **R8.1 — `local ROOTREADONLY=` added to `media_partition_info`** (L2197). The var is conditionally set (only when `$MOUNTDIR/etc/fstab` exists) and read by the final `echo`, but was the function's one un-`local`ed variable. Consequences: (a) global leak; (b) **cross-call contamination** — a first call on a read-only `/boot` Linux image leaves `ROOTREADONLY="(READONLY)"` in the global namespace, so a second call on a Windows image (no `fstab` → branch skipped) wrongly reports it as read-only. The A/B harness **reproduces the leak on pre** (call B: `'Windows'(READONLY)`) and **proves live clean** (`'Windows'`), with first-call behavior byte-identical. Nothing else in the file reads it (grep-proven; all 4 references inside the function).
+* **R8.2 — docs**: the open-item "`tr -cd '[[kmgtbKMGTB]]' suffix-set quirk" was **stale/mis-diagnosed** — the kmgtb set was **already fixed in R3** (R3.1); the remaining SC2021×3 are shellcheck FPs on the correct `[[:digit:]]` POSIX class. Open-item row closed.
+
+### Verification (agent-safe) — all green
+
+1. `bash -n` **PASS**; `bash pisafe -v` → `1.2.12.beta1`; 2917 → **2918 lines** (+1).
+2. **A/B harness `/tmp/opencode/r8_ab.sh` — ALL PASS** (pristine `8c42bd2` `/tmp/opencode/pisafe_preR8.txt` vs live; function exercised in the same shell with `sudo`/`mktemp`/`file` stubbed and fixture fs trees):
+   * first-call sequences (ro-fstab Linux image; Windows image) → pre/live **byte-identical**;
+   * contamination sequence (call A then call B, same shell) → **pre: `B:['Windows'(READONLY)]` (bug reproduced); live: `B:['Windows']` (fixed)**; call A output identical in both versions.
+3. shellcheck (`-f gcc`): **26 findings / 8 codes — unchanged**; site-list diff = exactly the one-line downward shift from the insertion, **0 added / 0 removed**.
+4. SC2086 keep-list: **15/15** at 125, 1857, 1976, 2066, 2468, 2470, 2474, 2476, 2478, 2489, 2491×3, 2889, 2918 (post-R8 line numbers).
+5. `git diff`: **1 ins / 0 del** — exactly `+    local ROOTREADONLY=` in the `media_partition_info` local block; nothing else touched.
+
+### Commit
+
+Pending user approval. Candidate message: `review R8: local ROOTREADONLY (fix cross-call (READONLY) bleed in media_partition_info)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_8.md`; untracked user files excluded). **No push, no tag, no version bump.**
 
 | Item | Location | Round |
 |---|---|---|
 | ~~`get_ver_to_int` (no locals, global `parts`, `let`)~~ — **closed in R4** (locals added; `let`→`(( ))`; **pre-existing dotted-version bug fixed** via `IFS='.' read -r -a parts <<< "$1"` — "UPDATE AVAILABLE" check now functional; A/B-proven) | `pisafe` ~710 | ✅ R4 |
 | **`media_name` dead error check** — `lsblk | sed` pipeline swallows lsblk failure; `ES=$?`/`if (( ES ))` can never fire; bad device → silent ` -  ()`. **R7: left as-is + documented** — return code is swallowed at all 5 call sites (embedded in `$(…)` strings), so an idiom fix changes no visible behavior; real fix (empty-output check + caller surfacing) = feature work | `pisafe` ~1024 | R7 (user: leave) |
-| **`ROOTREADONLY` not `local` in `media_partition_info`** — built as a bare global (sibling vars ARE local); discovered in the R7 SC2034 audit (dead `local READONLY=` was its sibling). Hygiene item, user decides | `pisafe` ~2224 | R8+, user decides |
+| ~~**`ROOTREADONLY` not `local` in `media_partition_info`**~~ — **closed in R8** (R8.1: `local ROOTREADONLY=`; fixes the cross-call `(READONLY)` contamination the stale-value path caused — A/B reproduced on pre, live proven clean; sibling vars were already local) | `pisafe` ~2197 (post-R8) | ✅ R8 |
 | ~~`echo $INPUT` unquoted~~ — **closed in R2** (class 3: `printf '%s\n' "$INPUT"`) | (was ~1237) | ✅ R2 |
 | ~~`cd $DIR` unquoted~~ — **closed in R2** (class 1: `cd "$DIR"`) | (was ~952) | ✅ R2 |
 | ~~`FILES+=($FILE)` unquoted~~ — **closed in R2** (class 5: `FILES+=("$FILE")`) | (was 2350) | ✅ R2 |
@@ -474,6 +497,6 @@ Pending user approval. Candidate message: `review R7: delete dead vars/locals (S
 | ~~Cosmetic double-space sites (`else  #`, `[[ … = primary  ]]`)~~ — **closed in R4** (R4.3) | `pisafe` 838, 1537 | ✅ R4 |
 | Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
 | **Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked** | `pisafe` L50–95 | R2+ (user: leave for now) |
-| `tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk (tr `[[` = literal-`[` escape) | `pisafe` L782 (cf. 899, 903) | R2+ (needs care + test) |
+| ~~`tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk~~ — **closed in R8 as stale/mis-diagnosed**: the kmgtb set was **already fixed in R3** (R3.1 → `tr -cd 'kmgtbKMGTB'`); the remaining SC2021×3 are shellcheck FPs on the correct `[[:digit:]]` POSIX-class form (L777, L897, L901) and stay on the file as known FPs | `pisafe` L779 (cf. L777, L897, L901) | ✅ R3 (fix) / R8 (row closed) |
 | ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → ~~**62 findings / 11 codes**~~ → ~~**44 findings / 10 codes**~~ → **26 findings / 8 codes** (SC2086×15 keep-list, SC2034×1 = L3 `COPYRIGHT` deferred to release, SC2021×3 (FPs), SC2027×2 (1 FP), SC2215×2 (dead fn), SC2207×1 (menu idiom), SC2068×1, SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5**; **SC2181×18 closed in R6**; **SC2034×14 + SC2059×1 + SC2048×1 + SC2086×2 closed in R7** | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 / 6 / 7 sections) | R8+ per-item if user wants |
 | Copyright header `2018 - 2022` (L3 dead `COPYRIGHT` var — the only place the notice lives) | `pisafe`:3 | **release round** (R7 user decision B2: kept out of R7; delete/rehome + date then) |

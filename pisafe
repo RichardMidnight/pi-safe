@@ -2193,6 +2193,7 @@ media_partition_info() {
     local ARCH=
     local BITS=
     local OVERLAY=
+    local ROOTREADONLY=
 
     PARTED_OUTPUT=$(sudo parted -ms "$MEDIA" unit B print)
     ES=$?
