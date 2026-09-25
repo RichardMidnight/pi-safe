@@ -577,7 +577,15 @@ Staged either way: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_10.md`, `lint.sh`
 
 ### Beta lock-in (user directive) — **IN EFFECT since R10 commit**
 
-**Code changes are frozen** until `things to fix.md` is explicitly re-scoped into post-beta feature rounds. Version stays `1.2.12.beta1` (bump + tag remain a separate explicit release action). The `lint.sh` gate + the zero-finding baseline + the single documented `SC2068` directive are the regression re-ignition lock.
+**Code changes are frozen** until `things to fix.md` is explicitly re-scoped into post-beta feature rounds. The `lint.sh` gate + the zero-finding baseline + the single documented `SC2068` directive are the regression re-ignition lock.
+
+## Release — `1.2.12-beta.2` (2026-09-25, user-approved release action)
+
+* **User functional test of the R10 tip: passed** (“it seems to work”).
+* **Version:** `SCRIPTVER` `1.2.12.beta1` (non-SemVer dot form) → **`1.2.12-beta.2`** — SemVer 2.0.0-standard (hyphen-separated pre-release). `v1.2.12-beta.1` is already claimed by the superseded `dev_old` line, so this reviewed line takes **beta.2**. `get_ver_to_int` verified: `1.2.12-beta.2` → `1002012`, identical to the old string (update-check logic unaffected).
+* **Commit (on `dev`, after `1c0434c`):** `version 1.2.12-beta.2 — shellcheck clean (0 findings)` — also carries the in-tree user tweak to `pisafe_about` (“Peace” → “ - Peace”), part of the tested working tree.
+* **Tag:** annotated `v1.2.12-beta.2` (message `PiSafe 1.2.12-beta.2`, matching the existing `v1.2.12-beta.1` tag style, which is the repo's only annotated tag).
+* **Not done (remain separate explicit user actions):** `main` untouched, nothing pushed, old `dev_old` line + `v1.2.12-beta.1` tag left in place, copyright header still `2018 - 2022` (update at final release).
 
 ---
 

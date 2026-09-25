@@ -15,7 +15,7 @@
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.12.beta1"   # 2026/09/25
+SCRIPTVER="1.2.12-beta.2"   # 2026/09/25
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -149,7 +149,7 @@ pisafe_about(){
     echo
     echo "Hopfully $PRODUCTNAME is useful to others."
     echo
-    echo "Peace"
+    echo " - Peace"
 }
 
 
