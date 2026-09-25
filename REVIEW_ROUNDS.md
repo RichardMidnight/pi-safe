@@ -345,7 +345,41 @@ Full scope/approval/verification record: `REVIEW_ROUND_4.md`. Baseline: `ed37b40
 
 ### Commit
 
-Pending user approval. Candidate message: `review R4: variable hygiene — get_ver_to_int fix+locals, split local X=$(…) (SC2155/2219 → 77 findings)`.
+✅ Committed `00b05fc` `review R4: variable hygiene — get_ver_to_int fix+locals, split local X=$(…) (SC2155/2219 → 77 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_4.md`). **No push, no tag, no version bump.**
+
+---
+
+## Round 5 — pipeline & command hygiene
+
+**Status: APPLIED + VERIFIED (changes on `dev`, uncommitted — commit pending user approval).**
+User-approved 2026-09-25 ("Approve all (recommended)"). Prompt: `REVIEW_ROUND_5.md`.
+Baseline: `00b05fc` (R4), 2918 lines, **77 findings / 14 codes**, `1.2.12.beta1`.
+
+### Changes applied (15 single-line replacements, line-neutral)
+
+| item | Site | Change |
+|---|---|---|
+| R5.1 ×8 | 633–636 `env_sysinfo`; 945 `file_image_size`; 991 `file_size`; 1062 `media_size`; 1017 `do_list_info` | `echo "$(cmd)"` → `printf '%s\n' "$(cmd)"` — byte-identical **including** the empty-output edge: `env_terminal`/`env_texteditor`/`env_root_device` (can fail silently empty) and `get_bytes` (warn-return → empty stdout) print a **blank line** today; a bare `cmd` call would print nothing = behavior change. `printf '%s\n'` preserves exactly that, zero new findings |
+| R5.2 | 877 `file_ext` | `echo "$(basename "$*")" | grep \\. \| sed …` → `basename "$*" | grep \\\. \| sed …` (output piped, not displayed; empty vs blank-line both miss `grep \.` identically) |
+| R5.3 ×5 | 470 `config_var_get`; 1009 `do_list_info`; 2224 / 2245 / 2253 `media_partition_info` | `cat FILE \| grep …` → `grep … FILE` (identical bytes; mount sites already `[[ -e ]]`-guarded; failure class unchanged — grep-on-missing-file reports and outputs nothing, pipe status still the last command's) |
+| R5.4 | 1515 `media_partition_info` (RISKY: exit-status restructure, approved per item) | `if [[ -z $(… \| grep primary) ]]` → `if ! … \| grep -q primary` — the L1515 site deferred in R3, now resolvable because **only the emptiness** of the capture is used; branch-decision identical on all inputs (pipeline status = last command's, in both forms; `-q` can only SIGPIPE upstream, which cannot change it) |
+
+### Verification (agent-safe) — all green
+
+1. `bash -n pisafe` PASS; `bash pisafe -v` → `1.2.12.beta1`.
+2. **A/B battery `/tmp/opencode/r5_ab.sh` — 23/23 PASS** (pristine `00b05fc` snapshot `/tmp/opencode/pisafe_preR5.txt` vs live): `env_sysinfo` ×3 scenarios (all-present; editor-missing = silent empty; terminal-fail + root empty) — identical incl. empty→blank-line edge; `file_ext` ×5 + pipe form ×4 — identical; `get_bytes`-wrap non-empty + empty — identical; `media_list`-wrap multi-line + empty — identical; `config_var_get` hit + miss on a real temp `$CONFIG` — identical; os-release / fstab / cmdline expressions hit + miss — identical; **L1515 branch: 3 `PARTED_OUTPUT` fixtures (primary-last → not taken; no-primary → taken; primary with Free line after → not taken) — identical rc pre vs live on all 3**.
+3. shellcheck (`-f gcc`, one line per finding): **77 → 62 findings, 14 → 11 codes** — exactly SC2005×9, SC2002×5, SC2143×1 removed; sorted full-report site diff = **15 removed lines, 0 added**.
+4. SC2086 keep-list: **17/17 same lines** — 129, 968, 1859, 1979, 2068, 2465, 2467, 2471, 2473, 2475, 2486, 2488×3, 2889, 2898, 2918.
+5. File stays **2918 lines** (all edits single-line). `git diff --stat`: **15 insertions / 15 deletions** — 15 one-line hunks, each mapping to an approved item; nothing else touched.
+
+### Explicitly left for later
+
+* **`media_name` dead error check** (pre-existing, R4 discovery — still open): `lsblk | sed` swallows lsblk failure; `ES=$?`/`if (( ES ))` never fires. Needs `PIPESTATUS[0]` or empty-output check = logic change.
+* SC2181×18 (`if (( $? ))` family — flow restructuring), SC2034×15 (dead/dynamic-scope vars — deletion = RISKY), SC2207×1 (menu splitter idiom), SC2068×1, SC2059/SC2048/SC1001, SC2027×2 (1 FP), SC2021×3 (FPs), SC2215×2 (dead `notes_desktop_environment`) — later rounds if the user wants; all classified leave-as-is/RISKY.
+
+### Commit
+
+Pending user approval. Candidate message: `review R5: drop useless echo/cat, grep files directly, -q emptiness test (SC2005/2002/2143 → 62 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_5.md`). **No push, no tag, no version bump.**
 
 ---
 
@@ -354,7 +388,7 @@ Pending user approval. Candidate message: `review R4: variable hygiene — get_v
 | Item | Location | Round |
 |---|---|---|
 | ~~`get_ver_to_int` (no locals, global `parts`, `let`)~~ — **closed in R4** (locals added; `let`→`(( ))`; **pre-existing dotted-version bug fixed** via `IFS='.' read -r -a parts <<< "$1"` — "UPDATE AVAILABLE" check now functional; A/B-proven) | `pisafe` ~710 | ✅ R4 |
-| **`media_name` dead error check** — `lsblk | sed` pipeline swallows lsblk failure; `ES=$?`/`if (( ES ))` can never fire; bad device → silent ` -  ()`. Needs `PIPESTATUS[0]` or empty-output check (logic change) | `pisafe` ~1031 | R5+, user decides |
+| **`media_name` dead error check** — `lsblk | sed` pipeline swallows lsblk failure; `ES=$?`/`if (( ES ))` can never fire; bad device → silent ` -  ()`. Needs `PIPESTATUS[0]` or empty-output check (logic change) | `pisafe` ~1031 | R6+, user decides |
 | ~~`echo $INPUT` unquoted~~ — **closed in R2** (class 3: `printf '%s\n' "$INPUT"`) | (was ~1237) | ✅ R2 |
 | ~~`cd $DIR` unquoted~~ — **closed in R2** (class 1: `cd "$DIR"`) | (was ~952) | ✅ R2 |
 | ~~`FILES+=($FILE)` unquoted~~ — **closed in R2** (class 5: `FILES+=("$FILE")`) | (was 2350) | ✅ R2 |
@@ -365,5 +399,5 @@ Pending user approval. Candidate message: `review R4: variable hygiene — get_v
 | Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
 | **Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked** | `pisafe` L50–95 | R2+ (user: leave for now) |
 | `tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk (tr `[[` = literal-`[` escape) | `pisafe` L782 (cf. 899, 903) | R2+ (needs care + test) |
-| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → **77 findings / 14 codes** (SC2181×18, SC2086×17 keep-list, SC2034×15, SC2005×9, SC2002×5, SC2021×3 (3× `[[:digit:]]` FPs), SC2143×1 (L1515 pipeline), SC2027×2 (1 FP), SC2215×2, SC2207×1, + 4 singletons) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4** | `pisafe` (full breakdown in Round 2 / 3 / 4 sections) | R5+ per-item if user wants |
+| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → **62 findings / 11 codes** (SC2181×18, SC2086×17 keep-list, SC2034×15, SC2021×3 (3× `[[:digit:]]` FPs), SC2027×2 (1 FP), SC2215×2 (dead fn), SC2207×1 (menu idiom), SC2068×1, SC2059×1, SC2048×1, SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5** | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 sections) | R6+ per-item if user wants |
 | Copyright header `2018 - 2022` | `pisafe`:3 | release round |

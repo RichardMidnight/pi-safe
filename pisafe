@@ -467,7 +467,7 @@ config_var_clear(){
 
 config_var_get(){
     SETTING=$1"="
-    cat "$CONFIG" | grep "$SETTING" | sed 's~'"$SETTING"'~~'
+    grep "$SETTING" "$CONFIG" | sed 's~'"$SETTING"'~~'
 }
 
 
@@ -630,10 +630,10 @@ env_which () {
 
 env_sysinfo(){
     uname -a
-    echo "$(env_terminal)"
-    echo "$(env_installer)"
-    echo "$(env_texteditor)"
-    echo "$(env_root_device)"
+    printf '%s\n' "$(env_terminal)"
+    printf '%s\n' "$(env_installer)"
+    printf '%s\n' "$(env_texteditor)"
+    printf '%s\n' "$(env_root_device)"
 }
 
 
@@ -874,7 +874,7 @@ file_device(){
 
 
 file_ext(){
-    echo "$(basename "$*")" | grep \\. | sed 's#.*\.##g'
+    basename "$*" | grep \\. | sed 's#.*\.##g'
 }
 
 
@@ -942,7 +942,7 @@ file_image_size() {
     fi
 
     if [[ "$HUMAN" = -h ]]; then
-        echo "$(get_bytes "$SIZE_BYTES" -h)"
+        printf '%s\n' "$(get_bytes "$SIZE_BYTES" -h)"
     else
         echo "$SIZE_BYTES"
     fi
@@ -988,7 +988,7 @@ file_size() {
             return 1
         fi
         if [[ "$HUMAN" = -h ]]; then
-            echo "$(get_bytes "$SIZE_BYTES" -h)"
+            printf '%s\n' "$(get_bytes "$SIZE_BYTES" -h)"
         else
             echo "$SIZE_BYTES"
         fi
@@ -1006,7 +1006,7 @@ do_list_info() {
 
     echo "~~~ CURRENT SYSTEM ~~~"
     echo $PRODUCTNAME ver $SCRIPTVER
-    echo "$(cat /etc/os-release | grep "PRETTY_NAME=" | cut -d '"' -f2)" hw="$(uname -m)" kernel="$(uname -r)"
+    echo "$(grep "PRETTY_NAME=" /etc/os-release | cut -d '"' -f2)" hw="$(uname -m)" kernel="$(uname -r)"
     echo "Root device   = $(env_root_device)"
     echo "Root size     = $(media_size "$(env_root_device)" -h )"
     echo "TrashSize     = $(file_folder_size /home/"$USER"/.local/share/Trash)"
@@ -1014,7 +1014,7 @@ do_list_info() {
     echo
     echo
     echo "~~~ STORAGE MEDIA (hide root device = $HIDE_ROOT_DEVICE) ~~~"
-    echo "$(media_list)"
+    printf '%s\n' "$(media_list)"
     echo
     echo
     echo "~~~ IMAGE FILES in '$DEFAULT_PATH' ($(file_fs_freespace "$DEFAULT_PATH" -h) free) ~~~"
@@ -1059,7 +1059,7 @@ media_size() {
     fi
 
     if [[ "$HUMAN" = -h ]]; then
-        echo "$(get_bytes "$SIZE_BYTES" -h)"
+        printf '%s\n' "$(get_bytes "$SIZE_BYTES" -h)"
     else
         echo "$SIZE_BYTES"
     fi
@@ -1512,7 +1512,7 @@ Switch to terminal and create image-file now?"
         MEDIA_FREESPACE_AT_END=0
     fi
 
-    if [[ -z $(echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | grep primary) ]]; then
+    if ! echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | grep -q primary; then
         MEDIA_LAST_PARTITION_TYPE=logical
     else
         MEDIA_LAST_PARTITION_TYPE=primary
@@ -2221,7 +2221,7 @@ media_partition_info() {
 
     # look for OS name and architecture
     if [[ -e "$MOUNTDIR/etc/os-release" ]]; then
-        OS="$(cat "$MOUNTDIR/etc/os-release" | grep PRETTY_NAME | cut -d= -f2)"
+        OS="$(grep PRETTY_NAME "$MOUNTDIR/etc/os-release" | cut -d= -f2)"
         ARCH="$(file "$MOUNTDIR/bin/bash" | cut -d, -f2)"
         BITS="$(file "$MOUNTDIR/bin/bash" | cut -d, -f1)"
         if echo "$BITS" | grep -q 32; then
@@ -2242,7 +2242,7 @@ media_partition_info() {
 
     # look for read-only partition (may not be needed)
     if [[ -e "$MOUNTDIR/etc/fstab" ]]; then
-        ROOTREADONLY="$(cat "$MOUNTDIR/etc/fstab" | grep /boot | grep ,ro )"
+        ROOTREADONLY="$(grep /boot "$MOUNTDIR/etc/fstab" | grep ,ro )"
         if [[ -n "$ROOTREADONLY" ]]; then
             ROOTREADONLY="(READONLY)"
         fi
@@ -2250,7 +2250,7 @@ media_partition_info() {
 
     # look for overlay file system
     if [[ -e "$MOUNTDIR/cmdline.txt" ]]; then
-        OVERLAY="$(cat "$MOUNTDIR/cmdline.txt" | grep boot=overlay )"
+        OVERLAY="$(grep boot=overlay "$MOUNTDIR/cmdline.txt" )"
         if [[ -n "$OVERLAY" ]]; then
             OVERLAY="(OVERLAY file system)"
         fi
