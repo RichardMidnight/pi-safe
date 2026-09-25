@@ -218,13 +218,13 @@ pisafe_install(){
     ui_echo "Installing $PRODUCTNAME v $SCRIPTVER..." white
 
     # Install the CLI script
-    sudo cp --backup=numbered $SCRIPTNAME /usr/local/bin/$SCRIPTNAME
-    sudo chmod +x /usr/local/bin/$SCRIPTNAME
-    echo Installed ver=$("/usr/local/bin/$SCRIPTNAME" -v)
+    sudo cp --backup=numbered "$SCRIPTNAME" /usr/local/bin/"$SCRIPTNAME"
+    sudo chmod +x /usr/local/bin/"$SCRIPTNAME"
+    echo "Installed ver=$("/usr/local/bin/$SCRIPTNAME" -v)"
 
     # download the icon
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_icon.png -O pisafe_icon.png
-    mv pisafe_icon.png /home/$USER/.config/pisafe/pisafe_icon.png
+    mv pisafe_icon.png /home/"$USER"/.config/pisafe/pisafe_icon.png
 
     # create the desktop file
     TERMINAL1=$(env_terminal)
@@ -275,7 +275,7 @@ pisafe_install_tool() {
 
         xz)
             ui_echo "Installing xz-utils..." white
-            sudo $INSTALL xz-utils
+            sudo "$INSTALL" xz-utils
             if [[ -z $(env_which xz) ]]; then
                 ui_msg_warning $LINENO "xz not installed."
             fi
@@ -295,7 +295,7 @@ pisafe_install_tool() {
         *)
             #echo_white Installing $TOOL ...
             ui_echo "Installing $TOOL..." white
-            sudo $INSTALL $TOOL
+            sudo "$INSTALL" "$TOOL"
             if (( $? )); then
                 ui_msg_warning $LINENO "$TOOL not installed."
             fi
@@ -347,7 +347,7 @@ pisafe_update() {
     fi
 
     local SERVER_VER=
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/$SCRIPTNAME -O $SCRIPTNAME.tmp 2> /dev/null
+    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/"$SCRIPTNAME" -O "$SCRIPTNAME.tmp" 2> /dev/null
     ES=$?
     if (( ES )); then
         echo_if_cli "ERROR: Can't connect to server..."
@@ -356,12 +356,12 @@ pisafe_update() {
 
     # did we get the new version from the server?
     if [[ -f $SCRIPTNAME.tmp ]]; then
-        SERVER_VER=$(bash $SCRIPTNAME.tmp -v)
+        SERVER_VER=$(bash "$SCRIPTNAME.tmp" -v)
     else
         return 1
     fi
 
-    if [[ $(get_ver_to_int $SERVER_VER) -gt $(get_ver_to_int $SCRIPTVER) ]]; then
+    if [[ $(get_ver_to_int "$SERVER_VER") -gt $(get_ver_to_int "$SCRIPTVER") ]]; then
         if [[ $YES = -y ]]; then
             RESULT="y"
         else
@@ -371,14 +371,14 @@ pisafe_update() {
 
         if [[ $RESULT = y ]]; then
             ui_echo "Updating $PRODUCTNAME to v $SERVER_VER..." white
-            sudo mv $SCRIPTNAME.tmp /usr/local/bin/$SCRIPTNAME
-            sudo chmod +x /usr/local/bin/$SCRIPTNAME
+            sudo mv "$SCRIPTNAME.tmp" /usr/local/bin/"$SCRIPTNAME"
+            sudo chmod +x /usr/local/bin/"$SCRIPTNAME"
             echo "$($SCRIPTNAME -v) installed. Press any key to exit... "
-            read -s -n 1
+            read -r -s -n 1
             exit 0
         fi
     else
-        rm $SCRIPTNAME.tmp
+        rm "$SCRIPTNAME.tmp"
         if [[ $SUMMARY = yes ]]; then
             ui_msg UPDATE "~ $PRODUCTNAME $SCRIPTVER is up to date.  Server ver is '$SERVER_VER' " "" "" log
         fi
@@ -418,7 +418,7 @@ pisafe_uninstall(){
 # ---------- Config_var functions
 config_var_init_configfile(){
     if [[ ! -d $(file_path "$CONFIG") ]]; then
-        mkdir -p $(file_path "$CONFIG")
+        mkdir -p "$(file_path "$CONFIG")"
     fi
 
     if [[ ! -f "$CONFIG" ]]; then
@@ -449,7 +449,7 @@ config_var_set() {
  ;;
 
         *)  #update setting to val
-            sed -i 's~'$SETTING'=.*$~'$SETTING'='$VAL'~' $CONFIG
+            sed -i 's~'"$SETTING"'=.*$~'"$SETTING"'='"$VAL"'~' "$CONFIG"
  ;;
 
     esac
@@ -459,13 +459,13 @@ config_var_set() {
 config_var_clear(){
     SETTING=$1
     VAL=$2
-    sed -i 's~'$SETTING'=.*$~'$VAR'=~' $CONFIG
+    sed -i 's~'"$SETTING"'=.*$~'"$VAR"'=~' "$CONFIG"
 }
 
 
 config_var_get(){
     SETTING=$1"="
-    cat "$CONFIG" | grep "$SETTING" | sed 's~'$SETTING'~~'
+    cat "$CONFIG" | grep "$SETTING" | sed 's~'"$SETTING"'~~'
 }
 
 
@@ -555,7 +555,7 @@ env_root_device() {
     local ROOT_DRIVE
 
     ROOT_MAJ=$(findmnt -n -e -o MAJ:MIN / | cut -d: -f1)
-    ROOT_DEV=$(lsblk -p | grep $ROOT_MAJ:0 | cut -d" " -f1)
+    ROOT_DEV=$(lsblk -p | grep "$ROOT_MAJ":0 | cut -d" " -f1)
     echo "$ROOT_DEV"
 
     # new simpler way
@@ -615,7 +615,7 @@ env_which () {
         sudo dnf install which -y
     fi
 
-    which $FILE 1>/dev/null 2>/dev/null
+    which "$FILE" 1>/dev/null 2>/dev/null
     if (( $? )); then
         #echo false
         return 1
@@ -628,10 +628,10 @@ env_which () {
 
 env_sysinfo(){
     uname -a
-    echo $(env_terminal)
-    echo $(env_installer)
-    echo $(env_texteditor)
-    echo $(env_root_device)
+    echo "$(env_terminal)"
+    echo "$(env_installer)"
+    echo "$(env_texteditor)"
+    echo "$(env_root_device)"
 }
 
 
@@ -641,7 +641,7 @@ do_beep(){
     TIME=${2:-.5}
 
     if [[ $SOUND = on ]] && [[ $(env_which speaker-test) ]]; then
-        (speaker-test -t sign -f $FREQ > /dev/null & sleep $TIME && kill -9 $! ) > /dev/null
+        (speaker-test -t sign -f "$FREQ" > /dev/null & sleep "$TIME" && kill -9 $! ) > /dev/null
       #  sleep .5  # to allow the beep to end
     fi
 }
@@ -687,7 +687,7 @@ do_countdown(){
     sleep 1
     for number in $(seq 1 "$MAX"); do
         echo -n ".$((MAX-number))"
-        read -s -t 1 -N 1 INPUT
+        read -r -s -t 1 -N 1 INPUT
         if [[ -n "$INPUT" ]]; then
             if [[ "$INPUT" = y ]]; then
                 echo Continuing...
@@ -697,7 +697,7 @@ do_countdown(){
                 return 1
             fi
         fi
-        MSG=$(echo "$MSG.$i")
+        MSG="$MSG.$i"
     done
 
     if [[ $DEF = n ]]; then
@@ -709,7 +709,7 @@ do_countdown(){
 
 get_ver_to_int() {
     local IFS=.
-    parts=($1)
+    parts=("$1")
 
     let val=1000000*parts[0]+1000*parts[1]+parts[2]
     echo $val
@@ -778,8 +778,8 @@ get_bytes(){
     local BYTES=$1
     local OUTPUT=${2:-"-h"};  #human or bytes
 
-    local BASE=$(echo $BYTES | tr -cd '[[:digit:]]' )
-    local SUFFIX=$(echo $BYTES | tr -cd '[[kmgtbKMGTB]]' )
+    local BASE=$(printf '%s\n' "$BYTES" | tr -cd '[[:digit:]]' )
+    local SUFFIX=$(printf '%s\n' "$BYTES" | tr -cd '[[kmgtbKMGTB]]' )
 
     if ! [[ "$BASE" =~ ^[0-9]+$ ]]; then   # not a number
         ui_msg_warning $LINENO "$BASE not a number"
@@ -788,12 +788,12 @@ get_bytes(){
 
     # if no translation needed... then just echo the input and leave
     if [[ "$OUTPUT" != -h ]] && [[ -z "$SUFFIX" ]]; then
-        echo $BYTES
+        printf '%s\n' "$BYTES"
         return
     fi
 
     if [[ "$OUTPUT" = -h ]] && [[ -n "$SUFFIX" ]]; then
-        echo $BYTES
+        printf '%s\n' "$BYTES"
         return
     fi
 
@@ -815,25 +815,25 @@ get_bytes(){
             fi
 
             case $LEN in
-                4) echo $(echo "scale=2; $BYTES/($k_ilo)" | bc)kb  ;;
-                5) echo $(echo "scale=1; $BYTES/($k_ilo)" | bc)kb  ;;
-                6) echo $(echo "scale=0; $BYTES/($k_ilo)" | bc)kb  ;;
+                4) printf '%skb\n' "$(echo "scale=2; $BYTES/($k_ilo)" | bc)"  ;;
+                5) printf '%skb\n' "$(echo "scale=1; $BYTES/($k_ilo)" | bc)"  ;;
+                6) printf '%skb\n' "$(echo "scale=0; $BYTES/($k_ilo)" | bc)"  ;;
 
-                7) echo $(echo "scale=2; $BYTES/($m_ega)" | bc)mb  ;;
-                8) echo $(echo "scale=1; $BYTES/($m_ega)" | bc)mb  ;;
-                9) echo $(echo "scale=0; $BYTES/($m_ega)" | bc)mb  ;;
+                7) printf '%smb\n' "$(echo "scale=2; $BYTES/($m_ega)" | bc)"  ;;
+                8) printf '%smb\n' "$(echo "scale=1; $BYTES/($m_ega)" | bc)"  ;;
+                9) printf '%smb\n' "$(echo "scale=0; $BYTES/($m_ega)" | bc)"  ;;
 
-                10) echo $(echo "scale=2; $BYTES/($g_iga)" | bc)gb ;;
-                11) echo $(echo "scale=1; $BYTES/($g_iga)" | bc)gb ;;
-                12) echo $(echo "scale=0; $BYTES/($g_iga)" | bc)gb ;;
+                10) printf '%sgb\n' "$(echo "scale=2; $BYTES/($g_iga)" | bc)" ;;
+                11) printf '%sgb\n' "$(echo "scale=1; $BYTES/($g_iga)" | bc)" ;;
+                12) printf '%sgb\n' "$(echo "scale=0; $BYTES/($g_iga)" | bc)" ;;
 
-                13) echo $(echo "scale=2; $BYTES/($t_era)" | bc)tb ;;
-                14) echo $(echo "scale=1; $BYTES/($t_era)" | bc)tb ;;
-                15) echo $(echo "scale=0; $BYTES/($t_era)" | bc)tb ;;
-                *)  echo $BYTES                                    ;;
+                13) printf '%stb\n' "$(echo "scale=2; $BYTES/($t_era)" | bc)" ;;
+                14) printf '%stb\n' "$(echo "scale=1; $BYTES/($t_era)" | bc)" ;;
+                15) printf '%stb\n' "$(echo "scale=0; $BYTES/($t_era)" | bc)" ;;
+                *)  printf '%s\n' "$BYTES"                                    ;;
             esac
         else
-            echo $BYTES
+            printf '%s\n' "$BYTES"
         fi
     else  # translate to bytes
         case $SUFFIX in
@@ -869,7 +869,7 @@ file_device(){
 
 
 file_ext(){
-    echo $(basename "$*") | grep \\. | sed 's#.*\.##g'
+    echo "$(basename "$*")" | grep \\. | sed 's#.*\.##g'
 }
 
 
@@ -900,7 +900,7 @@ file_fs_freespace() {
         ES=$?
     else
         #FREESPACE=$(df $(dirname "$FILENAME") -B1 --output=avail | grep -v Avail)
-        FREESPACE=$(df $(dirname "$FILENAME") -B1 --output=avail | tr -cd '[[:digit:]]' )
+        FREESPACE=$(df "$(dirname "$FILENAME")" -B1 --output=avail | tr -cd '[[:digit:]]' )
         ES=$?
     fi
 
@@ -921,7 +921,7 @@ file_image_size() {
     local HUMAN=${2:-"no"}   # or -h
 
     case $(file_ext "$INFILE") in
-        img | iso)      SIZE_BYTES=$(echo $((  $(ls -s "$INFILE" | cut -d' ' -f1 ) * 1024 )) )                                                                        ;;
+        img | iso)      SIZE_BYTES=$(stat -c%s -- "$INFILE")                                                                        ;;
         zip)            SIZE_BYTES=$(zipinfo -t "$INFILE" 2> /dev/null | grep "%" | cut -d, -f2 | cut -d" " -f2  )                                                    ;;
         xz)             SIZE_BYTES=$(xz -l -v "$INFILE" 2> /dev/null | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g')        ;;
         gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g') ;;
@@ -937,7 +937,7 @@ file_image_size() {
     fi
 
     if [[ "$HUMAN" = -h ]]; then
-        echo $(get_bytes "$SIZE_BYTES" -h)
+        echo "$(get_bytes "$SIZE_BYTES" -h)"
     else
         echo "$SIZE_BYTES"
     fi
@@ -949,13 +949,14 @@ file_list_image_files(){
     local DIR=$DEFAULT_PATH
 
     OLD_PWD=$(pwd)
-    cd $DIR
+    cd "$DIR"
 
     FILES="FILE_NAME FILE_SIZE (IMAGE_SIZE) \n"
     IFS=$'\t\n'
 
-    for FILE in $(ls *.img *.zip *.xz *.gz *.zst *.iso 2>/dev/null); do
-        FILE_NS=$(echo "$FILE" | sed 's/ /_/g')
+    for FILE in *.img *.zip *.xz *.gz *.zst *.iso; do
+        [[ -e $FILE ]] || continue
+        FILE_NS=$(printf '%s\n' "$FILE" | sed 's/ /_/g')
         FILES="$FILES $FILE_NS  $(file_size "$FILE" -h)  ($(file_image_size "$FILE" -h)) \n "
     done
 
@@ -977,12 +978,12 @@ file_size() {
     # $2 can be -h
 
     if [[ -f "$FILE" ]]; then
-        SIZE_BYTES="$(($(ls -s "$FILE" | cut -d' ' -f1) * 1024))"
+        SIZE_BYTES="$(stat -c%s -- "$FILE")"
         if (( $? )); then
             return 1
         fi
         if [[ "$HUMAN" = -h ]]; then
-            echo $(get_bytes "$SIZE_BYTES" -h)
+            echo "$(get_bytes "$SIZE_BYTES" -h)"
         else
             echo "$SIZE_BYTES"
         fi
@@ -1000,10 +1001,10 @@ do_list_info() {
 
     echo "~~~ CURRENT SYSTEM ~~~"
     echo $PRODUCTNAME ver $SCRIPTVER
-    echo $(cat /etc/os-release | grep "PRETTY_NAME=" | cut -d '"' -f2) hw=$(uname -m) kernel=$(uname -r)
+    echo "$(cat /etc/os-release | grep "PRETTY_NAME=" | cut -d '"' -f2)" hw="$(uname -m)" kernel="$(uname -r)"
     echo "Root device   = $(env_root_device)"
-    echo "Root size     = $(media_size $(env_root_device) -h )"
-    echo "TrashSize     = $(file_folder_size /home/$USER/.local/share/Trash)"
+    echo "Root size     = $(media_size "$(env_root_device)" -h )"
+    echo "TrashSize     = $(file_folder_size /home/"$USER"/.local/share/Trash)"
     echo "RootTrash     = $(file_folder_size /root/.local/share/Trash)"
     echo
     echo
@@ -1011,7 +1012,7 @@ do_list_info() {
     echo "$(media_list)"
     echo
     echo
-    echo "~~~ IMAGE FILES in '$DEFAULT_PATH' ($(file_fs_freespace $DEFAULT_PATH -h) free) ~~~"
+    echo "~~~ IMAGE FILES in '$DEFAULT_PATH' ($(file_fs_freespace "$DEFAULT_PATH" -h) free) ~~~"
     file_list_image_files
 }
 
@@ -1050,7 +1051,7 @@ media_size() {
     fi
 
     if [[ "$HUMAN" = -h ]]; then
-        echo $(get_bytes "$SIZE_BYTES" -h)
+        echo "$(get_bytes "$SIZE_BYTES" -h)"
     else
         echo "$SIZE_BYTES"
     fi
@@ -1075,7 +1076,7 @@ media_backup(){
 
     # preflight checklist.  Be sure INDEV and OUTFILE are good.
     ui_echo "$PRODUCTNAME $SCRIPTVER Backup... " white
-    media_backup_checklist $SILENT
+    media_backup_checklist "$SILENT"
     ES=$?
     if (( ES )); then
         return "$ES"
@@ -1096,9 +1097,9 @@ media_backup(){
     BS=$(( 4 * 1024 * 1024 ))
     BYTES_TO_READ=$(media_backup_bytes_to_read)
     BLOCKS_TO_READ=$(( BYTES_TO_READ / BS +1 ))
-    echo Media size=$(media_size "$INDEV" -h)
-    echo Skipping $(get_bytes $(( $(media_size "$INDEV") - BYTES_TO_READ )) -h ) of freespace at end of media.
-    echo Reading $(get_bytes $BYTES_TO_READ -h)...
+    echo "Media size=$(media_size "$INDEV" -h)"
+    echo "Skipping $(get_bytes $(( $(media_size "$INDEV") - BYTES_TO_READ )) -h ) of freespace at end of media."
+    echo "Reading $(get_bytes "$BYTES_TO_READ" -h)..."
 
     if [[ -n $(which pv) ]]; then
         #run_command "sudo pv $INDEV -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " "$LINENO"
@@ -1124,7 +1125,7 @@ media_backup(){
     echo "Done copying media '$INDEV'"
     echo_white "'$(ls -s -h "$OUTFILE_BASE".img)'"
     TIME2=$(date +%s)
-    echo_white Step 1 took $(get_elapsed_time "$TIME1" "$TIME2")
+    echo_white "Step 1 took $(get_elapsed_time "$TIME1" "$TIME2")"
     echo
 
     #################################################
@@ -1151,7 +1152,7 @@ media_backup(){
         echo Not shrinking iso file
     fi
         TIME3=$(date +%s)
-        echo_white Step 2 took $(get_elapsed_time $TIME2 $TIME3)
+        echo_white "Step 2 took $(get_elapsed_time "$TIME2" "$TIME3")"
 
     #################################################
     # Step 3 compresse the file
@@ -1159,7 +1160,7 @@ media_backup(){
     echo
     ui_echo "~ Step 3 of 3 - Compressing '$OUTFILE_BASE.img' to '$OUTFILE' ... " white log
     date
-    echo Compression set to level $COMPRESSION_LEVEL of 9
+    echo "Compression set to level $COMPRESSION_LEVEL of 9"
     echo "$(file_size "$OUTFILE_BASE".img -h) to compress."
 
     case $(file_ext "$OUTFILE") in
@@ -1239,9 +1240,9 @@ media_backup(){
     sleep 8
 
     echo "Done compressing '$OUTFILE_BASE.img' to '$OUTFILE' "
-    echo_white $(ls -s -h "$OUTFILE")
+    echo_white "$(ls -s -h "$OUTFILE")"
     TIME4=$(date +%s)
-    echo_white  Step 3 took $(get_elapsed_time $TIME3 $TIME4)
+    echo_white "Step 3 took $(get_elapsed_time "$TIME3" "$TIME4")"
 
     # check if "$OUTFILE" was created
     if [[ ! -f $OUTFILE ]]; then
@@ -1320,7 +1321,7 @@ media_backup_check_indev(){
     fi
 
     # Warning if media is large
-    if [[ $(media_size "$INDEV") -gt $(get_bytes $LARGE_DEVICE_READ_WARNING -b) ]]; then
+    if [[ $(media_size "$INDEV") -gt $(get_bytes "$LARGE_DEVICE_READ_WARNING" -b) ]]; then
         MESG="'$(media_name "$INDEV")' is larger than $(get_bytes "$LARGE_DEVICE_READ_WARNING" -h). 
 Use a smaller media if you can.  
 It will be faster because the entire media must be read before it can be compressed.
@@ -1345,7 +1346,7 @@ media_backup_check_outfile(){
 
     # Quit if path does not exist
     if [[ ! -d $(file_path "$OUTFILE") ]]; then
-        ui_msg_error $LINENO "Directory does not exist '$(file_path $OUTFILE)'"
+        ui_msg_error $LINENO "Directory does not exist '$(file_path "$OUTFILE")'"
         return 14
     fi
 
@@ -1385,23 +1386,23 @@ media_backup_check_outfile(){
     fi
 
     # Quit if OUTFILE_BASE.img exists
-    if [[ -f $(file_base $OUTFILE).img ]]; then
-        ui_msg_error $LINENO "File '$(file_base $OUTFILE).img' already exists"
+    if [[ -f $(file_base "$OUTFILE").img ]]; then
+        ui_msg_error $LINENO "File '$(file_base "$OUTFILE").img' already exists"
         return 17
     fi
 
     # Quit if media is bigger than freespace
-    PARTED_OUTPUT=$(sudo parted $INDEV unit B print free )
+    PARTED_OUTPUT=$(sudo parted "$INDEV" unit B print free )
 
     MEDIA_SIZE=$(media_backup_bytes_to_read)
-    echo "$(get_bytes $MEDIA_SIZE -h) to read from '$INDEV'"
+    echo "$(get_bytes "$MEDIA_SIZE" -h) to read from '$INDEV'"
 
-    AVAILABLE_SPACE=$(file_fs_freespace $(file_path "$OUTFILE"))
-    echo "$(get_bytes $AVAILABLE_SPACE -h) available space on '$(file_path "$OUTFILE")' "
+    AVAILABLE_SPACE=$(file_fs_freespace "$(file_path "$OUTFILE")")
+    echo "$(get_bytes "$AVAILABLE_SPACE" -h) available space on '$(file_path "$OUTFILE")' "
     if [[ $MEDIA_SIZE -gt $AVAILABLE_SPACE ]]; then
         MSG="Not enough free space on '$(file_path "$OUTFILE")'
-$(get_bytes $MEDIA_SIZE -h) to backup on '$(media_name "$INDEV")'
-$(get_bytes $AVAILABLE_SPACE -h) available space on '$(file_path "$OUTFILE")' "
+$(get_bytes "$MEDIA_SIZE" -h) to backup on '$(media_name "$INDEV")'
+$(get_bytes "$AVAILABLE_SPACE" -h) available space on '$(file_path "$OUTFILE")' "
          ui_msg_error $LINENO "$MSG"
          return 19
     fi
@@ -1410,8 +1411,8 @@ $(get_bytes $AVAILABLE_SPACE -h) available space on '$(file_path "$OUTFILE")' "
     SPACENEEDED=$(( MEDIA_SIZE + $(( MEDIA_SIZE / 2 )) ))
     if [[ $SPACENEEDED -gt $AVAILABLE_SPACE ]]; then
         MSG="Might not be enough free space for backup.
-$(get_bytes $MEDIA_SIZE -h) to backup on '$(media_name "$INDEV")'
-$(get_bytes $AVAILABLE_SPACE -h) available space on '$(file_path "$OUTFILE")' "
+$(get_bytes "$MEDIA_SIZE" -h) to backup on '$(media_name "$INDEV")'
+$(get_bytes "$AVAILABLE_SPACE" -h) available space on '$(file_path "$OUTFILE")' "
         ui_msg_warning $LINENO "$MSG"
     fi
 }
@@ -1496,7 +1497,7 @@ Switch to terminal and create image-file now?"
         /dev/mmcblk*|/dev/nvme*)    MEDIA_LAST_PARTITION_NAME=$MEDIA"p"$MEDIA_LAST_PARTITION_NUMBER ;;
     esac
 
-    PARTED_OUTPUT=$(sudo parted $MEDIA unit B print free )
+    PARTED_OUTPUT=$(sudo parted "$MEDIA" unit B print free )
 
     MEDIA_FREESPACE_AT_END=$(echo "$PARTED_OUTPUT" | tail -1 | grep Free | sed 's/[ ]\+/ /g' | cut -d " " -f 4 | tr -d 'B' )
     if [[ -z $MEDIA_FREESPACE_AT_END ]]; then
@@ -1512,11 +1513,11 @@ Switch to terminal and create image-file now?"
   #  MEDIA_LAST_PARTITION_FS=$(lsblk -no FSTYPE $MEDIA$MEDIA_LAST_PARTITION_NUMBER  )
 
     MSG=$MSG"\n===== $PRODUCTNAME BACKUP ESTIMATE ===== \n"
-    MSG=$MSG"Media size                         =  $(get_bytes $MEDIA_SIZE -h)\n"
+    MSG=$MSG"Media size                         =  $(get_bytes "$MEDIA_SIZE" -h)\n"
 
 
     #1 - free space
-    MSG=$MSG$(printf '%-35.34s' "Remove '$(get_bytes $MEDIA_FREESPACE_AT_END -h)' of freespace")
+    MSG=$MSG$(printf '%-35.34s' "Remove '$(get_bytes "$MEDIA_FREESPACE_AT_END" -h)' of freespace")
     MSG=$MSG"=> $(get_bytes $((MEDIA_SIZE - MEDIA_FREESPACE_AT_END )) -h ) \n"
 
 
@@ -1534,7 +1535,7 @@ Switch to terminal and create image-file now?"
 
         ext4|ext3|ext2)
             if [[ $MEDIA_PARTITION_TABLE = gpt ]] || { [[ $MEDIA_PARTITION_TABLE = msdos ]] && [[ $MEDIA_LAST_PARTITION_TYPE = primary  ]]; }; then
-                SHRINK_BYTES=$(sudo lsblk $MEDIA -lpbo name,fsavail | grep $MEDIA_LAST_PARTITION_NAME | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
+                SHRINK_BYTES=$(sudo lsblk "$MEDIA" -lpbo name,fsavail | grep "$MEDIA_LAST_PARTITION_NAME" | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
             else
                 MSG=$MSG"   Warning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This partition-type will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
             fi
@@ -1554,7 +1555,7 @@ Switch to terminal and create image-file now?"
 
     # 4 Shrink Filesystem
     UNCOMPRESSED_BYTES=$(( MEDIA_SIZE - MEDIA_FREESPACE_AT_END - SHRINK_BYTES ))
-    MSG=$MSG$(printf '%-35.34s' "Shrink filesystem by $(get_bytes $SHRINK_BYTES -h) ")
+    MSG=$MSG$(printf '%-35.34s' "Shrink filesystem by $(get_bytes "$SHRINK_BYTES" -h) ")
     MSG=$MSG"=> $(get_bytes $UNCOMPRESSED_BYTES -h) \n"
 
 
@@ -1613,8 +1614,8 @@ media_restore(){
                 ES=$?
             else
                 ui_echo "~ Running: sudo pv -n '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (pv -n "$INFILE" | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
-                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." $WT_HEIGHT $WT_WIDTH 0
+                (pv -n "$INFILE" | sudo dd of="$OUTDEV" bs=4M) 2>&1 | \
+                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
  ;;
@@ -1625,8 +1626,8 @@ media_restore(){
                 ES=$?
             else
                 ui_echo "~ Running: unzip -p '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (unzip -p "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
-                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." $WT_HEIGHT $WT_WIDTH 0
+                (unzip -p "$INFILE" | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M) 2>&1 | \
+                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
  ;;
@@ -1638,8 +1639,8 @@ media_restore(){
                 ES=$?
             else
                 ui_echo "~ Running: xz -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (xz -d -c "$INFILE"  | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
-                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." $WT_HEIGHT $WT_WIDTH 0
+                (xz -d -c "$INFILE"  | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M) 2>&1 | \
+                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
  ;;
@@ -1651,8 +1652,8 @@ media_restore(){
                 ES=$?
             else
                 ui_echo "~ Running: pigz -p -k -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (pigz -d -k -c "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync) 2>&1 | \
-                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." $WT_HEIGHT $WT_WIDTH 0
+                (pigz -d -k -c "$INFILE" | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M conv=fsync) 2>&1 | \
+                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
  ;;
@@ -1665,8 +1666,8 @@ media_restore(){
                 ES=$?
             else
                 ui_echo "~ Running: zstd -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (zstd -d -c "$INFILE" | pv -n -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M) 2>&1 | \
-                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." $WT_HEIGHT $WT_WIDTH 0
+                (zstd -d -c "$INFILE" | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M) 2>&1 | \
+                whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
  ;;
@@ -1836,9 +1837,9 @@ media_mount(){
     MEDIA_PARTITIONS=$(echo "$PARTED_OUTPUT" | grep '^[1-9]:' | grep -v ":::;" | cut -d: -f1)
 
     for PARTITION in $MEDIA_PARTITIONS; do
-        udisksctl mount -b $MEDIA$PARTITION
+        udisksctl mount -b "$MEDIA""$PARTITION"
         if (( $? )); then
-            echo error mounting $MEDIA$PARTITION
+            echo "error mounting $MEDIA$PARTITION"
         fi
     done
 }
@@ -1847,7 +1848,7 @@ media_mount(){
 media_power_off(){
     MEDIA=$1
     umount $MEDIA?
-    udisksctl power-off $MEDIA
+    udisksctl power-off "$MEDIA"
 }
 
 
@@ -1859,7 +1860,7 @@ ui_countdown(){
     local MESSAGE=${3:-"Pausing for $SECONDS seconds... Press y to continue immediately or any other key to stop"}
 
     if [[ "$INTERFACE" = cli ]]; then
-        do_countdown $SECONDS "$MESSAGE"
+        do_countdown "$SECONDS" "$MESSAGE"
     else
         whiptail_countdown "$SECONDS" "$TITLE" "$MESSAGE"
     fi
@@ -1892,7 +1893,7 @@ ui_log(){
     # usage ui_log "message"
     INFO=$*
 
-    INFO=$(echo $INFO | sed 's/\\n/ -/g')  #change newline for ~
+    INFO=$(printf '%s\n' "$INFO" | sed 's/\\n/ -/g')  #change newline for ~
 
     if [[ "$LOG" = on ]]; then
         touch "$LOG_FILE"
@@ -1916,7 +1917,7 @@ ui_msg() {
     fi
 
     if [[ "$INTERFACE" = cli ]]; then
-        ui_echo "$PRODUCTNAME $TITLE: $MSG" $COLOR nolog
+        ui_echo "$PRODUCTNAME $TITLE: $MSG" "$COLOR" nolog
     else
         whiptail --backtitle "$BACKTITLE" --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" "$WT_HEIGHT_TALL" "$WT_WIDTH_WIDE"
     fi
@@ -1956,9 +1957,9 @@ ui_yesno(){
     if [[ "$INTERFACE" = cli ]]; then
         MSG="$PRODUCTNAME: $TITLE: $MSG  [y/n]?"
         # change 'newline' chars to ' -'
-        MSG=$(echo $MSG | sed 's/\\n/ -/g')
+        MSG=$(printf '%s\n' "$MSG" | sed 's/\\n/ -/g')
         while true; do
-            read -s -n1 -p "$MSG" yn
+            read -r -s -n1 -p "$MSG" yn
             case $yn in
                 [Yy]* ) echo y; return 0 ;;
                 [Nn]* ) echo n; return 0 ;;
@@ -1987,8 +1988,8 @@ media_format(){
     local SILENT=${3:-"-n"}
 
     local ROOT="$(env_root_device)"
-    local TYPE="$(lsblk $DEVICE -dnpo TYPE)"
-    local NAME="$(lsblk $DEVICE -dnpo VENDOR,MODEL,SIZE,TYPE) ($DEVICE)"
+    local TYPE="$(lsblk "$DEVICE" -dnpo TYPE)"
+    local NAME="$(lsblk "$DEVICE" -dnpo VENDOR,MODEL,SIZE,TYPE) ("$DEVICE")"
     local PARTITION=$DEVICE
 
     if [[ $FORMAT = fat32 ]]; then
@@ -2051,7 +2052,7 @@ media_format(){
     fi
 
     echo "Unmounting '$DEVICE'..."
-    sudo umount $DEVICE 2> /dev/null
+    sudo umount "$DEVICE" 2> /dev/null
     sudo umount $DEVICE? 2> /dev/null
 
 
@@ -2077,7 +2078,7 @@ media_format(){
         fat16)
             if [[ -z $(which mkfs.vfat) ]]; then
                 echo Installing vfat support ...
-                sudo $INSTALL dosfstools
+                sudo "$INSTALL" dosfstools
             fi
             run_command "sudo mkfs.vfat -F16 -v -I -n FAT16 $PARTITION" "$LINENO"
             ES=$?
@@ -2086,7 +2087,7 @@ media_format(){
         fat32)
             if [[ -z $(which mkfs.vfat) ]]; then
                 echo Installing vfat support ...
-                sudo $INSTALL dosfstools
+                sudo "$INSTALL" dosfstools
             fi
             run_command "sudo mkfs.vfat -v -I -n FAT32 $PARTITION" "$LINENO"
             ES=$?
@@ -2096,8 +2097,8 @@ media_format(){
             #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
             if [[ -z $(which mkfs.exfat) ]]; then
                 echo Installing exfat support ...
-                sudo $INSTALL exfat-utils
-                sudo $INSTALL exfat-fuse
+                sudo "$INSTALL" exfat-utils
+                sudo "$INSTALL" exfat-fuse
                 #sudo modprobe fuse
                 #echo "fuse" | sudo tee -a /etc/modules
             fi
@@ -2109,9 +2110,9 @@ media_format(){
             if [[ -z $(which mkfs.ntfs) ]]; then
                 #sudo apt-get install fuse ntfs-3g
                 echo Installing ntfs support...
-                sudo $INSTALL fuse
-                sudo $INSTALL ntfs-3g
-                sudo $INSTALL ntfsprogs #ntfsprogs is for arch
+                sudo "$INSTALL" fuse
+                sudo "$INSTALL" ntfs-3g
+                sudo "$INSTALL" ntfsprogs #ntfsprogs is for arch
                 #sudo modprobe fuse
                 #echo "fuse" | sudo tee -a /etc/modules
             fi
@@ -2189,7 +2190,7 @@ media_partition_info() {
     fi
 
     # mount the filesystem
-    PARTSTART="$(echo "$PARTED_OUTPUT" | grep ^$PARTITION: | cut -d ':' -f 2 | tr -d 'B')"
+    PARTSTART="$(echo "$PARTED_OUTPUT" | grep "^$PARTITION:" | cut -d ':' -f 2 | tr -d 'B')"
     LOOPBACK="$(sudo losetup -f --show -o "$PARTSTART" "$MEDIA")"
     if (( $? )); then
         echo ...retrying...
@@ -2347,7 +2348,7 @@ whiptail_fselect() {
         -type f \
         -printf "%f\t     %s\n" | sort 2> /dev/null)
     do
-        FILES+=($FILE)
+        FILES+=("$FILE")
     done
     unset IFS
 
@@ -2360,12 +2361,12 @@ whiptail_fselect() {
     fi
 
     for (( i=0; i<arraylength; i++ )); do
-        arrayelement=$(echo "${FILES[$i]}" | sed 's/ *//g')
+        arrayelement=$(printf '%s\n' "${FILES[$i]}" | sed 's/ *//g')
         if [[ "$arrayelement" =~ $num ]]; then
            # FILES[$i]=$(echo "    " $(get_bytes "$arrayelement" -h))
-            FILES[i]=$(echo "    " $(get_bytes "$arrayelement" -h) \($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h)\))
+            FILES[i]="    $(get_bytes "$arrayelement" -h) ($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h))"
         else
-            PREVIOUS_ELEMENT=$(echo "${FILES[$i]}")
+            PREVIOUS_ELEMENT="${FILES[$i]}"
         fi
     done
 
@@ -2415,17 +2416,17 @@ whiptail_countdown(){
 
     for ((i=MAX; i>=0; i--)); do
         TERM=vt220 whiptail --backtitle "$BACKTITLE" --title "$TITLE" --infobox "$MSG" "$WT_MB_HEIGHT" "$WT_MB_WIDTH"
-        read -s -t 1 -N 1 INPUT
+        read -r -s -t 1 -N 1 INPUT
         if [[ -n "$INPUT" ]]; then
             if [[ "$INPUT" = y ]]; then
                 echo Continuing...
                 return 0
             else
-              echo $INPUT
+              printf '%s\n' "$INPUT"
               return 2
             fi
         fi
-        MSG=$(echo "$MSG.$i")
+        MSG="$MSG.$i"
     done
 }
 
@@ -2435,9 +2436,9 @@ echo_if_cli (){
     local COLOR=$2
     if [[ "$INTERFACE" = cli ]]; then
         case $COLOR in
-            white) echo_white $MSG ;;
-            red)    echo_red $MSG  ;;
-            *) echo $MSG           ;;
+            white) echo_white "$MSG" ;;
+            red)    echo_red "$MSG"  ;;
+            *) echo "$MSG"           ;;
         esac
     fi
 }
@@ -2506,10 +2507,10 @@ menu_get_outfile(){
     EXT=$DEFAULT_EXTENSION
     OUTFILE=
 
-    MEDIA_OS="$(media_os  $INDEV)"
+    MEDIA_OS="$(media_os  "$INDEV")"
 
   #  echo "Calculating backup estimates..."
-    ESTIMATES=$(media_backup_estimate $INDEV)
+    ESTIMATES=$(media_backup_estimate "$INDEV")
 
      while true; do
 
@@ -2525,7 +2526,7 @@ menu_get_outfile(){
         \n.zst is most efficient.  It compresses the most per second. \
         \n\nRecommended to have NO SPACES in the name \
         \n\nEnter the image filename (eg: 2020-12-15-buster32)"
-        NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP '$(media_name "$INDEV")'" --inputbox "$MSG" $WT_HEIGHT_TALL $WT_WIDTH_WIDE "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
+        NEWFILE=$(whiptail --backtitle "$BACKTITLE" --title "BACKUP '$(media_name "$INDEV")'" --inputbox "$MSG" "$WT_HEIGHT_TALL" "$WT_WIDTH_WIDE" "$OUTFILEDEFAULT" 3>&1 1>&2 2>&3)
         ES=$?
         if (( ES )); then
             return "$ES"
@@ -2615,7 +2616,7 @@ menu_select_device(){
 
     #get list of sd devices and add a field seperator |
     IFS=$'\n'
-    options=($(media_list $2 | sed 's/ / '$FIELD_SEPERATOR' /'))
+    options=($(media_list "$2" | sed 's/ / '"$FIELD_SEPERATOR"' /'))
     ES=$?
     if (( ES )); then
         return "$ES"
@@ -2763,7 +2764,7 @@ menu_settings_options(){
     fi
 
     # dump the quotes in the string.
-    ON=$(echo $ON | sed 's/"//g')
+    ON=$(printf '%s\n' "$ON" | sed 's/"//g')
 
     # set all to off
     config_var_set shrink_fs off
@@ -2841,7 +2842,7 @@ menu_tools(){
                 media_format "$DEVICE" "$FORMAT"
                                                                                                                                                      ;;
 
-            TERMINAL)   read -s -n 1 -p "Press any key to return" ; echo                                                                             ;;
+            TERMINAL)   read -r -s -n 1 -p "Press any key to return" ; echo                                                                             ;;
 
             LOG)        $TEXT_EDITOR "$LOG_FILE" 2>/dev/null ;;   # the error redirect is because mousepad kicks off a bunch of errors.
 

@@ -150,19 +150,61 @@ Total: 80 findings; all other codes untouched. Pre-snapshot: `/tmp/opencode/pisa
 
 ---
 
+## Round 2 — Shellcheck Classes 1/2/3/5 (user-approved 2026-09-25)
+
+**Status: APPLIED to `dev` working tree, full battery green — committed this round (see below).**
+Baseline: pristine `903530f` (post R1 + `ui_echo` fix + version bump + 5-bucket shellcheck) → **273 findings / 27 codes, 2902 lines**.
+Count-asserted transform `/tmp/opencode/sc_round2_transform.py`; **134 line-pairs → 172 findings resolved**; +1 net line (glob-loop guard) → 2902 → 2903.
+
+### Scope applied
+
+| Class | Findings addressed | Change |
+|---|---|---|
+| **1 — quote SAFE single-token expansions** | SC2086 (all but 17 keep-list) | install/self-copy (`"$SCRIPTNAME"`, `/usr/local/bin/"$SCRIPTNAME"`, `sudo "$INSTALL" "$TOOL"`, `bash/mv/rm "$SCRIPTNAME.tmp"`, `pi-safe/main/"$SCRIPTNAME" -O "$SCRIPTNAME.tmp"`), config `sed` ×3 (`sed 's~'"$SETTING"'=.*$~…'  "$CONFIG"`), `mkdir -p "$(file_path "$CONFIG")"`, `grep "$ROOT_MAJ":0`, `which "$FILE"`, `echo "$(env_terminal/installer/texteditor/root_device)"`, `-f "$FREQ" … sleep "$TIME"`, `echo "$(basename "$*")"`, `df "$(dirname "$FILENAME")"`, `echo "$(get_bytes "$SIZE_BYTES" -h)"` ×3, `cd "$DIR"`, `file_fs_freespace "$DEFAULT_PATH"`, `media_backup_checklist "$SILENT"`, the `echo Media/Skipping/Reading…` capture lines, `echo Compression set to level "$COMPRESSION_LEVEL"`, `echo_white "$(ls -s -h …)"` + `echo_white "Step 1/2/3 took $(get_elapsed_time …)"`, `get_bytes "$LARGE_DEVICE_READ_WARNING" -b`, `"(file_path "$OUTFILE")"`, `"$(file_base "$OUTFILE").img"` ×2, `parted "$INDEV" "$MEDIA" unit B`, all `get_bytes/media_size/file…` numeric args, `lsblk "$MEDIA" "$DEVICE" … grep "$MEDIA_LAST_PARTITION_NAME"`, `dd of="$OUTDEV"`, `pv -n -s "$RESTORE_BYTES"` ×4, whiptail `"$WT_HEIGHT" "$WT_WIDTH"` ×6 + `"$WT_HEIGHT_TALL" "$WT_WIDTH_WIDE"`, `udisksctl mount -b "$MEDIA""$PARTITION"` + `power-off "$MEDIA"`, `do_countdown "$SECONDS" "$MESSAGE"`, `ui_echo … "$COLOR" nolog`, `sudo umount "$DEVICE"`, `sudo "$INSTALL"` fat16/fat32/exfat/ntfs arms (×7), `grep "^$PARTITION:"`, `echo_white/red/echo "$MSG"`, `media_os "$INDEV"` / `media_backup_estimate "$INDEV"`, `options=($(media_list "$2" | sed 's/ / '"$FIELD_SEPERATOR"' /'))` |
+| **2 — `read -r` + drop no-op `$(echo …)`** | SC2162 (5 → 0) + SC2005 (2) | `read -r …` on the 5 reads (menu key, whiptail-countdown ×2, `ui_yesno yn`, "Press any key to return"); `MSG=$(echo "$MSG.$i")` → `MSG="$MSG.$i"` ×2; `PREVIOUS_ELEMENT=$(echo "${FILES[$i]}")` → `PREVIOUS_ELEMENT="${FILES[$i]}"` |
+| **3 — `echo`→`printf '%s\n'` (flag-eating / pipe contexts) + bc arms** | SC2001/SC2005 echo→printf family | `get_bytes` bc `-h` arms: 12 lines `echo $(echo …bc)kb` → `printf '%skb\n' "$(…bc)"` (kb/mb/gb/tb); `echo $BYTES` pass-throughs ×4 → `printf '%s\n' "$BYTES"`; `BASE`/`SUFFIX` `echo $BYTES\|tr` ×2 → `printf`; the `\|sed` pipes `FILE_NS`/`INFO`/`MSG`/`arrayelement`/`ON` → `printf`; countdown `echo $INPUT` → `printf '%s\n' "$INPUT"` |
+| **5 — loop / array / exact size** | SC2086 ls-loop + size precision | `file_list_image_files`: `for FILE in $(ls *.img *.zip *.xz *.gz *.zst *.iso 2>/dev/null)` → real glob loop **+ guard line `[[ -e $FILE ]] || continue`** (+1 line); `ls -s|cut -f1|×1024` → `stat -c%s -- "$INFILE"` (924) / `"$FILE"` (981) — **exact byte size** (sparse now reports apparent size = approved semantic, was an `ls`-block KiB approximation); `parts=("$1")` in `get_ver_to_int` (quoting only — locals/`let`/global `parts` stay backlog); `FILES+=($FILE)` → `FILES+=("$FILE")`; `FILES[i]=$(echo "    " …  \((…)\))` → `FILES[i]="    $(…) (…)"` (fixes 4-space prefix + paren-escape) |
+
+### Kept (RISKY / intentional — exactly 17 SC2086 survive, shifted +1 after L957)
+
+`eval $CMD` (129), `printf $FILES` (963), `umount $MEDIA?` (1850), `$DEFAULT --yesno` (1970), `sudo umount $DEVICE?` (2056), `media_backup|restore "$2" "$3" $4` (2453/2455), dispatch `$2` (2459/2461/2463), `media_format $2 $3 $4` ×3 (2474/2476), `pisafe_uninstall $2` (2874), `get_args $*` (2883), `menu_cli $1 …` (2903). **Nothing new introduced.**
+
+### Verification (agent-safe only) — all green
+
+* `bash -n pisafe` — PASS pre & post. `bash pisafe -v` — `1.2.12.beta1`.
+* `shellcheck 0.10.0 -s bash -f json`: **273 → 102 findings** — 172 findings resolved (exactly the four approved classes) + 1 new shellcheck FP, net −171. Line-level diff vs baseline: only the applied findings removed; zero unrelated removals, zero new (other than the one FP below).
+* **Residual 102 = 19 codes:** SC2181×18 · SC2086×17 (keep-list) · SC2034×15 · SC2155×13 · SC2005×9 · SC2002×5 · SC2021×4 (tr `[[`) · SC2125×4 (bc string-as-value) · SC2143×3 · SC2053×2 (`[[ = ]]` glob-RHS) · SC2027×2 · SC2164×2 · SC2215×2 (dead `notes_desktop_environment`) · singletons SC1001/SC2048/SC2059/SC2068/SC2207/SC2219.
+* **New shellcheck FP (1):** SC2027 @ L1992 — `local NAME="$(lsblk "$DEVICE" …) ("$DEVICE")"`. shellcheck 0.10.0 mis-parses the `…cmd "$X") ("$X")"` form. Minimal repro flags the pattern, but `bash -n` passes and **runtime output is byte-correct** (`NAME=[VENDOR MODEL SIZE TYPE for /dev/sdb (/dev/sdb)]`). L2634 SC2027 (`whiptail ""${options[@]}""`) is pre-existing (baseline L2633).
+* keep-list: all 17 SC2086 present at the +1-shifted lines; nothing new (list above).
+* Spot harness `/tmp/opencode/scfix_spot.sh` (extracts the real `get_bytes`/`get_elapsed_time`/`ui_msg_*`): **25/25 PASS**. (Two expectations corrected on the harness side, not the app: `sed` extraction range 1926→1927 to absorb the +1 line; expected `586kb`→`585kb` — bc `scale=0` truncates, identical in pristine and live.)
+* `get_bytes` pristine-vs-live: **byte-identical output on 20 inputs**.
+* `config_var_set/clear/get`: LIVE ≡ PRISTINE (temp-CONFIG test).
+* Size fns: regular file byte-identical (27,262,976 both); **sparse now apparent size** (1,025,024 vs old `ls`-based 16,384) = approved `stat -c%s`.
+* `read -r` @ nested-quote sites (1992) proven valid at runtime; `bash -n` clean.
+* **3 transform-script defects caught & fixed by the battery** (source of truth = `/tmp/opencode/sc_round2_transform.py`; none reached the file): (a) L1991 `old` swallowed the outer closing `"` → quote-parity breach → syntax error; fixed `new` to re-emit it. (b) L1348 Python **raw** string wrote literal `\"` into bash (→ passed literal quotes to `file_path` + spurious SC2086); fixed to plain nested quotes. (c) L924/981 `stat -c%s` replacement left a residual `* 1024` (1024× inflation — `ls` blocks are KiB but `stat -c%s` is bytes); empirically proven, fixed to plain `stat -c%s`.
+* **1 RISKY-class slip found in full `git diff` read-through & removed:** Step-3 timing line had two delimiter spaces baked into the visible string (orig `echo_white  Step 3 took`, extra space = delimiter). Fixed to `echo_white "Step 3 took …"` (no leading spaces in output).
+* `git diff --stat`: **134 insertions / 133 deletions** (net +1 = the L957 loop-guard line). Every hunk read through — all in the approved classes (quoting-only or the approved restructures); no out-of-class change.
+
+### Commit (approved by user 2026-09-25)
+
+`review R2: shellcheck classes 1/2/3/5 — quote expansions, read -r, echo→printf, stat -c%s sizes, ls→glob loop (273 → 102 findings)`
+— covering `pisafe` + `REVIEW_ROUNDS.md`. **No push, no tag, no version bump.**
+
+---
+
 ## Open items across rounds
 
 | Item | Location | Round |
 |---|---|---|
-| `get_ver_to_int` (no locals, global `parts`, `let`) | `pisafe` ~701–712 | R2+ |
-| `echo $INPUT` unquoted | `pisafe` ~1237 | R2+ |
-| `cd $DIR` unquoted | `pisafe` ~1066 | R2+ |
-| `FILES+=($FILE)` unquoted | `pisafe` ~2738 | R2+ |
-| `sudo $INSTALL …` unquoted | `pisafe` fat16/fat32/exfat/ntfs arms | R2+ |
+| `get_ver_to_int` (R2 quoted `parts=("$1")`; **no locals, global `parts`, `let` remain**) | `pisafe` ~710 | R3+ |
+| ~~`echo $INPUT` unquoted~~ — **closed in R2** (class 3: `printf '%s\n' "$INPUT"`) | (was ~1237) | ✅ R2 |
+| ~~`cd $DIR` unquoted~~ — **closed in R2** (class 1: `cd "$DIR"`) | (was ~952) | ✅ R2 |
+| ~~`FILES+=($FILE)` unquoted~~ — **closed in R2** (class 5: `FILES+=("$FILE")`) | (was 2350) | ✅ R2 |
+| ~~`sudo $INSTALL …` unquoted~~ — **closed in R2** (class 1: all bare `sudo "$INSTALL" …` arms quoted) | `pisafe` 278/298/2080–2115 | ✅ R2 |
 | Stale `test_pisafe` harness | `test_pisafe` | later, user decides |
 | Cosmetic double-space sites (`else  #`, `[[ … = primary  ]]`) | `pisafe` 838, 1536 | R2+ |
 | Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
 | **Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked** | `pisafe` L50–95 | R2+ (user: leave for now) |
 | `tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk (tr `[[` = literal-`[` escape) | `pisafe` L782 (cf. 899, 903) | R2+ (needs care + test) |
-| 273 residual shellcheck findings, all RISKY-class (SC2086/2046 lists & echo-flags, SC2155 locals, SC2181 `$?`, …) | `pisafe` (breakdown in shellcheck section) | R2+ per-item if user wants |
+| **102 residual shellcheck findings / 19 codes** (SC2181×18, SC2086×17 keep-list, SC2034×15, SC2155×13, SC2005×9, SC2002×5, SC2021×4 tr-`[[`, SC2125×4 bc-strings, SC2143×3, SC2053×2 `[[=]]` glob-RHS, SC2027×2 (1 FP @1992), SC2164×2, SC2215×2, + 6 singletons) — all RISKY/intentional/backlog | `pisafe` (full breakdown in Round 2 section) | R3+ per-item if user wants |
 | Copyright header `2018 - 2022` | `pisafe`:3 | release round |
