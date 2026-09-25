@@ -268,7 +268,8 @@ StartupNotify=false" > "$PRODUCTNAME.desktop"
 pisafe_install_tool() {
     local TOOL=$1
     #SILENT=${1:-"-n"}
-    local INSTALL=$(env_installer)
+    local INSTALL
+    INSTALL=$(env_installer)
 
     if [[ -z $(env_which "$TOOL") ]]; then
         case $TOOL in
@@ -330,7 +331,8 @@ pisafe_install_tools() {
 
     # if whiptail did not install then try installing newt...
     if ! [[ $(env_which whiptail) ]]; then
-        local INSTALL=$(env_installer)
+        local INSTALL
+        INSTALL=$(env_installer)
         run_command "sudo $INSTALL newt"        # for fedora
         run_command "sudo $INSTALL libnewt"     # for arch, manjaro
     fi
@@ -708,12 +710,11 @@ do_countdown(){
 
 
 get_ver_to_int() {
-    local IFS=.
-    parts=("$1")
-
-    let val=1000000*parts[0]+1000*parts[1]+parts[2]
-    echo $val
-    unset IFS
+    local parts
+    local val
+    IFS='.' read -r -a parts <<< "$1"
+    (( val = 1000000*parts[0] + 1000*parts[1] + parts[2] ))
+    echo "$val"
 }
 
 
@@ -778,8 +779,10 @@ get_bytes(){
     local BYTES=$1
     local OUTPUT=${2:-"-h"};  #human or bytes
 
-    local BASE=$(printf '%s\n' "$BYTES" | tr -cd '[[:digit:]]' )
-    local SUFFIX=$(printf '%s\n' "$BYTES" | tr -cd 'kmgtbKMGTB' )
+    local BASE
+    BASE=$(printf '%s\n' "$BYTES" | tr -cd '[[:digit:]]' )
+    local SUFFIX
+    SUFFIX=$(printf '%s\n' "$BYTES" | tr -cd 'kmgtbKMGTB' )
 
     if ! [[ "$BASE" =~ ^[0-9]+$ ]]; then   # not a number
         ui_msg_warning $LINENO "$BASE not a number"
@@ -835,7 +838,7 @@ get_bytes(){
         else
             printf '%s\n' "$BYTES"
         fi
-    else  # translate to bytes
+    else # translate to bytes
         case $SUFFIX in
         b|B|"")     echo "$BASE"                                    ;;
         k|K|kb|KB)  echo $((BASE*1024))                            ;;
@@ -851,8 +854,10 @@ get_bytes(){
 # ---------- file functions
 file_base(){
     #returns the path and filename minus all extensions
-    local DIR=$(dirname "$1")
-    local BASE=$(basename "$1")
+    local DIR
+    DIR=$(dirname "$1")
+    local BASE
+    BASE=$(basename "$1")
 
     # the %%. removes everything after the first . found
     BASE="${BASE%%.*}"
@@ -1021,13 +1026,16 @@ do_list_info() {
 # ---------- Media functions
 
 media_name(){
-    local VEN_MOD=$(lsblk -dpnlo VENDOR,MODEL "$1" 2> /dev/null | sed 's/  */ /g')
+    local VEN_MOD
+    VEN_MOD=$(lsblk -dpnlo VENDOR,MODEL "$1" 2> /dev/null | sed 's/  */ /g')
     ES=$?
     if (( ES )); then
         return "$ES"
     fi
-    local SIZE=$(lsblk -dpnlo SIZE "$1" 2> /dev/null | sed 's/[ ]\+//g')
-    local DEVICE=$(lsblk -dpnlo NAME "$1" 2> /dev/null)
+    local SIZE
+    SIZE=$(lsblk -dpnlo SIZE "$1" 2> /dev/null | sed 's/[ ]\+//g')
+    local DEVICE
+    DEVICE=$(lsblk -dpnlo NAME "$1" 2> /dev/null)
 
     echo "$VEN_MOD - $SIZE ($DEVICE)"
 }
@@ -1534,7 +1542,7 @@ Switch to terminal and create image-file now?"
     case $MEDIA_LAST_PARTITION_FS in
 
         ext4|ext3|ext2)
-            if [[ $MEDIA_PARTITION_TABLE = gpt ]] || { [[ $MEDIA_PARTITION_TABLE = msdos ]] && [[ $MEDIA_LAST_PARTITION_TYPE = primary  ]]; }; then
+            if [[ $MEDIA_PARTITION_TABLE = gpt ]] || { [[ $MEDIA_PARTITION_TABLE = msdos ]] && [[ $MEDIA_LAST_PARTITION_TYPE = primary ]]; }; then
                 SHRINK_BYTES=$(sudo lsblk "$MEDIA" -lpbo name,fsavail | grep "$MEDIA_LAST_PARTITION_NAME" | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
             else
                 MSG=$MSG"   Warning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This partition-type will not shrink and cannot be restored to a smaller media. Pisafe will still work.\n"
@@ -1594,7 +1602,8 @@ media_restore(){
     echo_if_cli "Unmounting device $OUTDEV ..." "white"
     umount "$OUTDEV"? 2> /dev/null
 
-    local INFILEEXT=$(file_ext "$INFILE")
+    local INFILEEXT
+    INFILEEXT=$(file_ext "$INFILE")
 
     echo
     echo_white "Writing '$INFILE' to '$OUTDEV' ... "
@@ -1987,9 +1996,12 @@ media_format(){
     local FORMAT=${2:-"fat32"}    # fat32, ntfs, ext4, exfat
     local SILENT=${3:-"-n"}
 
-    local ROOT="$(env_root_device)"
-    local TYPE="$(lsblk "$DEVICE" -dnpo TYPE)"
-    local NAME="$(lsblk "$DEVICE" -dnpo VENDOR,MODEL,SIZE,TYPE) ("$DEVICE")"
+    local ROOT
+    ROOT="$(env_root_device)"
+    local TYPE
+    TYPE="$(lsblk "$DEVICE" -dnpo TYPE)"
+    local NAME
+    NAME="$(lsblk "$DEVICE" -dnpo VENDOR,MODEL,SIZE,TYPE) ("$DEVICE")"
     local PARTITION=$DEVICE
 
     if [[ $FORMAT = fat32 ]]; then

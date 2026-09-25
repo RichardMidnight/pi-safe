@@ -314,7 +314,38 @@ Prompt: `REVIEW_ROUND_3.md`.
 
 ### Commit
 
-Pending user approval (RISKY, approved per item, verified). Candidate message: `review R3: quote = RHS and tr suffix set, fail-fast entry cd, grep -q (SC2053/2164/2021/2143 → 91 findings)`.
+✅ Committed `ed37b40` `review R3: quote = RHS + tr suffix, fail-fast cd, grep -q, bc-string quoting (102→91 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_3.md`). User functional testing of `1.2.12.beta1` passed before R4 started.
+
+---
+
+## Round 4 — variable hygiene (+ `get_ver_to_int` bug fix)
+
+Full scope/approval/verification record: `REVIEW_ROUND_4.md`. Baseline: `ed37b40` (R3), 2906 lines, 91 findings / 16 codes, `1.2.12.beta1`.
+
+### Changes applied (all user-approved)
+
+1. **R4.1 — `get_ver_to_int` (L710–717):** `parts`/`val` → local; `let` → `(( ))`; `echo $val` → `echo "$val"`; dead `unset IFS` deleted.
+2. **R4.1e — pre-existing bug FIX (discovered in R4 A/B, approved):** `parts=("$1")` is a *quoted* expansion → never word-splits (local IFS irrelevant) → **every dotted version** hit `let: 1.2.11: syntax error: invalid arithmetic operator (error token is ".2.11")` (stderr) + **empty stdout**, rc=0 — A/B-proven against the v1.2.11 baseline. Consequence in baseline: sole caller (update check L364, `SERVER_VER` dotted) compares `"" -gt ""` → **"UPDATE AVAILABLE" prompt dead since v1.x**, plus a syntax error printed to the user's terminal on every update check. Fixed with shellcheck-endorsed robust idiom: `IFS='.' read -r -a parts <<< "$1"` (user chose this over the minimal `parts=($1)`, which adds SC2206×1).
+3. **R4.2 — SC2155 ×13:** split `local X=$(…)` → `local X` + `X=$(…)` at 271, 333, 781, 782, 854, 855, 1024, 1029, 1030, 1597, 1990, 1991, 1992. 12 sites provably neutral (no `$?`/`ES` consumed after). L1024 (`media_name`): the following `ES=$?` check is **dead today** (`local` always returns 0; post-split it captures the trailing `sed`'s status, effectively still 0) → **observable behavior unchanged**, verified good+bad device A/B.
+4. **R4.3 — SAFE nits:** `else  #` → `else #` (838); `= primary  ]]` → `= primary ]]` (1537).
+
+### Verification (all green)
+
+1. `bash -n` PASS; `bash pisafe -v` = `1.2.12.beta1`.
+2. `get_ver_to_int` A/B: baseline dotted → error+empty; live fixed: `1.2.3→1002003  1.2.11→1002011  0.1.0→1000  2→2000000  1.2→1002000  9.9.9→9009009  0.0.0→0  abc→0`; non-dotted inputs byte-identical to baseline. Global-leak: `parts`/`val` **unset** after live call (previously leaked).
+3. `get_bytes` A/B (9 inputs): identical except WARN `$LINENO` diagnostic `11→13` (accepted). `file_base` A/B (5): identical. `media_name` A/B stubbed `lsblk` (good+bad): identical both.
+4. shellcheck: 91 → **77 findings**, 16 → **14 codes** (SC2155×13→0, SC2219×1→0, nothing new). SC2086 keep-list: same 17 sites, lines shifted +5/+9/+12 by the splits above (… 968, 1859, 1979, 2068, 2465, 2467, 2471, 2473, 2475, 2486, 2488×3, 2889, 2898, 2918).
+5. `git diff` — 17 hunks, each mapping to one approved item. File 2906 → 2918 lines (net +12).
+
+### Explicitly left for later
+
+* **`media_name` dead error check** (pre-existing, found in R4): `lsblk … | sed …` pipeline swallows lsblk failure, so `ES=$?`/`if (( ES ))` never fires — bad devices report ` -  ()` instead of failing. Needs `PIPESTATUS[0]` or empty-output check = logic change → backlog, user decides.
+* SC2181×18, SC2005×9, SC2002×5, SC2034×15, SC2143×1 (L1507→now L1515) — later rounds.
+* All leave-as-is classes (SC2086 keep-list, menu idioms, FPs).
+
+### Commit
+
+Pending user approval. Candidate message: `review R4: variable hygiene — get_ver_to_int fix+locals, split local X=$(…) (SC2155/2219 → 77 findings)`.
 
 ---
 
@@ -322,16 +353,17 @@ Pending user approval (RISKY, approved per item, verified). Candidate message: `
 
 | Item | Location | Round |
 |---|---|---|
-| `get_ver_to_int` (R2 quoted `parts=("$1")`; **no locals, global `parts`, `let` remain**) | `pisafe` ~710 | R3+ |
+| ~~`get_ver_to_int` (no locals, global `parts`, `let`)~~ — **closed in R4** (locals added; `let`→`(( ))`; **pre-existing dotted-version bug fixed** via `IFS='.' read -r -a parts <<< "$1"` — "UPDATE AVAILABLE" check now functional; A/B-proven) | `pisafe` ~710 | ✅ R4 |
+| **`media_name` dead error check** — `lsblk | sed` pipeline swallows lsblk failure; `ES=$?`/`if (( ES ))` can never fire; bad device → silent ` -  ()`. Needs `PIPESTATUS[0]` or empty-output check (logic change) | `pisafe` ~1031 | R5+, user decides |
 | ~~`echo $INPUT` unquoted~~ — **closed in R2** (class 3: `printf '%s\n' "$INPUT"`) | (was ~1237) | ✅ R2 |
 | ~~`cd $DIR` unquoted~~ — **closed in R2** (class 1: `cd "$DIR"`) | (was ~952) | ✅ R2 |
 | ~~`FILES+=($FILE)` unquoted~~ — **closed in R2** (class 5: `FILES+=("$FILE")`) | (was 2350) | ✅ R2 |
 | ~~`sudo $INSTALL …` unquoted~~ — **closed in R2** (class 1: all bare `sudo "$INSTALL" …` arms quoted) | `pisafe` 278/298/2080–2115 | ✅ R2 |
 | ~~`echo $DEVICE_SELECTED` trailing-space regression~~ (menu tag `sda␣`; R2 quoting unmasked latent ` | ` separator quirk; broke all 4 TUI device pickers in 1.2.12.beta1) — **closed** (Fix C: `DEVICE_SELECTED="${DEVICE_SELECTED% }"` before the quoted `echo`; see Round 2 regression section) | `pisafe` ~2643 | ✅ R2-regression-fix |
 | Stale `test_pisafe` harness | `test_pisafe` | later, user decides |
-| Cosmetic double-space sites (`else  #`, `[[ … = primary  ]]`) | `pisafe` 838, 1536 | R2+ |
+| ~~Cosmetic double-space sites (`else  #`, `[[ … = primary  ]]`)~~ — **closed in R4** (R4.3) | `pisafe` 838, 1537 | ✅ R4 |
 | Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
 | **Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked** | `pisafe` L50–95 | R2+ (user: leave for now) |
 | `tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk (tr `[[` = literal-`[` escape) | `pisafe` L782 (cf. 899, 903) | R2+ (needs care + test) |
-| ~~**102 residual shellcheck findings / 19 codes**~~ → **91 findings / 16 codes** (SC2181×18, SC2086×17 keep-list, SC2034×15, SC2155×13, SC2005×9, SC2002×5, SC2021×3 (3× `[[:digit:]]` FPs), SC2143×1 (L1507 pipeline), SC2027×2 (1 FP @1992), SC2215×2, + 6 singletons) — SC2125×4 **closed in post-R2 safe cleanup**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in Round 3** | `pisafe` (full breakdown in Round 2 / Round 3 sections) | R4+ per-item if user wants |
+| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → **77 findings / 14 codes** (SC2181×18, SC2086×17 keep-list, SC2034×15, SC2005×9, SC2002×5, SC2021×3 (3× `[[:digit:]]` FPs), SC2143×1 (L1515 pipeline), SC2027×2 (1 FP), SC2215×2, SC2207×1, + 4 singletons) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4** | `pisafe` (full breakdown in Round 2 / 3 / 4 sections) | R5+ per-item if user wants |
 | Copyright header `2018 - 2022` | `pisafe`:3 | release round |
