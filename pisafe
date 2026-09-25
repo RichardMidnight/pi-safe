@@ -1656,7 +1656,7 @@ media_restore(){
                 run_command "pigz -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" "$LINENO"
                 ES=$?
             else
-                ui_echo "~ Running: pigz -p -k -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                ui_echo "~ Running: pigz -d -k -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
                 (pigz -d -k -c "$INFILE" | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
@@ -2465,17 +2465,17 @@ menu_cli(){
     INTERFACE="cli"
     case $1 in
 
-        backup)             media_backup "$2" "$3" $4  ;;
+        backup)             media_backup "$2" "$3" "$4"  ;;
 
-        restore)            media_restore "$2" "$3" $4 ;;
+        restore)            media_restore "$2" "$3" "$4" ;;
 
         list)               do_list_info               ;;
 
-        install)            pisafe_install $2          ;;
+        install)            pisafe_install "$2"          ;;
 
-        update)             pisafe_update cli yes $2   ;;
+        update)             pisafe_update cli yes "$2"   ;;
 
-        uninstall)          pisafe_uninstall $2        ;;
+        uninstall)          pisafe_uninstall "$2"        ;;
 
         log)                nano "$LOG_FILE"           ;;
 
@@ -2486,9 +2486,9 @@ menu_cli(){
                                 config_var_set_defaults
                             fi                         ;;
 
-        details)            media_details $2           ;;
+        details)            media_details "$2"           ;;
 
-        erase|format)       media_format $2 $3 $4      ;;
+        erase|format)       media_format "$2" "$3" "$4"      ;;
 
         beep)
             #SOUND=on

@@ -483,8 +483,45 @@ Baseline: `8c42bd2` (R7), 2917 lines, **26 findings / 8 codes**, `1.2.12.beta1`.
 
 Pending user approval. Candidate message: `review R8: local ROOTREADONLY (fix cross-call (READONLY) bleed in media_partition_info)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_8.md`; untracked user files excluded). **No push, no tag, no version bump.**
 
+---
+
+## Round 9 — verification round: pv/compression syntax (user item #3) + global-leak audit + 2 small fixes (prompt: `REVIEW_ROUND_9.md`)
+
+**Status: APPLIED + VERIFIED (changes on `dev`, uncommitted — commit pending user approval).**
+User decision 2026-09-25: R9.0 docs ✓ · R9.1 (L1659 log `-p`→`-d`) ✓ · R9.1b (user's own menu_cli SAFE quotes) ✓ · R9.2 (raw-img restore `-s`) **deferred**.
+Baseline: `c4aca2b` (R8), 2918 lines, **26 findings / 8 codes**, `1.2.12.beta1`.
+
+### Verification verdicts (see `REVIEW_ROUND_9.md` for full detail) — **user item #3 CLOSED**
+
+* **`xz -z` on the compress path (L1199) is CORRECT** — `xz --help`: `-z, --compress`; refuted earlier suspicion of decompress; proven empirically (xz 5.8.1, 2 MB sample: rc 0, `xz -t` valid, byte-identical roundtrip). **Not changed.**
+* All compress arms verified (zip `… -` stdin ✓; xz ✓; pigz ✓; zstd `--rm` output lands at `$OUTFILE` **by virtue of** the enforced `.img.<EXT>` naming convention via `file_base`/`check_outfile` — consistent today, fragility **noted**); all restore decompress arms verified (`unzip -p`, `xz -d -c`, `pigz -d -k -c`, `zstd -d -c`); all `pv` usages syntactically valid (`-s`, `-n`).
+* **R9.1 applied**: L1659 restore log message said `pigz -p -k -c` but the command runs `pigz -d -k -c` → message now matches. (User-visible string — RISKY class, user-approved.)
+* **R9.2 noted, deferred**: raw img/iso restore (L1618/L1622) is the only restore path without `-s $RESTORE_BYTES` (no % denominator) — user-visible progress behavior change, on hold.
+
+### R9.1b — user-authored SAFE quotes (approved into R9)
+
+`menu_cli` case arms: `backup`/`restore` `$4`, `install`/`update`/`uninstall`/`details` `$2`, `erase|format` `$3 $4` → all single-token expansions quoted. Resolves exactly the 9 SC2086 keep-list sites of that cluster. A/B dispatch test (`/tmp/opencode/r9_ab.sh`, stubs) **ALL PASS** — 6 arms incl. 3-arg calls byte-identical pre/live.
+
+### Global-leak audit (ROOTREADONLY class, R7/R8 follow-up) — **CLOSED, no further bugs**
+
+Systematic scan of every function for "read while only conditionally written + never `local`": every flagged name triaged — others are unconditionally set-before-read, early-return before read (`file_image_size`), have covered case/if-else arms (`ROOT_FILTER`, `MEDIA_LAST_PARTITION_TYPE`, `PI_SHRINK_OPTS`, `START_OF_FREESPACE`, `TIME3`), or are intentional cross-step globals. **`media_partition_info` (R8) was the one real instance.** Hygiene residual: per-item fns still use bare globals provably set-before-read (`SIZE_BYTES`, `OS`, `PARTED_OUTPUT`, `MEDIA_PARTITIONS`, `FILE_NS`, …) — behavior-safe; **recommend no churn locals round** (logged as backlog).
+
+### Measured
+
+* `bash -n` PASS; `-v` → `1.2.12.beta1`; 2918 lines (unchanged).
+* shellcheck (`-f gcc`): **26 → 17 findings, 8 codes (SC2086 15 → 6)**; site-diff = exactly the 9 menu_cli sites removed, 0 added.
+* SC2086 keep-list now **6**: 125, 1857, 1976, 2066, 2889, 2918.
+* `git diff --stat`: **8 ins / 8 del** (L1659 + 7 menu_cli arms); nothing else touched.
+
+### Commit
+
+Pending user approval. Candidate message: `review R9: verify pv/tool syntax (item #3 closure), fix pigz log -p→-d, quote menu_cli args (26→17 findings)` (staged: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_9.md`; untracked user files excluded). **No push, no tag, no version bump.**
+
 | Item | Location | Round |
 |---|---|---|
+| ~~**pv/compression syntax confirmation** (user `things to fix.md` item #3)~~ — **closed in R9**: all compress/restore arms verified correct (incl. `xz -z` = `--compress`, refuted suspicion); L1659 log typo `-p`→`-d` fixed; residual R9.2 (raw-img restore `-s`) deferred below | `pisafe` L1110–1674 | ✅ R9 |
+| **Raw img/iso restore missing `-s "$RESTORE_BYTES"`** (only restore arm without a size denominator; L1618 cli + L1622 tui) | `pisafe` L1618, L1622 | **R9 deferred** (RISKY display change — user's call) |
+| **zst compress arm naming fragility** — `zstd IMG --rm` writes `IMG.zst` = `$OUTFILE` **only because** `check_outfile` enforces the `.img.<EXT>` convention; a convention change would silently break it (verified working today — no action requested) | `pisafe` L1225 | R9 (noted) |
 | ~~`get_ver_to_int` (no locals, global `parts`, `let`)~~ — **closed in R4** (locals added; `let`→`(( ))`; **pre-existing dotted-version bug fixed** via `IFS='.' read -r -a parts <<< "$1"` — "UPDATE AVAILABLE" check now functional; A/B-proven) | `pisafe` ~710 | ✅ R4 |
 | **`media_name` dead error check** — `lsblk | sed` pipeline swallows lsblk failure; `ES=$?`/`if (( ES ))` can never fire; bad device → silent ` -  ()`. **R7: left as-is + documented** — return code is swallowed at all 5 call sites (embedded in `$(…)` strings), so an idiom fix changes no visible behavior; real fix (empty-output check + caller surfacing) = feature work | `pisafe` ~1024 | R7 (user: leave) |
 | ~~**`ROOTREADONLY` not `local` in `media_partition_info`**~~ — **closed in R8** (R8.1: `local ROOTREADONLY=`; fixes the cross-call `(READONLY)` contamination the stale-value path caused — A/B reproduced on pre, live proven clean; sibling vars were already local) | `pisafe` ~2197 (post-R8) | ✅ R8 |
@@ -498,5 +535,5 @@ Pending user approval. Candidate message: `review R8: local ROOTREADONLY (fix cr
 | Backup-estimate `ui_echo` clobber + stdout pollution (pre-existing; fat32 box shows literal ANSI + fused lines) | `pisafe` L1546, L1872–1873, L2163, L2512 | **applied during R1 functional testing** (commit `e174ebe`) |
 | **Dead function `notes_desktop_environment` (L50–95) — never called; body is an unquoted table that would run `arch` etc. as commands if invoked** | `pisafe` L50–95 | R2+ (user: leave for now) |
 | ~~`tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk~~ — **closed in R8 as stale/mis-diagnosed**: the kmgtb set was **already fixed in R3** (R3.1 → `tr -cd 'kmgtbKMGTB'`); the remaining SC2021×3 are shellcheck FPs on the correct `[[:digit:]]` POSIX-class form (L777, L897, L901) and stay on the file as known FPs | `pisafe` L779 (cf. L777, L897, L901) | ✅ R3 (fix) / R8 (row closed) |
-| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → ~~**62 findings / 11 codes**~~ → ~~**44 findings / 10 codes**~~ → **26 findings / 8 codes** (SC2086×15 keep-list, SC2034×1 = L3 `COPYRIGHT` deferred to release, SC2021×3 (FPs), SC2027×2 (1 FP), SC2215×2 (dead fn), SC2207×1 (menu idiom), SC2068×1, SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5**; **SC2181×18 closed in R6**; **SC2034×14 + SC2059×1 + SC2048×1 + SC2086×2 closed in R7** | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 / 6 / 7 sections) | R8+ per-item if user wants |
+| ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → ~~**62 findings / 11 codes**~~ → ~~**44 findings / 10 codes**~~ → ~~**26 findings / 8 codes**~~ → **17 findings / 8 codes** (SC2086×6 keep-list at 125, 1857, 1976, 2066, 2889, 2918; SC2034×1 = L3 `COPYRIGHT` deferred to release; SC2021×3 (FPs); SC2027×2 (1 FP); SC2215×2 (dead fn); SC2207×1 (menu idiom); SC2068×1; SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5**; **SC2181×18 closed in R6**; **SC2034×14 + SC2059×1 + SC2048×1 + SC2086×2 closed in R7**; **SC2086×9 (menu_cli cluster) closed in R9** (user SAFE quotes) | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 / 6 / 7 / 9 sections) | R10+ per-item if user wants |
 | Copyright header `2018 - 2022` (L3 dead `COPYRIGHT` var — the only place the notice lives) | `pisafe`:3 | **release round** (R7 user decision B2: kept out of R7; delete/rehome + date then) |
