@@ -32,7 +32,7 @@ bash pisafe install
 
 **Beta Version**
 ```bash
-wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_beta -O pisafe
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/v1.2.12-beta.2/pisafe -O pisafe
 bash pisafe install
 ```
 
