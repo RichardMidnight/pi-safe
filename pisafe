@@ -1127,16 +1127,17 @@ media_backup(){
     echo "Reading $(get_bytes "$BYTES_TO_READ" -h)..."
 
     if [[ -n $(which pv) ]]; then
-        #run_command "sudo pv $INDEV -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " "$LINENO"
-        # the
-        #run_command "sudo dd if=$INDEV | pv -p -s $BYTES_TO_READ $DEVICE | sudo dd bs=$BS of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock conv=fsync " "$LINENO"
-        run_command "sudo dd if=$INDEV bs=$BS count=$BLOCKS_TO_READ | pv -s $BYTES_TO_READ $DEVICE | sudo dd of='$OUTFILE_BASE.img' conv=fsync " "$LINENO"
+        # NOTE: no file operand after '-s N' — a positional FILE makes pv read that file
+        # itself (like cat) and ignore the pipe; N is only the expected total for the bar.
+        run_command "sudo dd if=$INDEV bs=$BS count=$BLOCKS_TO_READ | pv -s $BYTES_TO_READ | sudo dd of='$OUTFILE_BASE.img' conv=fsync " "$LINENO"
 
         ES=$?
     else
         ui_echo "No progress bar installed.  Please wait..."
         PROGRESS=
-        if (( $(dd --help | grep progress) )); then
+        # probe dd for the operand instead of parsing its help text (wording is not stable;
+        # the old '(( $(dd --help | grep progress) ))' was a syntax error and always evaluated false)
+        if dd if=/dev/null of=/dev/null bs=1k count=1 status=progress 2> /dev/null; then
             PROGRESS="status=progress"
         fi
         run_command "sudo dd bs=$BS if=$INDEV of='$OUTFILE_BASE.img' count=$BLOCKS_TO_READ iflag=fullblock $PROGRESS conv=fsync " "$LINENO"
@@ -1210,19 +1211,38 @@ media_backup(){
             #  echo -n "                    $OUTFILE_BASE.img"
             #  echo " [........................|.........................] 100%"
             #  run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" "$LINENO"
-            run_command "pv '$OUTFILE_BASE.img' | zip -$COMPRESSION_LEVEL '$OUTFILE' - "
-            ES=$?
-            if (( ! ES )); then
-                rm -f "$OUTFILE_BASE".img
+            if [[ -n $(which pv) ]]; then
+                run_command "pv '$OUTFILE_BASE.img' | zip -$COMPRESSION_LEVEL '$OUTFILE' - " "$LINENO"
+                ES=$?
+                if (( ! ES )); then
+                    rm -f "$OUTFILE_BASE".img
+                fi
+            else
+                ui_echo "No progress bar installed.  Please wait..."
+                run_command "zip -j -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" "$LINENO"
+                ES=$?
+                if (( ! ES )); then
+                    rm -f "$OUTFILE_BASE".img
+                fi
             fi
  ;;
 
         xz)
             #run_command "sudo xz -z -T0 -v -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" "$LINENO"
-            run_command "pv '$OUTFILE_BASE.img' | xz -z -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
-            ES=$?
-            if (( ! ES )); then
-                rm -f "$OUTFILE_BASE".img
+            if [[ -n $(which pv) ]]; then
+                run_command "pv '$OUTFILE_BASE.img' | xz -z -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
+                ES=$?
+                if (( ! ES )); then
+                    rm -f "$OUTFILE_BASE".img
+                fi
+            else
+                ui_echo "No progress bar installed.  Please wait..."
+                # '-c' (stdout) rather than '-o' — this box's xz build has no '-o' option
+                run_command "xz -z -c -T0 -$COMPRESSION_LEVEL '$OUTFILE_BASE.img' > '$OUTFILE'" "$LINENO"
+                ES=$?
+                if (( ! ES )); then
+                    rm -f "$OUTFILE_BASE".img
+                fi
             fi
  ;;
 
