@@ -408,12 +408,11 @@ pisafe_uninstall(){
 
 # ---------- Config_var functions
 config_var_init_configfile(){
-    if [[ ! -d $(file_path "$CONFIG") ]]; then
+    if [[ ! -d "$(file_path "$CONFIG")" ]]; then
         mkdir -p "$(file_path "$CONFIG")"
     fi
 
     if [[ ! -f "$CONFIG" ]]; then
-        touch "$CONFIG"
         echo "# $CONFIG" > "$CONFIG"
         config_var_set_defaults
     else
@@ -424,11 +423,11 @@ config_var_init_configfile(){
 
 
 config_var_set() {
-    SETTING=$1
-    VAL=$2
+    local SETTING=$1
+    local VAL=$2
     local FORCE=${3:-true}      # if false, will only update if var not set.
 
-    #dont update the setting if thre is a value and we are not forcing new values
+    # dont update the setting if there is a value and we are not forcing new values
     if [[ "$FORCE" = false ]] && [[ -n $(config_var_get "$SETTING") ]]; then
         return
     fi
@@ -436,11 +435,11 @@ config_var_set() {
     case $(config_var_get "$SETTING") in
 
         '') # add setting to end of file
-            echo "$SETTING"="$VAL" >> "$CONFIG"
+            printf '%s=%s\n' "$SETTING" "$VAL" >> "$CONFIG"
  ;;
 
-        *)  #update setting to val
-            sed -i 's~'"$SETTING"'=.*$~'"$SETTING"'='"$VAL"'~' "$CONFIG"
+        *)  # update setting to val
+            sed -i "s~^$SETTING=.*~$SETTING=$VAL~" "$CONFIG"
  ;;
 
     esac
@@ -448,22 +447,22 @@ config_var_set() {
 
 
 config_var_clear(){
-    SETTING=$1
-    VAL=$2
-    sed -i 's~'"$SETTING"'=.*$~'"$VAR"'=~' "$CONFIG"
+    # replace a setting's value (VAL may be empty); anchored to the line start
+    local SETTING=$1
+    local VAL=$2
+    sed -i "s~^$SETTING=.*~$SETTING=$VAL~" "$CONFIG"
 }
 
 
 config_var_get(){
-    SETTING=$1"="
-    grep "$SETTING" "$CONFIG" | sed 's~'"$SETTING"'~~'
+    # match the setting only at the start of a line (names are [a-z_], so grep/sed-safe)
+    grep "^$1=" "$CONFIG" | sed "s~^$1=~~"
 }
 
 
 config_var_set_defaults(){
     FORCE=${1:-true}        # if false, will only update if var not set.
 
-    # config_var_init_configfile
     config_var_set settings_script_ver "$SCRIPTVER"
     config_var_set default_path_cli_from_settings off "$FORCE"
     config_var_set default_path "$HOME/Downloads" "$FORCE"
