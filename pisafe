@@ -288,7 +288,7 @@ pisafe_install_tool() {
 
         xz)
             ui_echo "Installing xz-utils..." white
-            sudo "$INSTALL" xz-utils
+            run_command "sudo $INSTALL xz-utils" "$LINENO"
             if [[ -z "$(env_which xz)" ]]; then
                 ui_msg_warning $LINENO "xz not installed."
             fi
@@ -297,7 +297,7 @@ pisafe_install_tool() {
         dd)
             # dd ships in coreutils on all supported distros
             ui_echo "Installing coreutils..." white
-            sudo "$INSTALL" coreutils
+            run_command "sudo $INSTALL coreutils" "$LINENO"
             if [[ -z "$(env_which dd)" ]]; then
                 ui_msg_warning $LINENO "dd not installed."
             fi
@@ -320,7 +320,7 @@ pisafe_install_tool() {
 
         *)
             ui_echo "Installing $TOOL..." white
-            sudo "$INSTALL" "$TOOL"
+            run_command "sudo $INSTALL $TOOL" "$LINENO"
             ES=$?
             if (( ES )); then
                 ui_msg_warning $LINENO "$TOOL not installed."
