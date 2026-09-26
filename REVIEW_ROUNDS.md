@@ -648,3 +648,32 @@ Staged either way: `pisafe`, `REVIEW_ROUNDS.md`, `REVIEW_ROUND_10.md`, `lint.sh`
 | ~~`tr -cd '[[kmgtbKMGTB]]'` suffix-set quirk~~ — **closed in R8 as stale/mis-diagnosed**: the kmgtb set was **already fixed in R3** (R3.1 → `tr -cd 'kmgtbKMGTB'`); the remaining SC2021×3 are shellcheck FPs on the correct `[[:digit:]]` POSIX-class form (L777, L897, L901) and stay on the file as known FPs | `pisafe` L779 (cf. L777, L897, L901) | ✅ R3 (fix) / R8 (row closed) |
 | ~~**102 residual shellcheck findings / 19 codes**~~ → ~~**91 findings / 16 codes**~~ → ~~**77 findings / 14 codes**~~ → ~~**62 findings / 11 codes**~~ → ~~**44 findings / 10 codes**~~ → ~~**26 findings / 8 codes**~~ → **17 findings / 8 codes** (SC2086×6 keep-list at 125, 1857, 1976, 2066, 2889, 2918; SC2034×1 = L3 `COPYRIGHT` deferred to release; SC2021×3 (FPs); SC2027×2 (1 FP); SC2215×2 (dead fn); SC2207×1 (menu idiom); SC2068×1; SC1001×1) — SC2125×4 **closed post-R2**; SC2053×2, SC2164×2, SC2021×1, SC2143×2 **closed in R3**; **SC2155×13, SC2219×1 closed in R4**; **SC2005×9, SC2002×5, SC2143×1 (incl. L1515) closed in R5**; **SC2181×18 closed in R6**; **SC2034×14 + SC2059×1 + SC2048×1 + SC2086×2 closed in R7**; **SC2086×9 (menu_cli cluster) closed in R9** (user SAFE quotes) → ~~**17 findings / 8 codes**~~ → **0 findings (R10 — all 17 processed: 9 SAFE rewrites + 8 user-approved dead-code/removal/rewrite items)** — the SC2086 keep-list is retired (every one of its 15 then-6 sites closed in R7/R9/R10; `media_power_off` deleted in R10); the single remaining sanctioned directive in the file is `# shellcheck disable=SC2068` on the `menu_select_device` whiptail line (documented; the only place unquoted `@` is semantically required); locked in by the new `lint.sh` gate | `pisafe` (full breakdown in Round 2 / 3 / 4 / 5 / 6 / 7 / 9 / 10 sections) | ✅ R10 — **0 findings** |
 | Copyright notice `2018 - 2022` (was the L3 dead `COPYRIGHT` var — the only place the notice lives) | `pisafe`:3 | **R10 (code side)**: dead var → header comment `# By Richard Reed 2018 - 2022`, notice preserved verbatim, SC2034 closed. **Remaining at release**: update the date range (release-time decision, separate explicit user action) |
+
+## Critical pre-release fix pass — 5 approved items (2026-09-26, user-approved)
+
+**Status: ✅ COMMITTED on `dev` (5 focused commits, one per item; user approval given 2026-09-26 via question tool — all 5 RISKY-class items explicitly approved).**
+Baseline: `3e9ecfd` (beta.3 tag), 2 commits ahead of `origin/dev`.
+
+### Items (all verified; A/B/stub evidence below)
+
+| # | Item | Location (pre) | Change | Commit |
+|---|---|---|---|---|
+| 1 | **`$INSTALL` word-split regression** — `sudo "$INSTALL" pkg` passed the multi-word string (`apt install -y`) to sudo as ONE argv element → `sudo: invalid option / could not open usr/bin/apt` for xz / coreutils / generic-tool installs | `pisafe_install_tool` (xz, dd/coreutils, `*` arms) | Route via existing `run_command "sudo $INSTALL …" "$LINENO"` idiom (eval re-splits); `*` arm now captures `ES=$?` | `38c0e07` |
+| 2 | **`media_format` auto-install failed closed** — `INSTALL` never assigned in that scope at all; same quoting bug in 7 package arms (fat16/fat32/exfat/ntfs) | `media_format` | Added `local INSTALL; INSTALL=$(env_installer)`; all 7 arms → `run_command "sudo $INSTALL <pkg>" "$LINENO"` | `949f160` |
+| 3 | **gz no-pv arm wrong output + source loss** — stray `sudo chmod 777` + in-place `pigz -N img` consumed the source and wrote `<base>.img.gz` (only right by naming convention); on a name mismatch: source deleted AND `Error creating $OUTFILE` | `media_backup` gz arm | Mirror xz/zst arms: `run_command "pigz -N -c <base>.img > \$OUTFILE"` + `ES=$?` + `rm -f` source on success | `bf81d1a` |
+| 4 | **Raw img/iso restore had no pv size denominator** (only restore arm without `-s`; indeterminate bar; R9-deferred open item) | `media_restore` img/iso arm | `pv -s $RESTORE_BYTES` in pipeline + log line; `pv -n -s "$RESTORE_BYTES"` in whiptail subshell (mirrors xz/gz) | `2f50b0a` |
+| 5 | **Stale README default** — `**Default:** zip 1`; default ext is `xz` since v1.2.12 (`config_var_set_defaults`), level 1; `zip` was a typo (not a valid ext) | `README.md` L107 | `**Default:** xz 1` (drop the "industry-standard balance" claim) | `ae5b953` |
+
+### Verification (all green)
+
+* `bash -n pisafe` PASS; `bash pisafe -v` → `1.2.12-beta.3`; **shellcheck 0.10.0: 0 findings** (lint.sh gate CLEAN; strict superset `--enable=all` still 12 FP-only, unchanged).
+* **Item 1 stub harness** (real `run_command`/`env_installer`/`pisafe_install_tool` extracted; fake `sudo`/`apt`/`env_which` on PATH): `xz` arm → argv `sudo apt install -y xz-utils` (4 split elements); `pigz` → `sudo apt install -y pigz`; success path (xz present post-stub) → no warning. Regression proven fixed.
+* **Item 3 A/B** (scratch dirs, `pigz -1`): OLD form — source deleted, `backup.img.gz` created (= `OUTFILE` only by naming coincidence; would fail the `[[ -f $OUTFILE ]]` check on any other name); NEW form — source kept, `OUTFILE` created, `rm -f` cleanup path, `pigz -dc | cmp -` **byte-identical** round-trip.
+* Grep audit: `sudo "$INSTALL"` call sites → **0 remaining**.
+* Items 1/2/4 are display/robustness fixes on paths the A-B harness can't reach without a real install/format — functional confirmation deferred to user's restore cycle (tag re-point below).
+
+### Tag
+
+* Local `v1.2.12-beta.3` **re-pointed** from `3e9ecfd` to `ae5b953` (tag was never pushed — re-pointing is free; user-chosen scheme, no beta.4 bump). PR #54 superseded by the xz size-parse fix (`139774d`) in this same tag — **do not merge PR #54**.
+
+* **Push:** pending as separate explicit user action — `git push origin dev v1.2.12-beta.3` (14 commits + moved tag).
