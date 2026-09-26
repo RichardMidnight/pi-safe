@@ -785,5 +785,5 @@ Deciding criterion (user): **cross-distro reliability with the fewest/thinnest d
 
 1. Commit on `dev` — suggested: `review fix: zst arm drops pv; zstd -v for native progress (cross-distro safe)`; optionally a second `docs:` commit for this entry (matching the `3459323`/`e37e41b` pattern).
 2. Re-point local `v1.2.12-beta.3` (never pushed → re-point is free) to the new tip.
-3. **Push stays the user's separate action**: `git push origin dev v1.2.12-beta.3` (28 commits ahead + moved tag) — supersedes origin's beta.3 tag.
+3. **Push stays the user's separate action**: `git push origin dev v1.2.12-beta.3` (30 commits ahead + moved tag) — supersedes origin's beta.3 tag.
 4. **PR #54 stays OPEN** until HovnovoD verifies against the new tag; user pastes the agreed reply text.
