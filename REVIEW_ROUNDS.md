@@ -928,3 +928,19 @@ Verification (all agent-safe — no device touched):
 1. User re-runs `test_pisafe /dev/sda` (std, then `--full`) — **expected: `OVERALL: PASS`** on the healthy card.
 2. On a passing run, commit `test_pisafe` on `dev` (same message as above; FAIL_RE tightening rides in the same commit since it's one logical harness).
 3. Still outstanding from earlier: pipefail commit (approved) + tag re-point `v1.2.12-beta.3`; delete-`test.img.*` decision (~2.9 GB untracked).
+
+## Release — `1.2.12-beta.4` (2026-09-26, user-approved release action)
+
+* **Context:** beta.3 is pushed and immutable — `origin/dev` = `v1.2.12-beta.3` → `125f20e`. New user-facing fix (GitHub issue #55) landed on top → new pre-release number **`1.2.12-beta.4`** (one version number = one body of code).
+* **Change (user-approved, issue #55 — "Media '' can't be blank", no media listed on an eMMC mini-PC):** `media_backup_checklist` no-mediums branch (pisafe:~1492) replaced the confusing `Media '' can't be blank.` (blank-variable echo) with a three-line explanation of the actual cause and workaround (rc unchanged, `return 10`):
+
+  > No media found to back up.
+  > If your only disk is the boot disk, it is hidden by default (hide_root_device).
+  > Back up an explicit device instead:  pisafe backup /dev/sda
+
+  Also dropped the two dead `#ui_msg BACKUP "No media found."` comment lines in `menu_tools` (DETAILS ~L2908, ERASE ~L2919).
+* **Verification:** `bash -n` OK; `bash pisafe -v` → `1.2.12-beta.4`; `shellcheck` 0 findings; stub-harness run of `media_backup_checklist` with the media list emptied printed the new message and returned 10.
+* **Commits (on `dev`, after `125f20e` = beta.3):**
+  1. `61f167b review fix: #55 no-media backup checklist — explain hidden boot disk + suggest explicit device (drops two dead 'No media found.' comments)`
+  2. `version 1.2.12-beta.4 — issue #55: no-media backup checklist message` (this commit: SCRIPTVER bump + this log entry)
+* **Tag / push:** awaiting a separate explicit user action (`v1.2.12-beta.4` annotated tag, then branch + tag to `origin`).
