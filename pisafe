@@ -2057,6 +2057,9 @@ media_format(){
     local FORMAT=${2:-"fat32"}    # fat32, ntfs, ext4, exfat
     local SILENT=${3:-"-n"}
 
+    local INSTALL
+    INSTALL=$(env_installer)
+
     local ROOT
     ROOT="$(env_root_device)"
     local TYPE
@@ -2152,7 +2155,7 @@ media_format(){
         fat16)
             if [[ -z $(which mkfs.vfat) ]]; then
                 echo Installing vfat support ...
-                sudo "$INSTALL" dosfstools
+                run_command "sudo $INSTALL dosfstools" "$LINENO"
             fi
             run_command "sudo mkfs.vfat -F16 -v -I -n FAT16 $PARTITION" "$LINENO"
             ES=$?
@@ -2161,7 +2164,7 @@ media_format(){
         fat32)
             if [[ -z $(which mkfs.vfat) ]]; then
                 echo Installing vfat support ...
-                sudo "$INSTALL" dosfstools
+                run_command "sudo $INSTALL dosfstools" "$LINENO"
             fi
             run_command "sudo mkfs.vfat -v -I -n FAT32 $PARTITION" "$LINENO"
             ES=$?
@@ -2171,8 +2174,8 @@ media_format(){
             #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
             if [[ -z $(which mkfs.exfat) ]]; then
                 echo Installing exfat support ...
-                sudo "$INSTALL" exfat-utils
-                sudo "$INSTALL" exfat-fuse
+                run_command "sudo $INSTALL exfat-utils" "$LINENO"
+                run_command "sudo $INSTALL exfat-fuse" "$LINENO"
                 #sudo modprobe fuse
                 #echo "fuse" | sudo tee -a /etc/modules
             fi
@@ -2184,9 +2187,9 @@ media_format(){
             if [[ -z $(which mkfs.ntfs) ]]; then
                 #sudo apt-get install fuse ntfs-3g
                 echo Installing ntfs support...
-                sudo "$INSTALL" fuse
-                sudo "$INSTALL" ntfs-3g
-                sudo "$INSTALL" ntfsprogs #ntfsprogs is for arch
+                run_command "sudo $INSTALL fuse" "$LINENO"
+                run_command "sudo $INSTALL ntfs-3g" "$LINENO"
+                run_command "sudo $INSTALL ntfsprogs" "$LINENO" #ntfsprogs is for arch
                 #sudo modprobe fuse
                 #echo "fuse" | sudo tee -a /etc/modules
             fi
