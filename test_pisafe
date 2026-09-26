@@ -1,189 +1,615 @@
-#! /bin/bash
-# 2022/02/22
+#!/bin/bash
+#
+# test_pisafe v2.0 - pisafe integration test harness (2026-09-26)
+#
+# DESTRUCTIVE tool: it formats $DEVICE and writes backup images onto it.
+# Pass the target card explicitly; never run it against a system disk.
+# Human-driven only: AI agents must never execute this script.
+#
+# Usage:
+#   test_pisafe DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+#
+#   DEVICE    target block device to test (required), e.g. /dev/sdb.
+#             must not be mounted anywhere; if it is, the script offers to
+#             umount it first and refuses if it is still mounted afterwards.
+#   BASE      prefix for the images (default: $PWD/test). pisafe inserts
+#             '.img' into the output name, so the files actually written are
+#             BASE.img.zip, BASE.img.gz, BASE.img.xz, BASE.img.zst - or only
+#             the ones you select with --compress (default: all four). pisafe
+#             also refuses an existing raw BASE.img.
+#   --full    additionally verify bytes (slower, uses extra disk):
+#                 * keeps a raw reference image of the card (harness does its own dd)
+#                 * each backup is decompressed and cmp'd against that reference
+#                 * after each format: first 1 MiB must have changed, FS must be vfat
+#                 * after each restore: card is read back and cmp'd against reference
+#             without --full (std mode): only exit status + fresh-log markers.
+#   --compress=L
+#             test only the listed compressions: any subset of zip, gz, xz,
+#             zst, comma-separated (e.g. --compress=zip,zst). Order and
+#             duplicates are ignored; the default is all four. A bare
+#             --compress or an empty list is a fatal error.
+#
+#   -y, --yes automatically answer every prompt "yes" (umount a mounted
+#             device, delete existing image files, final confirmation);
+#             nothing is ever read from stdin when set. Use only when you
+#             are sure the target is disposable.
+#
+# Flow:
+#   1  preflight         device / space / tool checks        (non-destructive)
+#   2  confirm gate      single warning + ENTER (skipped with -y),
+#                        plus two conditional pre-flight prompts, if needed:
+#                        umount a mounted device / delete existing images
+#   3  backup            the selected compressions           (card untouched)
+#   4  per compression   format card (fat32) -> verify -> restore its image -> verify
+#   5  report            PASS/FAIL per step, tally, exit 1 if any FAIL
+#
+# Checks per step (std mode):
+#   1. pisafe exit status == 0
+#   2. the log window covered by this exact step (line-count seed just before
+#      the call -- log timestamps are only minute-resolution) contains the
+#      step's "complete" marker and none of the exact fatal lines pisafe logs
+#      (see FAIL_RE) -- loose keywords like "error"/"exit_status" are NOT
+#      used, because pisafe logs benign lines containing them (e.g. the
+#      tolerated pishrink "nothing to shrink" path logs "~ Exit_Status 7 ..."
+#      and then continues to backup-complete).
+#
+# Environment:
+#   PISAFE  path to the pisafe script (default: ./pisafe)
+#
+set -u
 
-# for manjaro
-# sudo pacman -S wget
+VERSION="2.0"
+EXTS=(zip gz xz zst)
+# exact strings pisafe logs ONLY on fatal paths (verified against source):
+#   ~ Error at line ...   ui_msg_error  (pisafe:1995, all callers abort)
+#   ~ Backup canceled     backup user-abort (pisafe:1535)
+#   ~ Restore stopped.    restore user-abort (pisafe:1654)
+#   ~ Erase Media stopped.  erase user-abort (pisafe:2128)
+#   not erased.           erase confirm rejected (pisafe:2119)
+# Real failures also always trip check 1 (non-zero exit) and/or the missing
+# marker check, so this scan is a supplement, not the primary signal.
+FAIL_RE='~ Error at line|~ Backup canceled|~ Restore stopped|~ Erase Media stopped|not erased'
+LOG_FILE="$HOME/.config/pisafe/pisafe.log"
+PISAFE="${PISAFE:-./pisafe}"
 
-# exfat for suse   https://software.opensuse.org/download/package?package=exfat-utils&project=filesystems
-# exfat for suse leap  https://software.opensuse.org/download/package?package=exfat-utils&project=filesystems
+# deterministic, non-interactive flags for every pisafe invocation
+STD_FLAGS=(--log=on --updates=off --dependencies=off --sound=off)
 
-WHITE='\033[1;37m'
-RED='\033[1;31m'
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-LTBLUE='\033[1;34m'
-COLOR_BROWN='\e[0;33m'
-NC='\033[0m'    # No Color, standard text
+# unquoted-on-purpose: expands to nothing when empty (running as root)
+SUDO=""
+[[ $EUID -ne 0 ]] && SUDO=sudo
 
-echo_white()    { (echo -e "${WHITE}$*${NC}") }
-echo_red()      { (echo -e "${RED}$*${NC}") }
-echo_blue()     { (echo -e "${LTBLUE}$*${NC}") }  
-echo_green()    { (echo -e "${GREEN}$*${NC}") }
-echo_brown()   { (echo -e "${COLOR_BROWN}$*${NC}")}
+DEVICE=""
+BASE=""
+FULL=0
+# -y/--yes: auto-answer yes to every prompt (empty = always ask; a dead
+# stdin or any other answer is treated as "no", so it fails closed)
+YES=""
+# --compress=LIST: raw selection ("" = flag not given) and rebuilt arm list.
+COMPRESS=""
+HAVE_COMPRESS=0
+TMPD=""
+REFERENCE=""
+SUCCESS_MARKER=""
+PASS_CNT=0
+FAIL_CNT=0
+REPORT=()
 
+# ---------------------------------------------------------------- utilities --
 
-ui_yesno(){
-    # general yes/no function.  Supports CLI and whiptail.
-    # note, this output is often assigned to a variable, so don't add any additional echo statements.
-    TITLE="$1"
-    MSG="$2"
-    DEFAULT="${3:-""}"   # defaults to Yes.  can specify --defaultno
-    TIMEOUT=${4:-0}
-   # COLOR="${4:-white}"  color does not work with the 'read' command
-    
-    if [[ $INTERFACE != gui ]]; then
-        MSG="$PRODUCTNAME: $TITLE: $MSG  [y/n]?"
-        # change 'newline' chars to ' -'
-        MSG=$(echo $MSG | sed 's/\\n/ -/g')
-        while true; do        
-            read -s -n1 -p "$MSG" yn
-            case $yn in
-                [Yy]* ) echo y; return 0;;
-                [Nn]* ) echo n; return 1;;
-                * )     ;;
-            esac
-        done
-    else    
-        whiptail --backtitle "$BACKTITLE"  --title "$TITLE" $DEFAULT --yesno "$MSG" $WT_MB_HEIGHT $WT_MB_WIDTH 3>&1 1>&2 2>&3
-        ES=$?
-        if (( $ES )); then
-            echo n
-        else
-            echo y
-        fi
-        return $ES
-    fi
+if [[ -t 1 ]]; then
+  RED=$'\e[31m'; GRN=$'\e[32m'; YLW=$'\e[33m'; CYN=$'\e[36m'; RST=$'\e[0m'
+else
+  RED=""; GRN=""; YLW=""; CYN=""; RST=""
+fi
+
+info()  { echo "${CYN}== $*${RST}"; }
+ok()    { echo "${GRN}[PASS] ${RST}$*"; }
+bad()   { echo "${RED}[FAIL] ${RST}$*"; }
+warn()  { echo "${YLW}[WARN] ${RST}$*"; }
+DIE()   { echo "${RED}FATAL: $*${RST}" >&2; exit 2; }
+
+usage(){
+  cat <<EOF
+test_pisafe v$VERSION - destructive pisafe integration test harness
+
+Usage: test_pisafe DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+
+Arguments:
+  DEVICE      target block device to test (required), e.g. /dev/sdb.
+              must not be mounted anywhere; if it is, the script offers to
+              umount it and refuses if it is still mounted afterwards.
+              never point this at a system disk.
+  BASE        prefix for the test images (default: \$PWD/test). pisafe
+              inserts '.img' into the output name, so the actual files are
+              BASE.img.zip, BASE.img.gz, BASE.img.xz, BASE.img.zst - only the
+              ones selected with --compress are tested (default: all four).
+              pisafe also refuses an existing raw BASE.img. Existing files
+              under those names are deleted only after an explicit yes
+              (-y auto-yes).
+  --full      also verify bytes: keep a raw reference image of the card and
+              cmp each decompressed backup, the erased card state, and the
+              restored card against it. (slower, needs ~2x more free space)
+  --compress  test only the listed compressions: any subset of zip, gz,
+              xz, zst, comma-separated, as --compress=LIST
+              (e.g. --compress=zip,zst). Order and duplicates are ignored.
+              A bare --compress or an empty list is a fatal error.
+              Default: all four.
+  -y, --yes   answer every prompt "yes" without asking (umount a mounted
+              device, delete existing image files, the final confirmation);
+              nothing is read from stdin when set. use only on a target you
+              are sure is disposable.
+  -h, --help  this text
+
+Per step, both modes check:  pisafe exit status == 0  AND  the log window of
+this exact step contains its "complete" marker and no error/abort lines.
+
+Environment: PISAFE=/path/to/pisafe   (default: ./pisafe)
+
+Human-driven only: this script will format the target card.
+EOF
 }
 
+# ------------------------------------------------------------------ helpers --
 
-test_it(){
-    NAME="$1"
-    CMD="$2"
-    PAUSE=${3:--y}
-    
-  
-    
-    echo_green "$NAME"
-    echo_blue "$CMD"
-    eval "$CMD"
-    if (( $? )); then 
-        echo_red ERROR
-    fi
-
-    if [[ $PAUSE = -y ]]; then
-        echo_brown "Press any key ..."
-        read -n1 
-    fi
+# how many lines the log has right now (0 if no log yet)
+log_seed(){
+  local n
+  n=$(wc -l < "$LOG_FILE" 2>/dev/null | tr -dc '0-9')
+  echo "${n:-0}"
 }
 
+# everything written to the log after line N
+log_window(){
+  tail -n +$(( $1 + 1 )) "$LOG_FILE" 2>/dev/null
+}
 
-shared(){
-    local SHARED_USER=user
-    
-    if [[ $(ui_yesno "setup share") = y ]]; then 
-    sudo apt install cifs-utils
+# bookkeeping: one report row + tally
+record(){   # label status duration detail
+  local label=$1 status=$2 dur=${3:-0} detail=${4:-}
+  if [[ $status == PASS ]]; then PASS_CNT=$((PASS_CNT+1)); else FAIL_CNT=$((FAIL_CNT+1)); fi
+  REPORT+=("$(printf '%-22s %-5s %7ss  %s' "$label" "$status" "$dur" "$detail")")
+}
 
-    mkdir ~/shared
+# run one pisafe command, checking exit status + fresh log window
+run_step(){   # label pisafe-args...
+  local label=$1; shift
+  local seed es dur reason="" win hit t0=$SECONDS
+  seed=$(log_seed)
+  if [[ -x $PISAFE ]]; then
+    "$PISAFE" "$@"
+  else
+    bash "$PISAFE" "$@"
+  fi
+  es=$?
+  dur=$(( SECONDS - t0 ))
+  win=$(log_window "$seed")
 
-    sudo mount.cifs //192.168.1.18/shared ~/shared -o user=$SHARED_USER,vers=1.0
+  if (( es != 0 )); then reason="exit status $es"; fi
+  if ! grep -qF -- "$SUCCESS_MARKER" <<<"$win"; then
+    [[ -n $reason ]] && reason+=", "
+    reason+="missing log marker '$SUCCESS_MARKER'"
+  fi
+  # NB: test grep's own exit status. `grep ... | head -1` would make the
+  # condition depend on head (always exit 0), failing *every* step with an
+  # empty "log says: ". -m1 stops grep at the first match; no pipe, no SIGPIPE.
+  if hit=$(grep -Eim 1 -- "$FAIL_RE" <<<"$win") && [[ -n $hit ]]; then
+    [[ -n $reason ]] && reason+=", "
+    reason+="log says: $hit"
+  fi
+
+  if [[ -z $reason ]]; then
+    ok "$label"
+    record "$label" PASS "$dur"
+  else
+    bad "$label - $reason"
+    echo "  | ---- log window (seed line $seed, $(wc -l <<<"$win") lines) ----"
+    sed 's/^/  | /' <<<"$win"
+    record "$label" FAIL "$dur" "$reason"
+  fi
+  return 0
+}
+
+# run a byte-level verification function, record the outcome
+run_verify(){   # label verify-fn verify-args...
+  local label=$1; shift
+  local out
+  if out=$("$@" 2>&1); then
+    ok "$label"
+    record "$label" PASS 0
+  else
+    bad "$label - ${out:-no detail}"
+    record "$label" FAIL 0 "${out:-no detail}"
+  fi
+  return 0
+}
+
+# -------------------------------------------------------- prompts & naming --
+
+# Confirmation prompt; returns 0 for "yes". If YES (-y/--yes) is set the
+# answer is implied without asking. Never asks (and defaults to no).
+ask_yes(){   # question-text
+  if [[ -n $YES ]]; then
+    echo "  auto-yes (-y): $*"
+    return 0
+  fi
+  local ans=""
+  printf '%s (y/N) ' "$*"
+  IFS= read -r ans || return 1
+  [[ $ans =~ ^[Yy] ]]
+}
+
+# The full path pisafe will actually write for a given compression extension.
+# Pisafe inserts '.img' into any output name that lacks one (pisafe:1428-1434)
+# and its file_base cuts the basename at the FIRST dot (pisafe:883-894) - so
+# with BASE=/cwd/test and ext=zip it writes /cwd/test.img.zip, NOT
+# /cwd/test.zip. Every file reference in this harness must go through here.
+img_path(){   # EXT
+  local ext=$1 dir base
+  if [[ $BASE == *".img"* || $BASE == *".iso"* ]]; then
+    echo "$BASE.$ext"
+    return 0
+  fi
+  dir=$(dirname -- "$BASE"); base=$(basename -- "$BASE")
+  base=${base%%.*}
+  echo "$dir/$base.img.$ext"
+}
+
+# The raw image pisafe also refuses to overwrite if present (pisafe:1455-1458):
+# file_base(OUTFILE) + '.img' - the same name minus the compression extension.
+raw_img(){
+  local p=$(img_path zip)
+  echo "${p%.zip}"
+}
+
+# ------------------------------------------------------------- verification --
+
+# (re)decompress a backup into a raw image. reason on stdout, rc != 0 on error.
+decompress(){   # ext backup-file raw-out
+  local ext=$1 file=$2 out=$3
+  case $ext in
+    zip) unzip -p "$file" > "$out" || return 1 ;;
+    gz)  { command -v pigz >/dev/null && pigz -dc "$file" || gzip -dc "$file"; } > "$out" || return 1 ;;
+    xz)  xz -dc "$file" > "$out" || return 1 ;;
+    zst) zstd -dc "$file" > "$out" || return 1 ;;
+    *)   echo "unknown backup type '$ext'"; return 9 ;;
+  esac
+  return 0
+}
+
+# the decompressed backup must equal the raw reference image
+check_backup(){   # ext backup-file
+  local ext=$1 file=$2
+  local img="$TMPD/verify_$ext.img" size
+  if [[ ! -f $file ]]; then echo "image '$file' does not exist"; return 1; fi
+  if ! decompress "$ext" "$file" "$TMPD/_decompress_$ext"; then
+    echo "decompressing '$file' failed"; return 1
+  fi
+  mv -f "$TMPD/_decompress_$ext" "$img"
+  size=$(stat -c%s "$img")
+  if ! cmp -s "$img" <(head -c "$size" "$REFERENCE"); then
+    echo "backup content differs from reference image"; return 1
+  fi
+  return 0
+}
+
+# erased card: first 1 MiB must differ from the reference, and the FS must be vfat
+check_erase(){
+  local ref1="$TMPD/erase_ref_1mb" card1="$TMPD/erase_card_1mb" ftype
+  head -c 1048576 "$REFERENCE" > "$ref1" 2>/dev/null || { echo "cannot read reference"; return 1; }
+  if ! $SUDO head -c 1048576 "$DEVICE" > "$card1" 2>/dev/null; then
+    echo "cannot read the first 1 MiB of $DEVICE"; return 1
+  fi
+  if cmp -s "$ref1" "$card1"; then
+    echo "card looks unchanged after format (first 1 MiB identical to before)"; return 1
+  fi
+  ftype=$($SUDO blkid -o value -s TYPE "$DEVICE" 2>/dev/null)
+  if [[ -n $ftype && $ftype != vfat ]]; then
+    echo "blkid reports filesystem '$ftype' on $DEVICE, expected vfat"; return 1
+  fi
+  return 0
+}
+
+# restored card: first <image size> bytes must equal the reference image
+check_restore(){   # ext backup-file
+  local ext=$1 file=$2
+  local img="$TMPD/verify_$ext.img" raw="$TMPD/readback_$ext" size
+  if [[ ! -f $img ]]; then
+    if ! decompress "$ext" "$file" "$img"; then
+      echo "decompressing '$file' failed"; return 1
     fi
+  fi
+  size=$(stat -c%s "$img")
+  if ! $SUDO head -c "$size" "$DEVICE" > "$raw" 2>/dev/null; then
+    echo "cannot read back $size bytes from $DEVICE"; return 1
+  fi
+  if ! cmp -s "$raw" "$img"; then
+    echo "restored card differs from the backup image"; return 1
+  fi
+  return 0
 }
 
+# -------------------------------------------------------------- gate & start --
 
-test_install(){
-    if [[ $(ui_yesno "test install") = y ]]; then 
-    
-    echo_green GETTING PISAFE_BETA as PISAFE
-    #wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_beta -O pisafe
-    #if (( $? )); then echo_red ERROR; fi
-    cp pisafe_beta pisafe
-    
-    
-    #    test_it "INSTALL..ANSWER N"     "bash pisafe install"
-        test_it "INSTALL -y"            "bash pisafe install -y"
-        test_it "UPDATE"                "pisafe update"
-        test_it "UNINSTALL -y"          "pisafe uninstall -y"
-    #    test_it "INSTALL..should fail"  "pisafe install -y"
-        test_it "INSTALL -y"            "bash pisafe install -y"
+# Print the mount point of every filesystem mounted from $DEVICE or any
+# partition of it (one per line; nothing if none). Matches by resolved
+# source path so symlinks (/dev/disk/...) and partitions are both handled.
+mounted_targets(){
+  local devres mp src sr
+  devres=$(readlink -f "$DEVICE" 2>/dev/null || echo "$DEVICE")
+  while IFS= read -r mp src; do
+    [[ -z $src ]] && continue
+    sr=$(readlink -f "$src" 2>/dev/null || echo "$src")
+    if [[ $sr == "$devres" || $sr == "$devres"[0-9]* || $sr == "$devres"p[0-9]* ]]; then
+      echo "$mp"
     fi
+  done < <(findmnt -no TARGET SOURCE 2>/dev/null)
+  return 0
 }
 
+# ------------------------------------------------------------------- compress --
 
-test_other(){
-    if [[ $(ui_yesno "test other") = y ]]; then  
-    test_it "BEEP"                  "pisafe beep"
-    test_it HELP                    "pisafe help"
-    test_it ABOUT                   "pisafe about"
+# Validate the --compress selection and rebuild EXTS in canonical order.
+# No-op when the flag was not given (EXTS already holds all four arms).
+# Unknown tokens and an empty selection are fatal (exit 2) BEFORE any
+# preflight / state change, so a bad selection can never reach a step.
+validate_compress(){
+  (( HAVE_COMPRESS )) || return 0
+  local toks=() selected t
+  IFS=',' read -r -a toks <<< "$COMPRESS"
+  selected=" "
+  for t in "${toks[@]}"; do
+    t=${t//[[:space:]]/}               # trim: " zip , zst " == "zip,zst"
+    [[ -z $t ]] && continue            # empty slot: "zip,,zst" is fine
+    case $t in
+      zip|gz|xz|zst) ;;
+      *) DIE "unknown compression '$t' in --compress (valid: zip, gz, xz, zst)" ;;
+    esac
+    case $selected in
+      *" $t "*) ;;                    # already picked (dedupe)
+      *) selected+="$t " ;;
+    esac
+  done
+  EXTS=()
+  for t in zip gz xz zst; do           # rebuild in canonical order
+    case $selected in
+      *" $t "*) EXTS+=("$t") ;;
+    esac
+  done
+  (( ${#EXTS[@]} > 0 )) || DIE "empty --compress selection (valid: zip, gz, xz, zst)"
+  return 0
+}
 
-    test_it LIST                    "pisafe list"
-    test_it SETTINGS                "pisafe settings"
-    test_it LOG                     "pisafe log"
+preflight(){
+  local t mp mounts f e existing cardsize avail slots base_dir need
 
-    test_it "DETAILS SDA"           "pisafe details $DEVICE"
+  [[ -f $PISAFE ]] || DIE "pisafe script not found at '$PISAFE' (set PISAFE=/full/path)"
+  [[ -r $PISAFE ]] || DIE "pisafe script not readable: '$PISAFE'"
 
-  #  test_it "SETTINGS - change"     "pisafe settings"
-  #  test_it DEFAULTS                "pisafe defaults"
-  #  test_it "SETTINGS - review"     "pisafe settings"
+  [[ $DEVICE =~ ^/dev/[a-zA-Z0-9._-]+$ ]] || DIE "device '$DEVICE' does not look like a block device (expected /dev/xxx)"
+  [[ -b $DEVICE ]]                        || DIE "device '$DEVICE' is not found or not a block device"
+
+  # if any filesystem on this device (or its partitions) is mounted, ask.
+  # this catches the root disk no matter which partition the system is booted from.
+  mounts=$(mounted_targets)
+  if [[ -n $mounts ]]; then
+    echo
+    while IFS= read -r mp; do
+      [[ -n $mp ]] && warn "'$mp' is mounted from '$DEVICE' (or a partition of it)"
+    done <<<"$mounts"
+    echo
+    if ask_yes "Unmount and continue?"; then
+      # $SUDO unquoted on purpose: expands to nothing when running as root
+      while IFS= read -r mp; do
+        [[ -z $mp ]] && continue
+        $SUDO umount "$mp" 2>/dev/null || warn "umount failed for '$mp'"
+      done <<<"$mounts"
+      if mounts=$(mounted_targets) && [[ -n $mounts ]]; then
+        DIE "'$DEVICE' is STILL mounted after the unmount attempt - refusing to test a mounted device"
+      fi
+      info "unmount verified: '$DEVICE' is no longer mounted"
+    else
+      DIE "refusing to test '$DEVICE' while any part of it is mounted"
     fi
-}
+  fi
 
+  if [[ $EUID -ne 0 ]]; then
+    command -v sudo >/dev/null 2>&1 || DIE "need sudo (or run this script as root)"
+  fi
 
-test_backup(){
-#    DATE=$(date +%Y-%d-%m_%I%M%p)
-    if [[ $(ui_yesno "test backup") = y ]]; then   
-       
-       rm test.img test.img.zip test.img.gz test.img.xz -y
-    
-        test_it "backup -y"             "pisafe backup $DEVICE $OUTFILE -y"  -n
-        test_it "backup gz -y"          "pisafe backup $DEVICE $OUTFILE.gz -y"  -n
-        test_it "backup xz -y"          "pisafe backup $DEVICE $OUTFILE.xz -y"  -n
-        test_it "backup zst -y"          "pisafe backup $DEVICE $OUTFILE.zst -y"  -n
-        test_it LIST                    "pisafe list"
-    fi    
-}
+  # tooling for the selected arms + common steps (a missing tool still fails
+  # its step with a clear log error; warn here surfaces it early)
+  local e need="dd md5sum"
+  for e in "${EXTS[@]}"; do
+    case $e in
+      zip) need+=" zip unzip" ;;
+      gz)  need+=" pigz" ;;
+      xz)  need+=" xz" ;;
+      zst) need+=" zstd" ;;
+    esac
+  done
+  for t in $need; do
+    command -v "$t" >/dev/null 2>&1 || warn "tool '$t' not found in PATH"
+  done
 
+  base_dir=$(dirname -- "$BASE")
+  [[ -d $base_dir ]] || DIE "base directory '$base_dir' does not exist"
+  [[ -w $base_dir ]] || DIE "base directory '$base_dir' is not writable"
 
-test_format(){
-    if [[ $(ui_yesno "test format") = y ]]; then   
-        test_it "FORMAT $DEVICE FAT32 -y"      "pisafe format $DEVICE fat32 -y"
-        test_it "FORMAT $DEVICE EXFAT -y"      "pisafe format $DEVICE exfat -y"
-        test_it "FORMAT $DEVICE NTFS -y"       "pisafe format $DEVICE ntfs -y"
-        test_it "FORMAT $DEVICE EXT4 -y"       "pisafe format $DEVICE ext4 -y"
+  # pisafe refuses to write over image files that already exist
+  # (rc 16: the compressed image it writes; rc 17: the raw .img derived
+  # from the same name), so leftovers from a previous run must go first
+  existing=""
+  f=$(raw_img)
+  [[ -f $f ]] && existing+="$f"$'\n'
+  for e in "${EXTS[@]}"; do
+    f=$(img_path "$e")
+    [[ -f $f ]] && existing+="$f"$'\n'
+  done
+  existing=${existing%$'\n'}
+  if [[ -n $existing ]]; then
+    echo
+    while IFS= read -r f; do
+      [[ -n $f ]] && warn "image file already exists: '$f'"
+    done <<<"$existing"
+    echo
+    if ask_yes "Delete the existing image files and continue?"; then
+      while IFS= read -r f; do
+        [[ -n $f ]] && rm -f -- "$f"
+      done <<<"$existing"
+      info "existing image files removed"
+    else
+      DIE "existing image files must be removed before re-running (or pass -y)"
     fi
-}
+  fi
 
-
-test_restore(){
-    if [[ $(ui_yesno "test restore") = y ]]; then   
-        test_it "restore zip -y"       "pisafe restore $OUTFILE.img.zip $DEVICE -y"  -n
-        test_it "restore gz -y"        "pisafe restore $OUTFILE.img.gz $DEVICE -y"  -n
-        test_it "restore xz -y"        "pisafe restore $OUTFILE.img.xz $DEVICE -y"  -n
-        test_it "restore zst -y"        "pisafe restore $OUTFILE.img.zst $DEVICE -y"  -n
-        test_it "details"     	        "pisafe details $DEVICE"
+  # free-space sanity: worst case ~1 image slot per selected compression, +1 reference, +1 scratch
+  cardsize=$(stat -c%s "$DEVICE" 2>/dev/null || echo 0)
+  avail=$(df -B1 --output=avail "$base_dir" 2>/dev/null | tail -1 | tr -dc '0-9')
+  if (( cardsize > 0 && avail > 0 )); then
+    slots=${#EXTS[@]}; (( FULL )) && slots=$((slots + 2))
+    if (( avail < cardsize * slots )); then
+      warn "free space in '$base_dir' ($avail B) may be tight: card is $cardsize B, planning for $slots image slot(s)"
     fi
+    if (( avail < cardsize * 2 )); then
+      DIE "not enough free space in '$base_dir' (have $avail B, need at least ~$(( cardsize * 2 )) B)"
+    fi
+  fi
 }
 
+confirm(){
+  local desc e files n times
+  if (( FULL )); then
+    desc="std checks + byte-level verification (reference image)"
+  else
+    desc="exit status + log markers only (fast mode)"
+  fi
+  files=""
+  for e in "${EXTS[@]}"; do
+    files+=" $(img_path "$e")"
+  done
+  n=${#EXTS[@]}
+  times=TIME; (( n > 1 )) && times=TIMES
+  echo
+  echo "=========================================================================="
+  echo " PISAFE test harness v$VERSION - DESTRUCTIVE"
+  echo "   target device : $DEVICE"
+  echo "   compressions  : ${EXTS[*]}   ($n arm(s))"
+  echo "   images        :$files"
+  echo "   pisafe        : $PISAFE"
+  echo "   log file      : $LOG_FILE"
+  echo "   mode          : $desc"
+  echo "   the card will be FORMATED $n $times (fat32) and restored $n $times"
+  echo "   ALL CURRENT DATA ON $DEVICE WILL BE DESTROYED"
+  echo "=========================================================================="
+  if [[ -n $YES ]]; then
+    echo "  -y set: confirmation skipped (all prompts auto-answered)"
+  else
+    echo
+    echo "Press ENTER to start, or Ctrl-C to abort."
+    read -r _ || { echo "FATAL: no confirmation input (stdin closed?)" >&2; exit 2; }
+  fi
+}
 
-DEVICE=${1:-/dev/sda} 
-OUTFILE=test
+# --------------------------------------------------------------------- main --
 
-echo_red  Warning, Test_pisafe will will overwrite $DEVICE
-echo ctrl-c to quit, or any other key to contiue
-read -n1 
+main(){
+  local POSITIONAL=() a ext F FILE
 
+  for a in "$@"; do
+    case $a in
+      -h|--help)    usage; exit 0 ;;
+      --full)       FULL=1 ;;
+      -y|--yes)     YES=1 ;;
+      --compress)   echo "${RED}missing value for --compress (e.g. --compress=zip,zst)${RST}" >&2; exit 2 ;;
+      --compress=*) COMPRESS=${a#--compress=}; HAVE_COMPRESS=1 ;;
+      -*)           echo "${RED}unknown option '$a' (try -h)${RST}" >&2; exit 2 ;;
+      *)            POSITIONAL+=("$a") ;;
+    esac
+  done
 
-#shared
+  if (( ${#POSITIONAL[@]} < 1 )); then
+    usage
+    echo >&2
+    echo "${RED}error: DEVICE is required${RST}" >&2
+    exit 2
+  fi
+  DEVICE=${POSITIONAL[0]}
+  BASE=${POSITIONAL[1]:-$(pwd)/test}
+  if (( ${#POSITIONAL[@]} > 2 )); then
+    echo "${RED}error: too many positional arguments (see -h)${RST}" >&2
+    exit 2
+  fi
 
+  validate_compress
 
-test_it "VER"                   "bash pisafe -v"
+  preflight
+  confirm
 
-test_install  
-test_other
-test_backup
-test_format
-test_restore
+  TMPD=$(mktemp -d "${TMPDIR:-/tmp}/pisafe_test.XXXXXX") || DIE "could not create temp dir"
+  trap 'rm -rf "$TMPD"' EXIT
 
-pisafe log
-echo_green  DONE TESTING
+  if (( FULL )); then
+    REFERENCE="$TMPD/reference.img"
+    info "Creating reference image of $DEVICE (raw copy - may take a while)..."
+    # $SUDO unquoted on purpose: expands to nothing when empty (root)
+    $SUDO dd if="$DEVICE" of="$REFERENCE" bs=4M status=none \
+      || DIE "could not create reference image from $DEVICE"
+  else
+    REFERENCE=""
+  fi
 
+  info "Phase 1/2: backups of $DEVICE (${EXTS[*]}) - card is not modified in this phase"
+  for ext in "${EXTS[@]}"; do
+    F=$(img_path "$ext")
+    SUCCESS_MARKER='~ Backup complete.'
+    run_step "backup [$ext]" backup "$DEVICE" "$F" -y "${STD_FLAGS[@]}"
+    if (( FULL )); then
+      run_verify "backup bytes [$ext]" check_backup "$ext" "$F"
+    fi
+  done
 
+  info "Phase 2/2: per compression (${EXTS[*]}) - erase card, then restore that backup"
+  for ext in "${EXTS[@]}"; do
+    FILE=$(img_path "$ext")
+
+    SUCCESS_MARKER='~ Format complete.'
+    run_step "erase [$ext]" format "$DEVICE" fat32 -y "${STD_FLAGS[@]}"
+    if (( FULL )); then
+      run_verify "erase bytes [$ext]" check_erase
+    fi
+
+    if [[ ! -f $FILE ]]; then
+      bad "restore [$ext] - image '$FILE' missing (its backup step failed)"
+      record "restore [$ext]" FAIL 0 "image missing"
+      if (( FULL )); then
+        bad "restore bytes [$ext] - skipped (image missing)"
+        record "restore bytes [$ext]" FAIL 0 "skipped, image missing"
+      fi
+      continue
+    fi
+
+    SUCCESS_MARKER='~ Restore complete.'
+    run_step "restore [$ext]" restore "$FILE" "$DEVICE" -y "${STD_FLAGS[@]}"
+    if (( FULL )); then
+      run_verify "restore bytes [$ext]" check_restore "$ext" "$FILE"
+    fi
+  done
+
+  # ------------------------------------------------------------------ report --
+  echo
+  echo "============================= REPORT ================================="
+  for a in "${REPORT[@]}"; do
+    printf '  %s\n' "$a"
+  done
+  printf '  totals: %d passed, %d failed\n' "$PASS_CNT" "$FAIL_CNT"
+  echo "========================================================================"
+  if (( FAIL_CNT > 0 )); then
+    bad "OVERALL: FAIL ($FAIL_CNT step(s) failed)"
+    exit 1
+  fi
+  ok "OVERALL: PASS (all $PASS_CNT steps succeeded)"
+  exit 0
+}
+
+main "$@"

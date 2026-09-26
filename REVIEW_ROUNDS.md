@@ -841,7 +841,7 @@ The commented-out `#set -Eeuo pipefail` (L17) was evaluated flag-by-flag and spl
 
 ## Test harness rebuild — `test_pisafe` v2.0 (2026-09-26, design approved by user)
 
-**Status: ✅ written + agent-safe tested — new 409-line harness uncommitted, pending user review. Superseded 2022 harness archived (retired, still on disk) at `junk/test_pisafe.2022`. `test_pisafe` is human-driven ONLY — agents never run it against a real device.**
+**Status: ✅ written + agent-safe tested — new 614-line harness uncommitted, pending user review. Superseded 2022 harness archived (retired, still on disk) at `junk/test_pisafe.2022`. `test_pisafe` is human-driven ONLY — agents never run it against a real device.**
 
 ### Why
 
@@ -849,18 +849,20 @@ The 2022 `test_pisafe` was interactive, defaulted to `/dev/sda`, and referenced 
 
 ### New harness
 
-Signature: `test_pisafe DEVICE [BASE] [--full]`
+Signature: `test_pisafe DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]`
 
-* **DEVICE required** (no default); must match `/dev/[a-zA-Z0-9._-]+` and be a block device. **Refuses (rc=2) if any partition of it — or the whole disk — is mounted** (whole-disk and partition cases both refuse; proven on this box).
-* **BASE** = image basename (default `$PWD/test` → `test.{zip,gz,xz,zst}`).
+* **DEVICE required** (no default); must match `/dev/[a-zA-Z0-9._-]+` and be a block device. **Mounted-device gate** (harness L392–414): if a filesystem on the disk or on one of its partitions is mounted — matched by resolved source path, so symlinks (`/dev/disk/…`) and partitions are both caught (`mounted_targets()`, harness L337–348) — the harness lists the mount points and asks `Unmount and continue? (y/N)` (default no; dead stdin = no). "yes" → `$SUDO umount` per mount point, then a **second** `mounted_targets()` pass re-verifies — still mounted = DIE rc=2; "no" (or dead stdin) → DIE rc=2, nothing attempted. (Replaces the earlier flat refusal, which was proven fail-closed on this box for the whole-disk and partition cases.)
+* **BASE** = image basename (default `$PWD/test`). pisafe inserts `.img` into output names that lack one (pisafe:1428–1434), so a default run actually writes `test.img.{zip,gz,xz,zst}` — or only the selected arms when `--compress` is given. The harness routes **all** file references through `img_path()`/`raw_img()` (harness L247–263) so names always match what pisafe writes, including the raw `test.img` (pisafe refuses overwriting existing images: rc 16 compressed / rc 17 raw).
 * **std mode (default):** per step — pisafe exit status + a fresh window of `~/.config/pisafe/pisafe.log` (line-count seed, `tail -n +N+1`; `ui_log` timestamps are minute-resolution). Success = exact marker (`~ Backup complete.` pisafe:1321 · `~ Restore complete.` :1759 · `~ Format complete.` :2215). Failure evidence = case-insensitive `error|fail|exit_status|stopped|canceled|not erased` (hits `~ Error at line N.`, `~ Backup canceled` :1535, `~ Restore stopped.` :1654, `~ Erase Media stopped.` :2128, `not erased` :2119).
 * **full mode (`--full`):** harness `dd`s its own `reference.img`; then — each backup decompressed + `cmp`'d vs reference **before any erase**; after each format: first 1 MiB must differ from reference AND blkid TYPE must be vfat (unreported type tolerated, any other type = FAIL); after each restore: image-size bytes read back and `cmp`'d vs reference.
 * Deterministic pisafe invocations: `-y --log=on --updates=off --dependencies=off --sound=off` (every flag verified in `get_args`, pisafe:767–803).
 * Command order verified against dispatch: `backup DEV OUTFILE -y` · `format DEV fat32 -y` (fat32→msdos/vfat) · `restore INFILE OUTDEV -y`.
 * Per compression: backup → (full: `check_backup`) → `format fat32` → (full: `check_erase`) → restore → (full: `check_restore`); missing image = FAIL that step + skip its restore.
-* One warning screen + ENTER, then end-to-end run; per-step duration; on step failure the fresh log window is dumped inline; report table (`PASS/FAIL` + duration + reason), tally, **exit 1 if any FAIL**.
+* **Prompts & `-y`/`--yes`:** the only two prompts — the unmount gate above and the existing-image gate below — go through `ask_yes()` (harness L231–240): rendered `… (y/N)`, **default no**, fail-closed on dead stdin (`IFS= read -r ans || return 1`). `-y/--yes` auto-answers both "yes" (printing `auto-yes (-y): …` in place of the prompt) **and** skips the final ENTER read — with `-y` set, stdin is never read at all.
+* **Existing-image overwrite prompt** (harness L439–464): preflight lists every image file that already exists — the raw `$BASE.img` plus one per selected arm (`raw_img()`/`img_path()`) — and asks `Delete the existing image files and continue? (y/N)`. pisafe itself refuses overwriting existing images (rc 16 compressed / rc 17 raw), so the old files must go first; declining (or dead stdin) → DIE rc=2 "…(or pass -y)".
+* **Confirmation screen + ENTER (skipped under `-y`), then the end-to-end run:** per-step duration; on step failure the fresh log window is dumped inline; report table (`PASS/FAIL` + duration + reason), tally, **exit 1 if any FAIL**.
 * `$SUDO` intentionally left unquoted at use sites — expands to nothing under root (quoted would inject an empty argv element).
-* `mktemp -d` workdir + EXIT trap; free-space warn at <4× (std) / <6× (full) card size, **hard stop <2×**; tool presence checked against `REQUIRED_TOOLS` (pisafe:29); `PISAFE` env override for the app-under-test path.
+* `mktemp -d` workdir + EXIT trap; **selection-driven** free-space planning (harness L466–477): warns when `avail < cardsize × slots`, slots = selected arms (+2 under `--full` for the reference copy + scratch) — i.e. 4× std / 6× full for the default four-arm selection, as before; **hard stop <2× card size unchanged**; tool presence is a **WARN-only union** over the selected arms (harness L420–433): `dd md5sum` plus `zip`+`unzip` / `pigz` / `xz` / `zstd` as applicable — a missing tool still fails its own step with a clear log error, the warning just surfaces it early (replaces the old all-arms `REQUIRED_TOOLS` check, pisafe:29, which was wrong for subset selections); `PISAFE` env override for the app-under-test path.
 
 ### Verification (all agent-safe — no real device touched)
 
@@ -898,6 +900,28 @@ User re-ran `test_pisafe /dev/sda`: backup itself **succeeded** (`~ Backup compl
 * **Root cause:** `pisafe`'s `run_command()` (pisafe:122–124) logs `~ Exit_Status $ES running '…'` in red for **any** non-zero subprocess exit — and the pishrink step *explicitly tolerates* that (pisafe:1186–1188: log `~ Exiting without shrinking …` and continue). pishrink exit 7 = "cannot shrink this filesystem" — expected and benign (user-confirmed). The old keyword `FAIL_RE` (`error|fail|exit_status|stopped|canceled|not erased`) matched it. (Also: `~ pishrink download failed`-style `ui_msg_warning` lines would have false-FAILed on `fail`.)
 * **Fix applied (harness only):** `FAIL_RE` is now the **exact set of fatal lines pisafe actually logs** — audited against source: `~ Error at line …` (single fatal choke point `ui_msg_error`, pisafe:1995, all ~35 callers are real failure/abort paths) · `~ Backup canceled` (1535) · `~ Restore stopped.` (1654) · `~ Erase Media stopped.` (2128) · `not erased` (2119, erase-confirm refusal). Comment block at the definition cites the source lines. Real failures are still caught — primarily by exit status + missing marker, with the scan as supplement.
 * **Re-verified:** `bash -n` PASS · pattern sanity table (benign lines clean / all five fatal strings match) · run_step suite A–D still all-PASS · **new scenario E added** = the user's exact 2026-09-26 zip window incl. the `~ Exit_Status 7` pishrink line → **PASS** · original 14-scenario unit suite still all-PASS.
+
+### `--compress` — pick which arms to test (added this session)
+
+`--compress=LIST`: `LIST` is a non-empty **subset** of `zip, gz, xz, zst` (e.g. `--compress=zip,zst`). Flag omitted → all four arms (default unchanged).
+
+* **Token rules** (`validate_compress()`, harness L356–381): order-independent, deduplicated, case-sensitive; whitespace and empty entries are allowed (`" zip , zst "` ≡ `zip,zst` ≡ `zip,,zst`).
+* **Canonical re-assembly:** `EXTS` is rebuilt in `zip gz xz zst` order regardless of input order (`--compress=zst,xz` → `xz zst`), so the phase line, confirmation screen, report, and file lists all stay stable.
+* **Fails closed before anything else:** `validate_compress()` is called in `main()` (harness L544) after DEVICE/BASE parse, **before** `preflight` (L546) — a bad selection never reaches the device, never mktemps, never writes:
+  * bare `--compress` (no `=`) → `missing value for --compress (e.g. --compress=zip,zst)`, rc 2 (argument parse, harness L524)
+  * `--compress=` / `--compress=,` (empty selection) → `FATAL: empty --compress selection (valid: zip, gz, xz, zst)`, rc 2 (harness L379)
+  * unknown token (`--compress=zip,bogus`) → `FATAL: unknown compression 'bogus' in --compress (valid: zip, gz, xz, zst)`, rc 2 (harness L366)
+* **Everything downstream is selection-driven:** tools-need list, free-space slots, existing-image list, phase line, and the confirmation screen — which is now count-aware (`compressions : zip zst (2 arms)` … `the card will be FORMATED 2 TIMES (fat32) and restored 2 TIMES`; a single arm prints "1 TIME").
+
+**Live-harness bug found + fixed along the way:** the previous tools-need list matched the **whole** `EXTS` string against exclusive arms, so a multi-arm selection demanded only the **first matching arm's** tools — e.g. `zip,zst` dropped `zstd`. Replaced by a per-arm union loop (harness L420–433).
+
+Verification (all agent-safe — no device touched):
+
+* `bash -n test_pisafe` PASS.
+* New unit suite `/tmp/pt/compress_tests.sh`: **31/31 PASS** — token cases (trim, empty slots, dedupe, case-sensitivity), canonical-order re-assembly, and the exact message + rc of every fail-closed path. The initial FAIL was a **test-label bug**: the test grepped for `zip + zst` but the harness (correctly) prints `zip zst` — the test was wrong and got fixed, the harness was not.
+* Regression suites re-run after the change, all green: `runstep_test.sh` (scenarios A–E) · `prompt_tests.sh` · `run_tests.sh` (14/14).
+* rc-2 fail-closed spot checks, all firing **before** preflight: bare `--compress` · `--compress=` (empty) · `--compress=bogus` (unknown token) · `--compress=zip,bogus` (unknown in an otherwise-valid list).
+* Order check: `--compress=zip,zst /dev/null` dies at the **device check** (`/dev/null` is not a block device) — validation runs before preflight, and a valid selection never blocks a device refusal.
 
 ### Hand-off v2
 
