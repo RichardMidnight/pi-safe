@@ -30,9 +30,9 @@ wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pi
 bash pisafe install
 ```
 
-**Beta Version**
+**Beta Version** (v1.2.12-beta.3)
 ```bash
-wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/v1.2.12-beta.2/pisafe -O pisafe
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/v1.2.12-beta.3/pisafe -O pisafe
 bash pisafe install
 ```
 
