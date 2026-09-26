@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# By Richard Reed 2018 - 2022
+# By Richard Reed 2018 - 2026
 
 # This script basically
 # 1- copies a media-device with 'dd'
