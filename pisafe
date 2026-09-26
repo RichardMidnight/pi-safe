@@ -584,7 +584,11 @@ env_installer(){
         if [[ $(env_which "$INSTALLER") ]]; then
             break
         fi
+        INSTALLER=
     done
+    # none found: leave INSTALLER empty (do not report an installer that is
+    # not installed) so the callers' [[ -z $INSTALL ]] guards can fire
+    [[ -n $INSTALLER ]] || return 1
 
     case $INSTALLER in
         apt|dnf)    INSTALLER="$INSTALLER install -y" ;;
@@ -595,13 +599,18 @@ env_installer(){
 
 
 env_root_device() {
+    local PART DEV
 
-    ROOT_MAJ=$(findmnt -n -e -o MAJ:MIN / | cut -d: -f1)
-    ROOT_DEV=$(lsblk -p | grep "$ROOT_MAJ":0 | cut -d" " -f1)
-    echo "$ROOT_DEV"
+    PART=$(findmnt -no source /)
+    [[ -n $PART ]] || return 1
 
-    # new simpler way
-    # ROOT_PARTITION=$(findmnt -no source /)
+    DEV=$(lsblk -pno PKNAME "$PART")
+    # no parent (root directly on the disk, or a parent-less device like a
+    # loop): the device itself is the root device and must still match the
+    # guard strings at the call sites
+    [[ -n $DEV ]] || DEV=$PART
+
+    echo "$DEV"
 }
 
 
@@ -647,25 +656,25 @@ env_texteditor(){
 env_which () {
     #fixes manjaro's 'which' command
     local FILE=$1
+    local RC
 
     # if which not installed, try to install it
     which which 1>/dev/null 2>/dev/null
-    ES=$?
-    if (( ES )); then
+    RC=$?
+    if (( RC )); then
         sudo apt install which -y
         sudo pacman -S which --noconfirm
         sudo dnf install which -y
     fi
 
+    # local RC on purpose: this helper must not clobber the caller's global ES
     which "$FILE" 1>/dev/null 2>/dev/null
-    ES=$?
-    if (( ES )); then
-        #echo false
+    RC=$?
+    if (( RC )); then
         return 1
-    else
-        echo 1
-        return 0
     fi
+    echo 1
+    return 0
 }
 
 
