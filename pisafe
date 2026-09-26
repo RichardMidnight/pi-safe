@@ -715,7 +715,7 @@ get_elapsed_time() {
 do_countdown(){
     local MAX=${1:-10}
     local MSG=${2:-"Pausing for $MAX seconds... Press y to continue immediately or any other key to stop"}
-    local DEF=${3:-"y"}
+
 
    # echo "Pausing for $MAX seconds... Press y to continue immediately or any other key to stop"
     echo "$MSG"
@@ -735,9 +735,6 @@ do_countdown(){
         fi
     done
 
-    if [[ $DEF = n ]]; then
-        return 1
-    fi
     echo ...
 }
 
@@ -1917,7 +1914,7 @@ ui_echo(){
 ui_log(){
     # writes msg to $LOG_FILE
     # usage ui_log "message"
-    INFO=$*
+    local INFO=$*
 
     INFO=$(printf '%s\n' "$INFO" | sed 's/\\n/ -/g')  # literal '\n' -> ' -' (keeps log lines single)
 
@@ -1930,10 +1927,10 @@ ui_log(){
 ui_msg() {
     #general message function.  Supports CLI whiptail and logging.
     # usage ui_msg INSTALL "$MSG" white OK log
-    TITLE="$1"
-    MSG="${2:-no message}"
-    COLOR="${3:-grey}"
-    OK_BUTTON="${4:-OK}"
+    local TITLE="$1"
+    local MSG="${2:-no message}"
+    local COLOR="${3:-grey}"
+    local OK_BUTTON="${4:-OK}"
     local LOGIT="${5:-no}"   # or log
 
     if [[ "$LOGIT" = log ]]; then
@@ -1950,33 +1947,35 @@ ui_msg() {
 
 ui_msg_error() {
     # usage:  ui_msg_error $LINENO "message"
-    LINE=$1
+    local LINE="$1"
     shift
     do_beep_down
-    MSG="$*"
+    local MSG="$*"
     ui_msg "ERROR" "~ Error at line $LINE. $MSG" red "" log
 }
 
 
 ui_msg_warning(){
     # usage:  ui_msg_warning $LINENO "message"
-    LINE=$1
+    local LINE="$1"
     shift
     do_beep
     do_beep
-    MSG="$*"
-    ui_msg "WARNING" "~ $MSG" red "" nolog
+    local MSG="$*"
+    ui_msg "WARNING" "~ $MSG" red "" log
 }
 
 
 ui_yesno(){
     # general yes/no function.  Supports CLI and whiptail.
     # note, this output is often assigned to a variable, so don't add any additional echo statements.
-    TITLE="$1"
-    MSG="$2"
-    DEFAULT="${3:-""}"   # defaults to Yes.  can specify --defaultno
-    YT_FLAGS=()
+    # rc contract: 0 = answered (result on stdout), 1 = no answer (CLI EOF/interrupt)
+    local TITLE="$1"
+    local MSG="$2"
+    local DEFAULT="${3:-""}"   # defaults to Yes.  can specify --defaultno
+    local YT_FLAGS=()
     [[ -n "$DEFAULT" ]] && YT_FLAGS+=("$DEFAULT")
+    local yn
    # COLOR="${4:-white}"  color does not work with the 'read' command
 
     if [[ "$INTERFACE" = cli ]]; then
@@ -2005,7 +2004,7 @@ ui_yesno(){
         else
             echo y
         fi
-        return "$ES"
+        return 0
     fi
 }
 
