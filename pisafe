@@ -141,7 +141,7 @@ pisafe_about(){
     echo
     echo "Use at your own risk."
     echo
-    echo "Hopfully $PRODUCTNAME is useful to others."
+    echo "Hopefully $PRODUCTNAME is useful to others."
     echo
     echo " - Peace"
 }
@@ -158,10 +158,10 @@ pisafe_help() {
     echo "CLI Function is:"
     echo "                               - with no arguments it launches the PiSafe menu (recommended)"
     echo "  list                         - list media and image-files "
-    echo "  backup [media] [file] [-y]   - backup media to image-file (-y also supresses check-for-updates)"
+    echo "  backup [media] [file] [-y]   - backup media to image-file (-y also suppresses check-for-updates)"
     echo "  restore [file] [media] [-y]  - restore image-file to media"
     echo "  details [media]              - show media details"
-    echo "  erase [media] [format] [-y]  - format media as fat32 exfat ntfs or ext4"
+    echo "  erase|format [media] [fs] [-y] - format media as fat32 exfat ntfs or ext4"
     echo "  install [-y]                 - install this script"
     echo "  update [-y]                  - update script from website"
     echo "  uninstall [-y]               - uninstall this script"
@@ -381,7 +381,8 @@ pisafe_update() {
     wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/"$SCRIPTNAME" -O "$SCRIPTNAME.tmp" 2> /dev/null
     ES=$?
     if (( ES )); then
-        echo_if_cli "ERROR: Can't connect to server..."
+        rm -f "$SCRIPTNAME.tmp"
+        ui_msg ERROR "~ Can't connect to server.  Update check failed." red "" log
         return "$ES"
     fi
 
@@ -396,23 +397,34 @@ pisafe_update() {
         if [[ $YES = -y ]]; then
             RESULT="y"
         else
-            RESULT=$(ui_yesno "UPDATE AVAILABLE" "Update $PRODUCTNAME from '$SCRIPTVER'  to '$SERVER_VER' ")
+            RESULT=$(ui_yesno "UPDATE AVAILABLE" "Update $PRODUCTNAME from '$SCRIPTVER' to '$SERVER_VER'")
             echo
         fi
 
         if [[ $RESULT = y ]]; then
             ui_echo "Updating $PRODUCTNAME to v $SERVER_VER..." white
             sudo cp --backup=numbered "$SCRIPTNAME.tmp" /usr/local/bin/"$SCRIPTNAME"
+            ES=$?
+            if (( ES )); then
+                # keep the download for a retry; the running (old) copy is untouched
+                ui_msg ERROR "~ Update install failed.  Download kept at '$SCRIPTNAME.tmp'." red "" log
+                return 1
+            fi
             sudo chmod +x /usr/local/bin/"$SCRIPTNAME"
             rm -f "$SCRIPTNAME.tmp"
-            echo "$($SCRIPTNAME -v) installed. Press any key to exit... "
-            read -r -s -n 1
+            NEW_VER=$("/usr/local/bin/$SCRIPTNAME" -v)
+            if [[ "$INTERFACE" = cli ]]; then
+                echo "$NEW_VER installed.  Press any key to exit... "
+                read -r -s -n 1
+            else
+                echo "$NEW_VER installed."
+            fi
             exit 0
         fi
     else
-        rm "$SCRIPTNAME.tmp"
+        rm -f "$SCRIPTNAME.tmp"
         if [[ $SUMMARY = yes ]]; then
-            ui_msg UPDATE "~ $PRODUCTNAME $SCRIPTVER is up to date.  Server ver is '$SERVER_VER' " "" "" log
+            ui_msg UPDATE "~ $PRODUCTNAME $SCRIPTVER is up to date.  Server ver is '$SERVER_VER'." "" "" log
         fi
     fi
 }
