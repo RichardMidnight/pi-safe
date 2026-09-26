@@ -1677,11 +1677,11 @@ media_restore(){
     case $INFILEEXT in
         img | iso)
             if [[ "$INTERFACE" = cli ]]; then
-                run_command "pv '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync"
+                run_command "pv -s $RESTORE_BYTES '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync" "$LINENO"
                 ES=$?
             else
-                ui_echo "~ Running: sudo pv -n '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (pv -n "$INFILE" | sudo dd of="$OUTDEV" bs=4M) 2>&1 | \
+                ui_echo "~ Running: pv -s $RESTORE_BYTES '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                (pv -n -s "$RESTORE_BYTES" "$INFILE" | sudo dd of="$OUTDEV" bs=4M) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
