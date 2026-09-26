@@ -648,19 +648,13 @@ do_beep_down(){
 
 
 get_elapsed_time() {
-    # paramaters are in seconds
+    # parameters are seconds; returns "MIN min SEC sec"
     local BEG=$1
     local END=$2
-
-    local SECONDS=$(( END-BEG ))
-    local MIN=$(( SECONDS/60 ))
-    local SEC=$(( SECONDS%60 ))
+    local ELAPSED=$(( END-BEG ))
+    local MIN=$(( ELAPSED/60 ))
+    local SEC=$(( ELAPSED%60 ))
     echo "$MIN" min "$SEC" sec
-
-    #echo $(( $(( $END-$BEG ))/60)) min $(( $(( $END-$BEG ))%60 )) sec
-
-    #minutes decimal
-   # echo $(($END-$BEG)) seconds
 }
 
 
@@ -696,11 +690,15 @@ do_countdown(){
 
 
 get_ver_to_int() {
-    local parts
-    local val
+    # "MAJOR.MINOR.PATCH" -> MAJOR*1000000 + MINOR*1000 + PATCH
+    # a pre-release tail counts as its numeric prefix ("12-beta.3" -> 12)
+    local parts MAJOR MINOR PATCH
     IFS='.' read -r -a parts <<< "$1"
-    (( val = 1000000*parts[0] + 1000*parts[1] + parts[2] ))
-    echo "$val"
+    MAJOR=${parts[0]:-0}
+    MINOR=${parts[1]:-0}
+    PATCH=${parts[2]:-0}
+    PATCH=${PATCH%%[^0-9]*}          # leading digits only ("12-beta" -> "12"; "beta" -> "")
+    echo "$(( 1000000*MAJOR + 1000*MINOR + PATCH ))"
 }
 
 
