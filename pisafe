@@ -23,7 +23,7 @@ USER=$(whoami)
 CONFIG="/home/$USER/.config/pisafe/pisafe.conf"
 LOG_FILE="/home/$USER/.config/pisafe/pisafe.log"
 LOG=on
-REQUIRED_TOOLS="dd pishrink.sh zip unzip pv bc whiptail file nano"
+REQUIRED_TOOLS="dd pishrink.sh zip unzip pv whiptail file nano"
 INDEV=
 OUTDEV=
 INFILE=
@@ -761,7 +761,8 @@ get_args(){
 
 get_bytes(){
     # input bytes or human  and returns human or bytes
-    # currently shows 3 significant digits.
+    # -h : bytes in -> <value><unit> (unit by magnitude, min kb, 2 decimals); human in -> as-is
+    # -b : human in -> bytes; bytes in -> as-is
     local BYTES=$1
     local OUTPUT=${2:-"-h"};  #human or bytes
 
@@ -771,8 +772,8 @@ get_bytes(){
     SUFFIX=$(printf '%s\n' "$BYTES" | tr -cd 'kmgtbKMGTB' )
 
     if ! [[ "$BASE" =~ ^[0-9]+$ ]]; then   # not a number
-        ui_msg_warning $LINENO "$BASE not a number"
-        return 0
+        ui_msg_warning $LINENO "'$BYTES' not a number"
+        return 1
     fi
 
     # if no translation needed... then just echo the input and leave
@@ -787,51 +788,33 @@ get_bytes(){
     fi
 
     if [[ "$OUTPUT" = -h ]]; then  # translate to human readable
-
-        if [[ -z "$SUFFIX" ]]; then
-            local LEN=${#BYTES}
-            local k_ilo=1024;
-            local m_ega="$k_ilo*$k_ilo";
-            local g_iga="$m_ega*$k_ilo";
-            local t_era="$g_iga*$k_ilo";
-
-            [[ -z "$BYTES" ]] && return               # null, so exit
-
-            if ! [[ $BYTES =~ ^[0-9]+$ ]]; then    # not a number
-                echo 0
-                return 1
-            fi
-
-            case $LEN in
-                4) printf '%skb\n' "$(echo "scale=2; $BYTES/($k_ilo)" | bc)"  ;;
-                5) printf '%skb\n' "$(echo "scale=1; $BYTES/($k_ilo)" | bc)"  ;;
-                6) printf '%skb\n' "$(echo "scale=0; $BYTES/($k_ilo)" | bc)"  ;;
-
-                7) printf '%smb\n' "$(echo "scale=2; $BYTES/($m_ega)" | bc)"  ;;
-                8) printf '%smb\n' "$(echo "scale=1; $BYTES/($m_ega)" | bc)"  ;;
-                9) printf '%smb\n' "$(echo "scale=0; $BYTES/($m_ega)" | bc)"  ;;
-
-                10) printf '%sgb\n' "$(echo "scale=2; $BYTES/($g_iga)" | bc)" ;;
-                11) printf '%sgb\n' "$(echo "scale=1; $BYTES/($g_iga)" | bc)" ;;
-                12) printf '%sgb\n' "$(echo "scale=0; $BYTES/($g_iga)" | bc)" ;;
-
-                13) printf '%stb\n' "$(echo "scale=2; $BYTES/($t_era)" | bc)" ;;
-                14) printf '%stb\n' "$(echo "scale=1; $BYTES/($t_era)" | bc)" ;;
-                15) printf '%stb\n' "$(echo "scale=0; $BYTES/($t_era)" | bc)" ;;
-                *)  printf '%s\n' "$BYTES"                                    ;;
-            esac
+        local VAL=$(( 10#$BASE ))
+        local UNIT
+        local LABEL
+        if   (( VAL >= 1099511627776 )); then UNIT=1099511627776; LABEL=tb
+        elif (( VAL >= 1073741824  )); then UNIT=1073741824;  LABEL=gb
+        elif (( VAL >= 1048576     )); then UNIT=1048576;     LABEL=mb
+        elif (( VAL >= 1024        )); then UNIT=1024;        LABEL=kb
         else
-            printf '%s\n' "$BYTES"
+            printf '%d\n' "$VAL"
+            return
         fi
-    else # translate to bytes
-        case $SUFFIX in
-        b|B|"")     echo "$BASE"                                    ;;
-        k|K|kb|KB)  echo $((BASE*1024))                            ;;
-        m|M|mb|MB)  echo $((BASE*1024*1024))                       ;;
-        g|G|gb|GB)  echo $((BASE*1024*1024*1024))                  ;;
-        t|T|tb|TB)  echo $((BASE*1024*1024*1024*1024))             ;;
-        *)          ui_msg_error $LINENO "bad byte suffix 'SUFFIX'" ;;
+        printf '%d.%02d%s\n' $(( VAL / UNIT )) $(( (VAL % UNIT) * 100 / UNIT )) "$LABEL"
+        return
+    else                               # translate to bytes
+        local MULT
+        case ${SUFFIX:0:1} in
+            b|B)      MULT=1 ;;
+            k|K)      MULT=1024 ;;
+            m|M)      MULT=1048576 ;;
+            g|G)      MULT=1073741824 ;;
+            t|T)      MULT=1099511627776 ;;
+            *)
+                ui_msg_error $LINENO "bad byte suffix '$SUFFIX'"
+                return 1
+                ;;
         esac
+        echo $(( 10#$BASE * MULT ))
     fi
 }
 
