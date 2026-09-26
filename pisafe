@@ -14,6 +14,9 @@
 
 # https://jfearn.fedorapeople.org/fdocs/en-US/Documentation/0.1/html/Fedora_Multiboot_Guide/freespace-ntfs.html
 
+#set -Eeuo pipefail
+set -o pipefail
+
 SCRIPTNAME="${0##*/}"
 SCRIPTVER="1.2.12-beta.3"   # 2026/09/25
 PRODUCTNAME="PiSafe"

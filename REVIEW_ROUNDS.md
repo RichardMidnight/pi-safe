@@ -787,3 +787,120 @@ Deciding criterion (user): **cross-distro reliability with the fewest/thinnest d
 2. Re-point local `v1.2.12-beta.3` (never pushed → re-point is free) to the new tip.
 3. **Push stays the user's separate action**: `git push origin dev v1.2.12-beta.3` (30 commits ahead + moved tag) — supersedes origin's beta.3 tag.
 4. **PR #54 stays OPEN** until HovnovoD verifies against the new tag; user pastes the agreed reply text.
+
+---
+
+## Post-beta.3 follow-up — `set -o pipefail` (2026-09-26)
+
+**Status: ⏳ applied in the working tree (user edit, `pisafe`: L17–18) — awaiting commit approval. On approval: one commit (code + this entry), local tag re-pointed; push remains a separate explicit user action.**
+
+The commented-out `#set -Eeuo pipefail` (L17) was evaluated flag-by-flag and split: `-e`/`-u` are incompatible with this script's error model; `pipefail` alone is hazard-free and fixes a real class of masked failures.
+
+### Flag-by-flag verdict
+
+| Flag | Verdict | Evidence (live line numbers) |
+|------|---------|------------------------------|
+| `-e` | ❌ rejected | The error model is `eval "$CMD"` (L120) → `ES=$?` (L121) → `(( ES ))` branch + `~ Exit_Status` message (L123), in **69 `ES=$?` sites**; under `-e` the branch and the message never fire — the script dies at the line. Concrete: `SIZE_BYTES=$(…)` L957–965 with the designed fallback at L970; `DEVICES=$(lsblk … \| grep -vE … \| grep -v …)` L1894; `OS="$(grep PRETTY_NAME … \| cut …)"` L2295 |
+| `-u` | ❌ rejected | L2554 `erase\|format) media_format "$2" "$3" "$4"` — without the optional `-y`, `pisafe erase /dev/sdX fat32` leaves `$4` unset → "unbound variable" abort on a supported invocation |
+| `-E` | ❌ moot | Only meaningful together with `-e`; buys nothing standalone |
+| **`pipefail`** | ✅ **adopted** | Mechanism + proof below |
+
+### Why `pipefail` is safe and effective here
+
+`run_command` evals each pipeline in the **current shell** (L120), so a script-level pipefail reaches every `| … |` string with zero per-arm changes. Previously: pipeline status = last command's status, masking real failures.
+
+* **Backup** L1147 `dd if=… | pv | dd of=…` — a dd *read* failure would be masked by the writer's rc
+* **Compress** L1226 `pv | zip`, L1244 `pv | xz`, L1262 `pv | pigz` (the no-`pv` fallbacks L1233/L1252/L1269 are already pipe-free)
+* **Restore, cli** — all 5 arms L1682/L1694/L1707/L1720/L1733: a corrupt stream was reported **SUCCESS**
+* **Restore, GUI (new finding, while verifying this change)** — L1686–1688 / L1698–1700 / L1711–1713 / L1724–1726 / L1738–1740: `( … | pv -n | sudo dd … ) 2>&1 | whiptail --backtitle … --gauge …` — `ES=$?` captured **whiptail's** rc (0 on clean exit), so a total decompression failure was reported as success; with pipefail the pipeline returns the subshell's real non-zero
+
+### Risk audit (clean)
+
+* `| head` / `grep -q` pipelines (L1556, L1573, L2298, L2300) pipe **small** echo/grep output — no SIGPIPE-141 hazard
+* No `-e` interaction (we are not using `-e`); `grep` no-match exits are all in `if`/`elif` conditions or `… || true`-style fallbacks, never bare pipelines
+* bash builtin option, no new package or flag surface; buster's bash 5.0 floor and above are fine
+
+### Proof (agent-safe sandbox, `/tmp/opencode/pipefailtest`)
+
+* Corrupt stream: `xz -d -c bad.xz | pv … | dd` → **rc 0 without pipefail** (old: reported success), **rc 1 with** (real error path)
+* Healthy stream (80 KiB): same pipeline → **rc 0 both ways** (no false positive)
+
+### Diff / verification
+
+* `git diff` = `pisafe` only, **+3/−0** (L17 reference comment, L18 directive, L19 blank)
+* Gates on the patched tree: `bash -n` PASS · `bash pisafe -v` → `1.2.12-beta.3` · `./lint.sh` (shellcheck 0.10.0) **0 findings** · grep audit: no other `set`-options line in the script
+
+### Tag / hand-off (pending approval)
+
+1. **One commit** on `dev` covering `pisafe` + this entry (code and log land together → the "N commits ahead" line below stays honest).
+2. Re-point local `v1.2.12-beta.3` to the new dev tip (tag never pushed → re-point is free).
+3. **Push remains the user's separate action**: `git push origin dev v1.2.12-beta.3` (after the commit: **31 commits ahead** + moved tag) — supersedes origin's beta.3 tag.
+4. **PR #54 stays OPEN** until HovnovoD verifies against the new tag; the agreed reply text is ready.
+
+---
+
+## Test harness rebuild — `test_pisafe` v2.0 (2026-09-26, design approved by user)
+
+**Status: ✅ written + agent-safe tested — new 409-line harness uncommitted, pending user review. Superseded 2022 harness archived (retired, still on disk) at `junk/test_pisafe.2022`. `test_pisafe` is human-driven ONLY — agents never run it against a real device.**
+
+### Why
+
+The 2022 `test_pisafe` was interactive, defaulted to `/dev/sda`, and referenced the long-removed `pisafe_beta` file (known-issues backlog, "later, user decides" — now decided: replaced). New harness is non-interactive, single-confirm, fail-closed.
+
+### New harness
+
+Signature: `test_pisafe DEVICE [BASE] [--full]`
+
+* **DEVICE required** (no default); must match `/dev/[a-zA-Z0-9._-]+` and be a block device. **Refuses (rc=2) if any partition of it — or the whole disk — is mounted** (whole-disk and partition cases both refuse; proven on this box).
+* **BASE** = image basename (default `$PWD/test` → `test.{zip,gz,xz,zst}`).
+* **std mode (default):** per step — pisafe exit status + a fresh window of `~/.config/pisafe/pisafe.log` (line-count seed, `tail -n +N+1`; `ui_log` timestamps are minute-resolution). Success = exact marker (`~ Backup complete.` pisafe:1321 · `~ Restore complete.` :1759 · `~ Format complete.` :2215). Failure evidence = case-insensitive `error|fail|exit_status|stopped|canceled|not erased` (hits `~ Error at line N.`, `~ Backup canceled` :1535, `~ Restore stopped.` :1654, `~ Erase Media stopped.` :2128, `not erased` :2119).
+* **full mode (`--full`):** harness `dd`s its own `reference.img`; then — each backup decompressed + `cmp`'d vs reference **before any erase**; after each format: first 1 MiB must differ from reference AND blkid TYPE must be vfat (unreported type tolerated, any other type = FAIL); after each restore: image-size bytes read back and `cmp`'d vs reference.
+* Deterministic pisafe invocations: `-y --log=on --updates=off --dependencies=off --sound=off` (every flag verified in `get_args`, pisafe:767–803).
+* Command order verified against dispatch: `backup DEV OUTFILE -y` · `format DEV fat32 -y` (fat32→msdos/vfat) · `restore INFILE OUTDEV -y`.
+* Per compression: backup → (full: `check_backup`) → `format fat32` → (full: `check_erase`) → restore → (full: `check_restore`); missing image = FAIL that step + skip its restore.
+* One warning screen + ENTER, then end-to-end run; per-step duration; on step failure the fresh log window is dumped inline; report table (`PASS/FAIL` + duration + reason), tally, **exit 1 if any FAIL**.
+* `$SUDO` intentionally left unquoted at use sites — expands to nothing under root (quoted would inject an empty argv element).
+* `mktemp -d` workdir + EXIT trap; free-space warn at <4× (std) / <6× (full) card size, **hard stop <2×**; tool presence checked against `REQUIRED_TOOLS` (pisafe:29); `PISAFE` env override for the app-under-test path.
+
+### Verification (all agent-safe — no real device touched)
+
+* `bash -n test_pisafe` PASS · no args → usage + rc=2 · `-h` → rc=0 · `/dev/nosuch` → "not found or not a block device" · `--bogus` → "unknown option `--bogus'".
+* Mounted-device refusal proven against the live box: `/dev/mmcblk0p2` (root) and whole disk `/dev/mmcblk0` → `FATAL: REFUSING … rc=2` (fail-closed, refuses before any write).
+* **Unit scenarios (`/tmp/pt/run_tests.sh`; the 4 pure functions extracted from the real file with `sed`, driven against a 2 MiB regular-file "card"): 14/14 PASS** —
+  * `check_backup` × {zip,gz,xz,zst} valid → PASS (decompress round-trips + `cmp` vs reference); missing file → FAIL; corrupt zip → FAIL; trailing-garbage gz → FAIL.
+  * `check_erase`: card identical to reference → **FAIL** (correctly rejects a no-effect erase — this caught a test-setup bug: this box's mkfs.fat 4.2 rejects `-q`, so the "erase" never happened); `mkfs.vfat -F 12` card → PASS, and `blkid` reliably reports `vfat` on regular files.
+  * `check_restore`: card == reference → PASS; 1 MiB tampered → FAIL; card shorter than the image → FAIL.
+* App untouched by this workstream: `bash -n pisafe` PASS · `bash pisafe -v` → `1.2.12-beta.3` (no functional change — the harness only *reads* pisafe's outputs).
+* Pre-report read-through caught one harness bug: the preflight hard-stop DIE message ended `~$(( cardsize * 2 ) B)` — bash swallows the trailing `B` into the arithmetic (truncated message + stderr syntax error). Fixed to `~$(( cardsize * 2 )) B)`, verified live; smoke suite re-run after the edit (usage rc=2 · `-h` rc=0 · `/dev/nosuch` refused · `--bogus` rejected).
+* Full `git status`: `M pisafe` (pipefail entry above), `M test_pisafe` (replacement), `M REVIEW_ROUNDS.md`; `junk/` untracked.
+
+### First human run (2026-09-26 10:19) — harness bug found, root-caused, fixed
+
+User ran `test_pisafe /dev/sda` on a real card: **all four backups and all four phase-2 formats reported FAIL** with an empty `log says: ` and a *healthy* log window; user aborted before restores. Investigated and closed:
+
+* **Ruled out first** (live forensics): not a seed/off-by-one error — the exact zip window from the live log (lines 1806–1814: backup header → 3 steps → `~ Backup complete.`) is clean and contains the marker; not stale-line bleed (seed captured before each call) — the 9-line window provably passes both checks.
+* **Root cause — `test_pisafe:144` (then):** `if hit=$(grep -Ei "$FAIL_RE" <<<"$win" | head -1); then` — the `if` tests the **last** command in the pipeline, i.e. `head`'s exit status, not grep's. `head` exits 0 even on empty input (proven: `: | head -1` → rc=0), so the branch fired on **every step** with an **empty** `hit` → every step got `log says: ` appended → unconditionally FAIL. Exactly matches the user's output (`[FAIL] backup [zip] - log says: ` + healthy window). Ran the exact pipeline against the real log lines to reproduce; then verified the fixed construct both ways (clean window → no hit; error line → captures it).
+* **Fix applied:** `if hit=$(grep -Eim 1 -- "$FAIL_RE" <<<"$win") && [[ -n $hit ]]; then` — tests grep's own status, `-m1` stops at the first match (no pipe, no SIGPIPE), `--` guards a window starting with `-`; explanatory comment inline (line 144–147). Also hardened the FAIL dump header to show the seed and window size: `---- log window (seed line N, M lines) ----` — future window issues are now visible in the output itself.
+* **Regression suite added** (`/tmp/pt/runstep_test.sh` — sources the *live* harness with only the final `main "$@"` line stripped; stubs `PISAFE`; throwaway log; no device touched): A: clean window + stale pre-seed error line → **PASS**, stale line excluded · B: error line in window → **FAIL naming that exact line** · C: exit 3 + missing marker + error line → **FAIL with all three reasons** · D: the actual 2026-09-26 clean 7-line zip window → **PASS** (the false-FAIL regression case the old suite never covered — that's why 14/14 passed with the bug in it). **All assertions PASS.**
+* **Audit:** grepped the harness for other status-tested pipelines and `head` uses — lines 200/209/210/233 are byte-capture (`head -c`) contexts, not `if x=$(…|head)` status tests; the only remaining `if out=$(…)` (168) tests the function's own status. No other instances of the pattern.
+* **Re-verified:** `bash -n` PASS · original 14-scenario unit suite `/tmp/pt/run_tests.sh` still all-PASS · new run_step suite all-PASS (above).
+
+### Hand-off (pending approval)
+
+1. User re-runs `test_pisafe /dev/sda` (std first, then `--full`) on a spare card — **expected: backups/format now PASS on a healthy card**; ideally once with a pre-damaged card to see the FAIL paths name the actual line.
+2. Commit on `dev` — suggested: `harness: test_pisafe v2.0 — explicit-device fail-closed gate, std (status+log) and full (cmp) modes, per-step report` — independent of the pending pipefail commit, order doesn't matter.
+3. No push / tag / version bump — harness is test tooling, not app code.
+
+### Second human run (2026-09-26 ~11:05) — benign pishrink line false-FAILed; scanner tightened
+
+User re-ran `test_pisafe /dev/sda`: backup itself **succeeded** (`~ Backup complete.`, 7.40gb → 2.55gb zip, exit 0) but the harness reported `[FAIL] backup [zip] - log says: … ~ Exit_Status 7 running 'sudo pishrink.sh …'`.
+
+* **Root cause:** `pisafe`'s `run_command()` (pisafe:122–124) logs `~ Exit_Status $ES running '…'` in red for **any** non-zero subprocess exit — and the pishrink step *explicitly tolerates* that (pisafe:1186–1188: log `~ Exiting without shrinking …` and continue). pishrink exit 7 = "cannot shrink this filesystem" — expected and benign (user-confirmed). The old keyword `FAIL_RE` (`error|fail|exit_status|stopped|canceled|not erased`) matched it. (Also: `~ pishrink download failed`-style `ui_msg_warning` lines would have false-FAILed on `fail`.)
+* **Fix applied (harness only):** `FAIL_RE` is now the **exact set of fatal lines pisafe actually logs** — audited against source: `~ Error at line …` (single fatal choke point `ui_msg_error`, pisafe:1995, all ~35 callers are real failure/abort paths) · `~ Backup canceled` (1535) · `~ Restore stopped.` (1654) · `~ Erase Media stopped.` (2128) · `not erased` (2119, erase-confirm refusal). Comment block at the definition cites the source lines. Real failures are still caught — primarily by exit status + missing marker, with the scan as supplement.
+* **Re-verified:** `bash -n` PASS · pattern sanity table (benign lines clean / all five fatal strings match) · run_step suite A–D still all-PASS · **new scenario E added** = the user's exact 2026-09-26 zip window incl. the `~ Exit_Status 7` pishrink line → **PASS** · original 14-scenario unit suite still all-PASS.
+
+### Hand-off v2
+
+1. User re-runs `test_pisafe /dev/sda` (std, then `--full`) — **expected: `OVERALL: PASS`** on the healthy card.
+2. On a passing run, commit `test_pisafe` on `dev` (same message as above; FAIL_RE tightening rides in the same commit since it's one logical harness).
+3. Still outstanding from earlier: pipefail commit (approved) + tag re-point `v1.2.12-beta.3`; delete-`test.img.*` decision (~2.9 GB untracked).
