@@ -1263,8 +1263,7 @@ media_backup(){
                 fi
             else
                 ui_echo "No progress bar installed.  Please wait..."
-                sudo chmod 777 '$OUTFILE_BASE.img'
-                run_command "pigz -$COMPRESSION_LEVEL '$OUTFILE_BASE.img'" "$LINENO"
+                run_command "pigz -$COMPRESSION_LEVEL -c '$OUTFILE_BASE.img' > '$OUTFILE'" "$LINENO"
                 ES=$?
                 if (( ! ES )); then
                     rm -f "$OUTFILE_BASE".img
