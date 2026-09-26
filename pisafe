@@ -221,25 +221,27 @@ pisafe_install(){
     fi
     rm -f pisafe_icon.png
 
-    # create the desktop file
+    # create the desktop file (freedesktop.org Desktop Entry spec)
+    # note: 'Version=' is the spec version of this file format, not the app version
+    NO_DISPLAY=
     if ! TERMINAL1=$(env_terminal); then
         TERMINAL1=""
-        ui_msg_warning $LINENO "no terminal emulator found - the menu entry will not wrap in a terminal"
+        NO_DISPLAY="NoDisplay=true"
+        ui_msg_warning $LINENO "no terminal emulator found - the menu entry will be hidden"
     fi
-    echo "\
-[Desktop Entry]
-Type=Application
-Terminal=false
-Version=1.0
-Name=$PRODUCTNAME
-Comment=$PRODUCTCOMMENT
-#Icon=rpi-imager
-#Icon=media-removable
-Icon=/usr/share/pisafe/pisafe_icon.png
-#Exec=lxterminal --geometry=110x40 -e $SCRIPTNAME
-Exec=${TERMINAL1}/usr/local/bin/$SCRIPTNAME
-Categories=Utility
-StartupNotify=false" > "$PRODUCTNAME.desktop"
+    {
+        echo "[Desktop Entry]"
+        echo "Type=Application"
+        echo "Terminal=false"
+        echo "Version=1.0"
+        echo "Name=$PRODUCTNAME"
+        echo "Comment=$PRODUCTCOMMENT"
+        echo "Icon=/usr/share/pisafe/pisafe_icon.png"
+        echo "Exec=${TERMINAL1}/usr/local/bin/$SCRIPTNAME"
+        [[ -n "${NO_DISPLAY:-}" ]] && echo "${NO_DISPLAY}"
+        echo "Categories=Utility"
+        echo "StartupNotify=false"
+    } > "$PRODUCTNAME.desktop"
 
     # for lxde, MATE and xfce put it in /usr/share/applications
     sudo cp --backup=numbered "$PRODUCTNAME.desktop" /usr/share/applications/"$PRODUCTNAME.desktop"
@@ -593,19 +595,18 @@ env_root_device() {
 
 env_terminal(){
     local TERMINAL1=
-    #if [ -f /usr/bin/lxterminal ];then
     if [[ $(env_which lxterminal) ]]; then
-        TERMINAL1="lxterminal --geometry=110x40 --title='PiSafe' -e bash -c "
+        TERMINAL1="lxterminal --geometry=110x40 --title=PiSafe -e bash -c "
     elif [[ $(env_which xfce4-terminal) ]]; then
-        TERMINAL1="xfce4-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
+        TERMINAL1="xfce4-terminal --geometry=110x40 --title=PiSafe -x bash -c "
     elif [[ $(env_which mate-terminal) ]]; then
-        TERMINAL1="mate-terminal --geometry=110x40 --title='PiSafe' -x bash -c "
+        TERMINAL1="mate-terminal --geometry=110x40 --title=PiSafe -x bash -c "
     elif [[ $(env_which gnome-terminal) ]]; then
-        TERMINAL1="gnome-terminal --geometry=110x40 --title='PiSafe' -- bash -c "
+        TERMINAL1="gnome-terminal --geometry=110x40 --title=PiSafe -- bash -c "
     elif [[ $(env_which xterm) ]]; then
-        TERMINAL1="xterm -geometry 110x40 -T 'PiSafe' -e bash -c "
+        TERMINAL1="xterm -geometry 110x40 -T PiSafe -e bash -c "
     elif [[ $(env_which terminator) ]]; then
-        TERMINAL1="terminator --geometry=110x40 -T 'PiSafe' -x bash -c "
+        TERMINAL1="terminator --geometry=110x40 -T PiSafe -x bash -c "
     elif [[ $(env_which konsole) ]]; then
         TERMINAL1="konsole -e bash -c "
     elif [[ $(env_which qterminal) ]]; then
