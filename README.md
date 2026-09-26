@@ -104,7 +104,7 @@ Compressing the image file with zip, xz, gz, or zst reduces the size of the imag
 Standard compression levels are 1 through 9. A higher number will compress the file a little more but take a lot more time.
 - **Fastest:** `zst 1`  
 - **Smallest:** `xz 8` (or higher, limited by memory)  
-- **Default:** `zip 1` (industry-standard balance)
+- **Default:** `xz 1`
 ---
 
 ### Overlay FS (Raspberry Pi Desktop x86 & Overlay Mode)
