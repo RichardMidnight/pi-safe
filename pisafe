@@ -1272,10 +1272,12 @@ media_backup(){
  ;;
 
         zst)
-            # the old 'pv ... | zstd ... -o OUT' attempt failed: '-o' is not allowed on
-            # stdin input — '-c ... > OUT' is the working form
+            # pv goes on the *output* side on purpose: with pv on the input
+            # ('pv FILE | zstd'), zstd reads a pipe it cannot stat, so the frame
+            # omits its content size and the file listing reports 0 B
+            # ('-o OUT' is also not allowed with stdin input; '-c ... > OUT' is the form)
             if [[ -n $(which pv) ]]; then
-                run_command "pv '$OUTFILE_BASE.img' | zstd -T0 -$COMPRESSION_LEVEL -c > '$OUTFILE'" "$LINENO"
+                run_command "zstd -T0 -$COMPRESSION_LEVEL -c '$OUTFILE_BASE.img' | pv > '$OUTFILE'" "$LINENO"
                 ES=$?
                 if (( ! ES )); then
                     rm -f "$OUTFILE_BASE".img
