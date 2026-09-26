@@ -685,7 +685,6 @@ do_beep(){
 
     if [[ $SOUND = on ]] && [[ $(env_which speaker-test) ]]; then
         (speaker-test -t sign -f "$FREQ" > /dev/null & sleep "$TIME" && kill -9 $! ) > /dev/null
-      #  sleep .5  # to allow the beep to end
     fi
 }
 
@@ -734,7 +733,6 @@ do_countdown(){
                 return 1
             fi
         fi
-        MSG="$MSG.$i"
     done
 
     if [[ $DEF = n ]]; then
@@ -1885,13 +1883,13 @@ media_mount(){
 ui_countdown(){
     local SECONDS=${1:-10}
     local TITLE="${2:-Countdown}"
-    #local MESSAGE="${3:-Counting down...}"
     local MESSAGE=${3:-"Pausing for $SECONDS seconds... Press y to continue immediately or any other key to stop"}
 
     if [[ "$INTERFACE" = cli ]]; then
         do_countdown "$SECONDS" "$MESSAGE"
     else
-        whiptail_countdown "$SECONDS" "$TITLE" "$MESSAGE"
+        # GUI: single explicit confirm (this whiptail has no --timeout and swallows keys)
+        whiptail_countdown "$SECONDS" "$TITLE"
     fi
 }
 
@@ -1911,8 +1909,7 @@ ui_echo(){
         red)        echo_red "$MSG" >&2   ;;
         white)      echo_white "$MSG" >&2 ;;
         blue)       echo_blue "$MSG" >&2  ;;
-        *)          echo -e "$MSG" >&2    ;;
-    #    *)          echo  "$MSG"     ;;
+        *)          printf '%b\n' "$MSG" >&2 ;;
     esac
 }
 
@@ -1922,10 +1919,9 @@ ui_log(){
     # usage ui_log "message"
     INFO=$*
 
-    INFO=$(printf '%s\n' "$INFO" | sed 's/\\n/ -/g')  #change newline for ~
+    INFO=$(printf '%s\n' "$INFO" | sed 's/\\n/ -/g')  # literal '\n' -> ' -' (keeps log lines single)
 
     if [[ "$LOG" = on ]]; then
-        touch "$LOG_FILE"
         echo "$(date "+%Y-%m-%d %H:%M") $INFO" >> "$LOG_FILE"
     fi
 }
@@ -1937,7 +1933,6 @@ ui_msg() {
     TITLE="$1"
     MSG="${2:-no message}"
     COLOR="${3:-grey}"
-   # OK_BUTTON="${4:-Back}"
     OK_BUTTON="${4:-OK}"
     local LOGIT="${5:-no}"   # or log
 
@@ -1948,7 +1943,7 @@ ui_msg() {
     if [[ "$INTERFACE" = cli ]]; then
         ui_echo "$PRODUCTNAME $TITLE: $MSG" "$COLOR" nolog
     else
-        whiptail --backtitle "$BACKTITLE" --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" "$WT_HEIGHT_TALL" "$WT_WIDTH_WIDE"
+        whiptail --backtitle "$BACKTITLE" --title "$TITLE" --scrolltext --ok-button "$OK_BUTTON" --msgbox "$MSG" "$WT_HEIGHT_TALL" "$WT_WIDTH_WIDE" 3>&1 1>&2 2>&3
     fi
 }
 
@@ -1985,15 +1980,21 @@ ui_yesno(){
    # COLOR="${4:-white}"  color does not work with the 'read' command
 
     if [[ "$INTERFACE" = cli ]]; then
-        MSG="$PRODUCTNAME: $TITLE: $MSG  [y/n]?"
+        MSG="$PRODUCTNAME: $TITLE: $MSG [y/n]?"
         # change 'newline' chars to ' -'
         MSG=$(printf '%s\n' "$MSG" | sed 's/\\n/ -/g')
         while true; do
             read -r -s -n1 -p "$MSG" yn
+            ES=$?
+            if (( ES > 0 )); then
+                # EOF or Ctrl-C: don't spin forever - treat as 'n'
+                echo n
+                return 1
+            fi
             case $yn in
                 [Yy]* ) echo y; return 0 ;;
                 [Nn]* ) echo n; return 0 ;;
-                * )                      ;;
+                * )                      ;;  # any other key: ask again
             esac
         done
     else
@@ -2449,24 +2450,19 @@ whiptail_fselect() {
 
 
 whiptail_countdown(){
+    # this whiptail (newt build) has no --timeout, and it swallows the key that
+    # closes a dialog, so the old infobox + read loop could never actually be stopped.
+    # the GUI countdown is now a real gate: Yes = proceed, No/ESC = stop (rc 1).
     local MAX=${1:-10}
-    local TITLE=${2:-"COUNTDOWN... press any key to stop or 'y' to continue now"}
-    local MSG="${3:-Countdown for $MAX seconds.\n\n}"
+    local TITLE=${2:-"CONFIRM"}
+    local MSG="Take a moment, then decide.\n\nYes = proceed now, No/ESC = stop."
 
-    for ((i=MAX; i>=0; i--)); do
-        TERM=vt220 whiptail --backtitle "$BACKTITLE" --title "$TITLE" --infobox "$MSG" "$WT_MB_HEIGHT" "$WT_MB_WIDTH"
-        read -r -s -t 1 -N 1 INPUT
-        if [[ -n "$INPUT" ]]; then
-            if [[ "$INPUT" = y ]]; then
-                echo Continuing...
-                return 0
-            else
-              printf '%s\n' "$INPUT"
-              return 2
-            fi
-        fi
-        MSG="$MSG.$i"
-    done
+    whiptail --backtitle "$BACKTITLE" --title "$TITLE" --defaultno --yesno "$MSG" "$WT_MB_HEIGHT" "$WT_MB_WIDTH" 3>&1 1>&2 2>&3
+    ES=$?
+    if (( ES )); then
+        return 1   # No or ESC -> stop the countdown
+    fi
+    return 0
 }
 
 
