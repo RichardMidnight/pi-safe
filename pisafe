@@ -1272,23 +1272,20 @@ media_backup(){
  ;;
 
         zst)
-            # pv goes on the *output* side on purpose: with pv on the input
-            # ('pv FILE | zstd'), zstd reads a pipe it cannot stat, so the frame
-            # omits its content size and the file listing reports 0 B
-            # ('-o OUT' is also not allowed with stdin input; '-c ... > OUT' is the form)
-            if [[ -n $(which pv) ]]; then
-                run_command "zstd -T0 -$COMPRESSION_LEVEL -c '$OUTFILE_BASE.img' | pv > '$OUTFILE'" "$LINENO"
-                ES=$?
-                if (( ! ES )); then
-                    rm -f "$OUTFILE_BASE".img
-                fi
-            else
-                ui_echo "No progress bar installed.  Please wait..."
-                run_command "zstd -T0 -$COMPRESSION_LEVEL -c '$OUTFILE_BASE.img' > '$OUTFILE'" "$LINENO"
-                ES=$?
-                if (( ! ES )); then
-                    rm -f "$OUTFILE_BASE".img
-                fi
+            # zstd reads the image file directly, no pv pipe:
+            #  - file input lets zstd stat the size and record it in the frame
+            #    (pipe input can't be stat'd, so the file listing reports 0 B)
+            #  - no pipe means a failed compress can't be masked by a trailing pv
+            #    reporting success
+            # -v is required: zstd downgrades its default display level 2 to 1
+            # when output goes to a redirected stdout, which suppresses the
+            # progress bar; level 3 (verbose) restores the bar and the final
+            # summary.  This is the oldest flag that requests progress: it works
+            # on zstd >= 1.3.x (buster), 1.4.x (bullseye), 1.5.x (bookworm)
+            run_command "zstd -T0 -$COMPRESSION_LEVEL -v -c '$OUTFILE_BASE.img' > '$OUTFILE'" "$LINENO"
+            ES=$?
+            if (( ! ES )); then
+                rm -f "$OUTFILE_BASE".img
             fi
  ;;
 
