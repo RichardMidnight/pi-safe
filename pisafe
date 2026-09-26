@@ -1206,12 +1206,7 @@ media_backup(){
         zip)
             # pv-pipe branch = progress bar; stdin has no name, so the archive entry
             # is stored as '-'.  the no-pv fallback below uses 'zip -j' so the entry
-            # keeps a real name (no bar).  the commented attempts below are history.
-            #  local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
-            #  local DOTSIZE=$(( $FILESIZE_M / 50 ))m
-            #  echo -n "                    $OUTFILE_BASE.img"
-            #  echo " [........................|.........................] 100%"
-            #  run_command "zip -dbds $DOTSIZE -m -$COMPRESSION_LEVEL '$OUTFILE' '$OUTFILE_BASE.img'" "$LINENO"
+            # keeps a real name (no bar).  
             if [[ -n $(which pv) ]]; then
                 run_command "pv '$OUTFILE_BASE.img' | zip -$COMPRESSION_LEVEL '$OUTFILE' - " "$LINENO"
                 ES=$?
@@ -1266,10 +1261,22 @@ media_backup(){
  ;;
 
         zst)
-            run_command "zstd -T0 -$COMPRESSION_LEVEL --rm '$OUTFILE_BASE.img'" "$LINENO"
-            #run_command "pv '$OUTFILE_BASE.img' | zstd -T0 -$COMPRESSION_LEVEL -c -q -o '$OUTFILE' " "$LINENO"
-            ES=$?
-            #if (( ! $ES )); then rm -f "$OUTFILE_BASE".img; fi
+            # the old 'pv ... | zstd ... -o OUT' attempt failed: '-o' is not allowed on
+            # stdin input — '-c ... > OUT' is the working form
+            if [[ -n $(which pv) ]]; then
+                run_command "pv '$OUTFILE_BASE.img' | zstd -T0 -$COMPRESSION_LEVEL -c > '$OUTFILE'" "$LINENO"
+                ES=$?
+                if (( ! ES )); then
+                    rm -f "$OUTFILE_BASE".img
+                fi
+            else
+                ui_echo "No progress bar installed.  Please wait..."
+                run_command "zstd -T0 -$COMPRESSION_LEVEL -c '$OUTFILE_BASE.img' > '$OUTFILE'" "$LINENO"
+                ES=$?
+                if (( ! ES )); then
+                    rm -f "$OUTFILE_BASE".img
+                fi
+            fi
  ;;
 
         *)
