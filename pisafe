@@ -23,7 +23,7 @@ USER=$(whoami)
 CONFIG="/home/$USER/.config/pisafe/pisafe.conf"
 LOG_FILE="/home/$USER/.config/pisafe/pisafe.log"
 LOG=on
-REQUIRED_TOOLS="dd pishrink.sh zip unzip pv whiptail file nano"
+REQUIRED_TOOLS="dd pishrink.sh xz zip unzip pv whiptail file nano"
 INDEV=
 OUTDEV=
 INFILE=
@@ -205,17 +205,27 @@ pisafe_install(){
     echo
     ui_echo "Installing $PRODUCTNAME v $SCRIPTVER..." white
 
-    # Install the CLI script
-    sudo cp --backup=numbered "$SCRIPTNAME" /usr/local/bin/"$SCRIPTNAME"
-    sudo chmod +x /usr/local/bin/"$SCRIPTNAME"
+    # Install the CLI script (skip if already running from the install location)
+    if [[ "$(readlink -f "$0" 2> /dev/null)" != "/usr/local/bin/$SCRIPTNAME" ]]; then
+        sudo cp --backup=numbered "$SCRIPTNAME" /usr/local/bin/"$SCRIPTNAME"
+        sudo chmod +x /usr/local/bin/"$SCRIPTNAME"
+    fi
     echo "Installed ver=$("/usr/local/bin/$SCRIPTNAME" -v)"
 
-    # download the icon
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_icon.png -O pisafe_icon.png
-    mv pisafe_icon.png /home/"$USER"/.config/pisafe/pisafe_icon.png
+    # download the icon; install system-wide so any user's menu entry can find it
+    if wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_icon.png -O pisafe_icon.png && [[ -s pisafe_icon.png ]]; then
+        sudo mkdir -p /usr/share/pisafe
+        sudo mv pisafe_icon.png /usr/share/pisafe/pisafe_icon.png
+    else
+        ui_msg_warning $LINENO "icon download failed - the menu entry may show a default icon"
+    fi
+    rm -f pisafe_icon.png
 
     # create the desktop file
-    TERMINAL1=$(env_terminal)
+    if ! TERMINAL1=$(env_terminal); then
+        TERMINAL1=""
+        ui_msg_warning $LINENO "no terminal emulator found - the menu entry will not wrap in a terminal"
+    fi
     echo "\
 [Desktop Entry]
 Type=Application
@@ -225,19 +235,25 @@ Name=$PRODUCTNAME
 Comment=$PRODUCTCOMMENT
 #Icon=rpi-imager
 #Icon=media-removable
-Icon=/home/$USER/.config/pisafe/pisafe_icon.png
+Icon=/usr/share/pisafe/pisafe_icon.png
 #Exec=lxterminal --geometry=110x40 -e $SCRIPTNAME
-Exec=$TERMINAL1 $SCRIPTNAME
+Exec=${TERMINAL1}/usr/local/bin/$SCRIPTNAME
 Categories=Utility
 StartupNotify=false" > "$PRODUCTNAME.desktop"
 
     # for lxde, MATE and xfce put it in /usr/share/applications
-    sudo mv "$PRODUCTNAME.desktop" "/usr/share/applications"
+    sudo cp --backup=numbered "$PRODUCTNAME.desktop" /usr/share/applications/"$PRODUCTNAME.desktop"
+    ES=$?
+    if (( ES )); then
+        ui_msg_warning $LINENO "failed to install the desktop entry"
+    else
+        rm -f "$PRODUCTNAME.desktop"
+    fi
     # for just this user, put it in $HOME/.local/share/applications/
-    #mv "$PRODUCTNAME.desktop" "$HOME/.local/share/applications/"
+    #cp "$PRODUCTNAME.desktop" "$HOME/.local/share/applications/"
 
     if [[ -f /usr/local/bin/"$SCRIPTNAME" ]]; then
-        MSG="$PRODUCTNAME $SCRIPTVER installed.            
+        MSG="$PRODUCTNAME $SCRIPTVER installed.
         \nSelect it from the 'Accessories' menu.
         \n\nOr you can execute it from any directory by typing '$SCRIPTNAME'."
 
@@ -259,30 +275,48 @@ pisafe_install_tool() {
     local INSTALL
     INSTALL=$(env_installer)
 
-    if [[ -z $(env_which "$TOOL") ]]; then
+    if [[ -z "$(env_which "$TOOL")" ]]; then
+        # every tool but pishrink.sh needs a supported package manager (apt/pacman/dnf)
+        if [[ -z "$INSTALL" ]] && [[ "$TOOL" != pishrink.sh ]]; then
+            ui_msg_warning $LINENO "no supported package manager found - install '$TOOL' manually"
+            return 1
+        fi
+
         case $TOOL in
 
         xz)
             ui_echo "Installing xz-utils..." white
             sudo "$INSTALL" xz-utils
-            if [[ -z $(env_which xz) ]]; then
+            if [[ -z "$(env_which xz)" ]]; then
                 ui_msg_warning $LINENO "xz not installed."
+            fi
+ ;;
+
+        dd)
+            # dd ships in coreutils on all supported distros
+            ui_echo "Installing coreutils..." white
+            sudo "$INSTALL" coreutils
+            if [[ -z "$(env_which dd)" ]]; then
+                ui_msg_warning $LINENO "dd not installed."
             fi
  ;;
 
         pishrink.sh)
             ui_echo "Installing pishrink..." white
-            wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh
-            sudo chmod +x pishrink.sh
-            sudo mv pishrink.sh /usr/local/bin
+            if wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh && [[ -s pishrink.sh ]]; then
+                sudo cp --backup=numbered pishrink.sh /usr/local/bin/
+                sudo chmod +x /usr/local/bin/pishrink.sh
+            else
+                ui_msg_warning $LINENO "pishrink download failed"
+            fi
+            rm -f pishrink.sh
 
-            if [[ -z $(env_which pishrink.sh) ]]; then
+            if [[ -z "$(env_which pishrink.sh)" ]]; then
                 ui_msg_warning $LINENO "pishrink not installed."
             fi
  ;;
 
         *)
-            #echo_white Installing $TOOL ...
             ui_echo "Installing $TOOL..." white
             sudo "$INSTALL" "$TOOL"
             ES=$?
@@ -300,7 +334,7 @@ pisafe_install_tools() {
 
     #scan for missing tools
     for TOOL in $REQUIRED_TOOLS; do
-        if [[ -z $(env_which "$TOOL") ]]; then
+        if [[ -z "$(env_which "$TOOL")" ]]; then
             MISSING_TOOLS="$MISSING_TOOLS $TOOL"
         fi
     done
@@ -319,11 +353,15 @@ pisafe_install_tools() {
     done
 
     # if whiptail did not install then try installing newt...
-    if ! [[ $(env_which whiptail) ]]; then
+    if [[ -z "$(env_which whiptail)" ]]; then
         local INSTALL
         INSTALL=$(env_installer)
-        run_command "sudo $INSTALL newt"        # for fedora
-        run_command "sudo $INSTALL libnewt"     # for arch, manjaro
+        if [[ -z "$INSTALL" ]]; then
+            ui_msg_warning $LINENO "no supported package manager found - install whiptail manually"
+        else
+            run_command "sudo $INSTALL newt"        # for fedora
+            run_command "sudo $INSTALL libnewt"     # for arch, manjaro
+        fi
     fi
 }
 
@@ -346,7 +384,7 @@ pisafe_update() {
     fi
 
     # did we get the new version from the server?
-    if [[ -f $SCRIPTNAME.tmp ]]; then
+    if [[ -f "$SCRIPTNAME.tmp" ]]; then
         SERVER_VER=$(bash "$SCRIPTNAME.tmp" -v)
     else
         return 1
@@ -362,8 +400,9 @@ pisafe_update() {
 
         if [[ $RESULT = y ]]; then
             ui_echo "Updating $PRODUCTNAME to v $SERVER_VER..." white
-            sudo mv "$SCRIPTNAME.tmp" /usr/local/bin/"$SCRIPTNAME"
+            sudo cp --backup=numbered "$SCRIPTNAME.tmp" /usr/local/bin/"$SCRIPTNAME"
             sudo chmod +x /usr/local/bin/"$SCRIPTNAME"
+            rm -f "$SCRIPTNAME.tmp"
             echo "$($SCRIPTNAME -v) installed. Press any key to exit... "
             read -r -s -n 1
             exit 0
@@ -397,6 +436,10 @@ pisafe_uninstall(){
     sudo rm -f "/usr/share/applications/$PRODUCTNAME.desktop"
     # next line cleans up an old configuration
     rm -f "$HOME/.local/share/applications/$PRODUCTNAME.desktop"
+
+    # remove the icon (current and legacy location)
+    sudo rm -f /usr/share/pisafe/pisafe_icon.png
+    rm -f "$HOME/.config/pisafe/pisafe_icon.png"
 
     # remove the script and config
     sudo rm -f "/usr/local/bin/$SCRIPTNAME"
