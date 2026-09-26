@@ -5,7 +5,7 @@
 # This script basically
 # 1- copies a media-device with 'dd'
 # 2- shrinks the last partition with 'pishrink'
-# 3- compresses with 'zip'
+# 3- compresses with 'xz' (default), 'zip', 'gz' or 'zst'
 
 # references
 # https://www.raspberrypi.org/documentation/installation/installing-images/linux.md
@@ -477,7 +477,7 @@ config_var_set_defaults(){
     config_var_set hide_root_device on "$FORCE"
     config_var_set shrink_fs on "$FORCE"
     config_var_set auto_expand_fs on "$FORCE"
-    config_var_set default_extension zip "$FORCE"
+    config_var_set default_extension xz "$FORCE"
     config_var_set compression_level 1 "$FORCE"
     config_var_set parallel_compression on "$FORCE"
     config_var_set large_device_read_warning 16gb "$FORCE"
@@ -2501,9 +2501,9 @@ menu_get_outfile(){
         \n$ESTIMATES\n===== BACKUP FILENAME ===== \
         \nIf you don't include an extension '.img.$DEFAULT_EXTENSION' will be added \
         \n\nSupported extensions are: .img .zip .xz .gz .zst \
-        \n.zip is the baseline \
+        \n.zip is the baseline ( faster, larger ) \
         \n.img is ~2x faster but twice the size (NOT compressed) \
-        \n.xz is ~25% smaller but takes 3x-4x longer \
+        \n.xz is the default ( ~25% smaller but takes 3x-4x longer ) \
         \n.gz is ~25% faster \
         \n.zst is most efficient.  It compresses the most per second. \
         \n\nRecommended to have NO SPACES in the name \
@@ -2686,13 +2686,23 @@ menu_set_compression(){
 
 
 menu_settings_default_extension(){
+     # the radio state reflects the current default (previously 'zip on' was hard-coded)
+     local ZIP_SEL=off XZ_SEL=off GZ_SEL=off IMG_SEL=off ZST_SEL=off
+     case $DEFAULT_EXTENSION in
+         zip)  ZIP_SEL=on  ;;
+         gz)   GZ_SEL=on   ;;
+         img)  IMG_SEL=on  ;;
+         zst)  ZST_SEL=on  ;;
+         *)    XZ_SEL=on   ;;   # xz, and anything unset/unknown falls back to the default
+     esac
+
      CHOICE=$(whiptail --backtitle "$BACKTITLE" --title "SETTINGS-EXTENSION" --radiolist \
             "Choose default extension (compression format)" "$WT_HEIGHT" "$WT_WIDTH" "$WT_MENU_HEIGHT" \
-            "zip" "Default" on \
-            "xz" "~25% smaller, 3x-4x more time" off \
-            "gz" "~25% faster, same size as zip" off \
-            "img" "Twice the size, half the time (No compression)" off \
-            "zst" "Set compression level to 1-22 " off \
+            "zip" "faster, larger" "$ZIP_SEL" \
+            "xz" "~25% smaller, 3x-4x more time (default)" "$XZ_SEL" \
+            "gz" "~25% faster, same size as zip" "$GZ_SEL" \
+            "img" "Twice the size, half the time (No compression)" "$IMG_SEL" \
+            "zst" "Set compression level to 1-22 " "$ZST_SEL" \
             3>&1 1>&2 2>&3 )
 
     if [[ -n "$CHOICE" ]]; then
