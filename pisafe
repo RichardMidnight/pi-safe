@@ -953,7 +953,10 @@ file_image_size() {
     case $(file_ext "$INFILE") in
         img | iso)      SIZE_BYTES=$(stat -c%s -- "$INFILE")                                                                        ;;
         zip)            SIZE_BYTES=$(zipinfo -t "$INFILE" 2> /dev/null | grep "%" | cut -d, -f2 | cut -d" " -f2  )                                                    ;;
-        xz)             SIZE_BYTES=$(xz -l -v "$INFILE" 2> /dev/null | grep Uncompressed | sed 's/\s\s*/ /g' | cut -d'(' -f 2 | cut -d ' ' -f1 | sed 's/,//g')        ;;
+        #  2025 fix (user "HovnovoD"): xz 5.8.1 prints "Uncompressed size: 20.0 MiB (20,971,520 B)",
+        #  older xz prints bare digits (optional " B" / ", B" suffix). Pin the trailing byte field and
+        #  keep digits only -- a naive whole-line digit strip would turn that 5.8.1 line into "20020971520".
+        xz)             SIZE_BYTES=$(xz -l -v "$INFILE" 2> /dev/null | grep Uncompressed | sed 's/\s\s*/ /g' | grep -oE '[0-9,]+( B)?\)?' | tail -n 1 | tr -cd '0123456789') ;;
         gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g') ;;
      #  gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 )                ;;
         zst)            SIZE_BYTES=$(zstd -v -l "$INFILE" 2> /dev/null | grep Decompressed | cut -d"(" -f2 | cut -d" " -f1)                                           ;;
