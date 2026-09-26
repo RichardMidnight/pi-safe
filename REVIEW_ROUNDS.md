@@ -683,6 +683,7 @@ Baseline: `3e9ecfd` (beta.3 tag), 2 commits ahead of `origin/dev`.
 ## Post-beta.3 fix — zst size-0 regression (2026-09-26, Option B approved)
 
 **Status: ✅ COMMITTED on `dev`; local tag re-pointed; push pending as separate user action.**
+*(Superseded in the working tree by the `Post-beta.3 follow-up` entry below: `pv` was dropped from this arm — that change is awaiting user commit approval.)*
 
 User-reported regression: zst images made with the pv arm listed as `0` in the size listing, while xz/gz images from the same box listed the correct `2,982,150,144 B` (`/pi/Downloads/list.txt`; files `2026-09-25-pisafezz.img.zst`, `2026-09-26-pisafe.img.zst`).
 
@@ -717,3 +718,72 @@ pv moves to the **output** side: zstd now reads the source file directly (stat-a
 * **User, after push:** repair the 2 zero-size zsts if wanted — `zstd -dc <old>.zst | zstd -T0 -1 -c --stream-size=2982150144 > fixed.zst` (they restore fine as-is — size only drives the listing/`pv -s` denominator).
 * **PR #54: leave OPEN**, user pastes the agreed reply; HovnovoD verifies against the tag before any merge.
 * **Push (user action):** `git push origin dev v1.2.12-beta.3` (27 commits ahead of `origin/dev` + moved tag) — supersedes origin's beta.3 tag.
+
+---
+
+## Post-beta.3 follow-up — zst arm: drop `pv`, use `zstd -v` (2026-09-26)
+
+**Status: ⏳ IN WORKING TREE — awaiting the user's per-item approval (two RISKY items below). On approval: commit on `dev` + re-point local `v1.2.12-beta.3`. Push stays a separate explicit user action.**
+
+Deciding criterion (user): **cross-distro reliability with the fewest/thinnest dependencies**. The `pv` in the zst arm adds a third process and a pipe for something zstd itself does — and that same pipe is exactly the failure-mask class the entry above logged as residual (zstd dies mid-stream while the trailing `pv` exits 0 — proven: `false | pv` → rc 0). New form: **no pipe, no extra process**; zstd reads the image file directly and reports its own progress.
+
+### Why a bare `zstd in > out` shows no bar — root cause, source-traced in two distro versions
+
+* Shell redirection makes zstd's *own* stdout its output file (internally `outFileName = stdoutmark`), and then:
+  `hasStdout && (g_displayLevel == 2) → g_displayLevel = 1` — the default level 2 is **downgraded to 1**, suppressing the bar.
+  * zstd **1.5.7** (bookworm-era): `zstdcli.c` ~L1547
+  * zstd **1.4.8** (bullseye): `zstdcli.c` L1286–1288 — **identical gate**
+* So bare `zstd in > out` is silent *by design* on bullseye and bookworm-era zstd. `-v` raises the display level to 3, which the gate (fires only at level == 2) leaves alone.
+* isatty behavior: 1.4.8 has **no** stderr-isatty gate — with `-v` the bar always prints to stderr, even when stderr is redirected (harmless). 1.5.7 gates it (`zstdcli.c` L1553–1554) and **auto-suppresses** the bar when stderr isn't a TTY — desirable.
+* Empirical matrix (zstd 1.5.7, 150 MiB source, stderr on a pty; logs `t_default` / `t_levelv` / `t_prog` / `t_nprog` kept in `/tmp/opencode/zsttest`):
+
+  | form | stderr bytes | bar | output valid, size recorded |
+  |------|--------------|-----|------------------------------|
+  | `zstd -T0 -L -c in > out` (default) | **0** | no | yes — `157286400 B` |
+  | `… -v …` | 879 | **yes** + final summary | yes |
+  | `… --progress …` | ~621 | yes (clean bar) | yes |
+  | `… --no-progress …` | 0 | no | yes |
+
+### Flag choice (oldest-compatible wins — the deciding criterion)
+
+| candidate | verdict |
+|-----------|---------|
+| `--progress` | ❌ **introduced in v1.5.0** (changelog L215 / PR #2595) → hard-fails on buster (1.3.4) and bullseye (1.4.8) |
+| `--no-progress` | ❌ does the opposite of what we want |
+| `-o OUT` | ❌ abandoned — no longer needed once `-v` was verified; `-v` is strictly older-compatible |
+| **`-v`** | ✅ **chosen**: oldest progress-flag; works on 1.3.x (buster), 1.4.x (bullseye), 1.5.x (bookworm). Bar path = `displayLevel >= 3` (1.4.8 `fileio.c` L1356; 1.5.7 equivalent), final summary fires (1.4.8 `fileio.c` L1549) |
+
+### Change (`media_backup`, zst compress arm — supersedes the pv-on-output form in the entry above)
+
+```text
+-old  if [[ -n $(which pv) ]]; then
+-         run_command "zstd -T0 -$COMPRESSION_LEVEL -c '$OUTFILE_BASE.img' | pv > '$OUTFILE'" "$LINENO"
+-       else
+-         ui_echo "No progress bar installed.  Please wait..."
+-         run_command "zstd -T0 -$COMPRESSION_LEVEL -c '$OUTFILE_BASE.img' > '$OUTFILE'" "$LINENO"
+-       fi
++new  run_command "zstd -T0 -$COMPRESSION_LEVEL -v -c '$OUTFILE_BASE.img' > '$OUTFILE'" "$LINENO"
+```
+
+* 8-line inline comment in the code records: size recording on file input, no-pipe failure semantics, and why `-v` (incl. the downgrade gate).
+* `pv` stays required for the gz arm and the restore arms → `REQUIRED_TOOLS` **unchanged**.
+* The residual PIPESTATUS/mask item from the entry above is **eliminated in this arm** (there is no pipe at all). The same class remains in the gz no-pv fallback quirk and the restore arms' `pv …` pipelines — still open, user's call.
+
+### RISKY items — per AGENTS.md, need the user's per-item sign-off
+
+1. **User-visible string removed**: `No progress bar installed.  Please wait...` — the no-pv fallback branch no longer exists; a box without `pv` now gets zstd's own live bar instead of that message (strictly an improvement, but a removed string is RISKY by the rulebook).
+2. **Code deletion / restructure**: the whole `if [[ -n $(which pv) ]]` if/else collapses to a single `run_command` (behavior change on pv-less boxes as above; gz arm deliberately untouched).
+
+### Verification (agent-safe, all green on the patched tree)
+
+* **Exact-string simulation** (`/tmp/opencode/zsttest`, zstd 1.5.7, 150 MiB, stderr on a pty): the literal `run_command` string (quoted-path form) — `eval "zstd -T0 -19 -v -c 'sim.img' > 'sim.img.zst'"` → live bar while running (`sim.img : 100.00%`), rc 0, `zstd -t` PASS, `zstd -v -l` → `Decompressed Size: 150 MiB (157286400 B)` ✓
+* **Dual-version source audit** (sources kept in `/tmp/opencode/zsttest/`: `zstdcli_148.c`, `fileio_148.c`, `zstdcli_157.c`, `fileio_157.c`): identical `hasStdout` gate in both; `-v` reaches bar + summary in both; isatty gate only in 1.5.7.
+* **Banner mystery closed**: `*** Zstandard CLI (64-bit) v1.5.7 ***` is emitted by `zstd --version` / `-v -l`, **not** by a compress run — it never pollutes the progress output.
+* Gates: `bash -n` PASS · `bash pisafe -v` → `1.2.12-beta.3` · `./lint.sh` → shellcheck **0 findings** · `git diff` = `pisafe` only, **+14/−17**, full diff read through.
+
+### Tag / hand-off (pending approval)
+
+1. Commit on `dev` — suggested: `review fix: zst arm drops pv; zstd -v for native progress (cross-distro safe)`; optionally a second `docs:` commit for this entry (matching the `3459323`/`e37e41b` pattern).
+2. Re-point local `v1.2.12-beta.3` (never pushed → re-point is free) to the new tip.
+3. **Push stays the user's separate action**: `git push origin dev v1.2.12-beta.3` (28 commits ahead + moved tag) — supersedes origin's beta.3 tag.
+4. **PR #54 stays OPEN** until HovnovoD verifies against the new tag; user pastes the agreed reply text.
