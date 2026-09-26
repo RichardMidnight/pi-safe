@@ -1204,8 +1204,9 @@ media_backup(){
  ;;
 
         zip)
-            # not using pv because it supresses the name of the file in the archive.
-            # added sudo to the command so manjaro can write to a network folder.
+            # pv-pipe branch = progress bar; stdin has no name, so the archive entry
+            # is stored as '-'.  the no-pv fallback below uses 'zip -j' so the entry
+            # keeps a real name (no bar).  the commented attempts below are history.
             #  local FILESIZE_M=$(( $(file_size "$OUTFILE_BASE".img)/1024/1024 ))
             #  local DOTSIZE=$(( $FILESIZE_M / 50 ))m
             #  echo -n "                    $OUTFILE_BASE.img"
