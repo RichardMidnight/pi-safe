@@ -677,3 +677,43 @@ Baseline: `3e9ecfd` (beta.3 tag), 2 commits ahead of `origin/dev`.
 * Local `v1.2.12-beta.3` **re-pointed** from `3e9ecfd` to `ae5b953` (tag was never pushed — re-pointing is free; user-chosen scheme, no beta.4 bump). PR #54 superseded by the xz size-parse fix (`139774d`) in this same tag — **do not merge PR #54**.
 
 * **Push:** pending as separate explicit user action — `git push origin dev v1.2.12-beta.3` (14 commits + moved tag).
+
+---
+
+## Post-beta.3 fix — zst size-0 regression (2026-09-26, Option B approved)
+
+**Status: ✅ COMMITTED on `dev`; local tag re-pointed; push pending as separate user action.**
+
+User-reported regression: zst images made with the pv arm listed as `0` in the size listing, while xz/gz images from the same box listed the correct `2,982,150,144 B` (`/pi/Downloads/list.txt`; files `2026-09-25-pisafezz.img.zst`, `2026-09-26-pisafe.img.zst`).
+
+### Root cause (A/B-proven in `/tmp/opencode/zsttest`, 24 MiB source)
+
+* zstd records the frame **content size** only when it can stat a regular-file input (or `--stream-size` is given, ≥1.4.4). A pipe input has no size → the field is **omitted** from the frame.
+* The pv arm read its input through a pipe — `pv '$OUTFILE_BASE.img' | zstd -c` — so every pv-arm zst frame came out size-less. `file_image_size` (zst arm: `zstd -v -l … | grep Decompressed …`) finds no `Decompressed Size:` line → empty → prints `0`.
+* xz/gz record their uncompressed size in the footer/header **regardless of input source** — verified on the user's real files (xz 5.8.1, pigz). Unaffected.
+* zstd-reading-a-file (no-pv arm) records the size — unaffected.
+
+### Change (`media_backup`, zst compress arm)
+
+```text
+-old  run_command "pv '$OUTFILE_BASE.img' | zstd -T0 -$COMPRESSION_LEVEL -c > '$OUTFILE'" "$LINENO"
+-new  run_command "zstd -T0 -$COMPRESSION_LEVEL -c '$OUTFILE_BASE.img' | pv > '$OUTFILE'" "$LINENO"
+```
+
+pv moves to the **output** side: zstd now reads the source file directly (stat-able → size recorded), making the pv arm size-equivalent to the no-pv arm. Accepted tradeoff (user-approved): pv no longer has a size denominator, so the zst-bar shows bytes/rate without %/ETA (xz/gz restore-style `pv -s` bars unchanged).
+
+* Stale `'-o'` comment replaced with the rationale above.
+* **Residual (documented, NOT changed — RISKY class, user to decide):** with `pv` last in the pipeline the exit status is `pv`'s; a zstd mid-stream failure could be masked → `rm -f` of the source on a failed compress. The **old** arm had the mirror class (pv read-error masked when zstd still exits 0). Same class exists pre-existing elsewhere (gz restore `pv … | gunzip`, L1718-style arms). Disk-full still surfaces (pv/disk-write status propagates). Any `PIPESTATUS` hardening is RISKY — logged, not applied.
+
+### Verification (agent-safe, all green)
+
+* **New form** (24 MiB source): `zstd -v -l | grep Decompressed …` parses → `25165824` = expected ✓; `zstd -t` OK; `zstd -dc | cmp` byte-identical round-trip ✓
+* **Old form** re-run to reproduce the bug: `Decompressed Size:` line **absent** → script parser yields empty → `0` — exactly the user-reported behavior ✓
+* `bash -n` PASS; `bash pisafe -v` → `1.2.12-beta.3`; **shellcheck: 0 findings** (lint.sh CLEAN); `git diff` = the 2 changed lines + comment only.
+
+### Tag / hand-off
+
+* Local annotated `v1.2.12-beta.3` **re-pointed** from `d2b149e` (prior tip, incl. the critical fix-pass docs) to the `dev` tip of the moment — fix `3459323` plus this round's docs commit (the docs commit is deliberately not given a SHA here: it *is* this entry's commit, so its SHA changes with any amend — the tag simply tracks the tip). Tag never pushed — re-point free; annotation message `v1.2.12-beta.3` preserved.
+* **User, after push:** repair the 2 zero-size zsts if wanted — `zstd -dc <old>.zst | zstd -T0 -1 -c --stream-size=2982150144 > fixed.zst` (they restore fine as-is — size only drives the listing/`pv -s` denominator).
+* **PR #54: leave OPEN**, user pastes the agreed reply; HovnovoD verifies against the tag before any merge.
+* **Push (user action):** `git push origin dev v1.2.12-beta.3` (27 commits ahead of `origin/dev` + moved tag) — supersedes origin's beta.3 tag.
