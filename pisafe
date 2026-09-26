@@ -1493,8 +1493,9 @@ media_backup_checklist(){
         INDEV=$(menu_select_device "BACKUP")
         ES=$?
         if (( ES )); then
-            # ui_msg_error $LINENO "No media found."
-            ui_msg_error $LINENO "Media '$INDEV' can't be blank."
+            ui_msg_error $LINENO "No media found to back up.
+If your only disk is the boot disk, it is hidden by default (hide_root_device).
+Back up an explicit device instead:  pisafe backup /dev/sda"
             return 10
         fi
     fi
@@ -2904,7 +2905,6 @@ menu_tools(){
                 ES=$?
                 if (( ES )); then
                     ui_msg_error $LINENO "No media found."
-                    #ui_msg BACKUP "No media found."
                     return 2
                 fi
                 media_details "$DEVICE"
@@ -2915,7 +2915,6 @@ menu_tools(){
                 ES=$?
                 if (( ES )); then
                     ui_msg_error $LINENO "No media found."
-                    #ui_msg BACKUP "No media found."
                     return 2
                 fi
 
