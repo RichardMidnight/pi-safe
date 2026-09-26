@@ -1799,8 +1799,8 @@ media_list() {
                                                  ;;
     esac
 
-    # the 254 is for a QTM virtual machine on Mac
-    DEVICES=$(lsblk -I 8,179,254,259 -dnpo NAME,VENDOR,MODEL,SIZE | grep -v "$ROOT_FILTER")
+    # the 254 is for a QTM virtual machine on Mac; on a Pi major 254 is zram (RAM disk), so zram/ram names are filtered out
+    DEVICES=$(lsblk -I 8,179,254,259 -dnpo NAME,VENDOR,MODEL,SIZE | grep -vE '^/dev/(zram|ram)[0-9]+' | grep -v "$ROOT_FILTER")
     ES=$?
     if (( ES )); then
         return "$ES"
