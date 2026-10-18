@@ -114,7 +114,6 @@ notes_performance(){
 
 run_command(){
     local CMD=$1
-    local LINE=$2
 
     ui_echo "~ Running: $CMD" blue
     eval "$CMD"
@@ -2532,6 +2531,7 @@ echo_if_cli (){
     if [[ "$INTERFACE" = cli ]]; then
         case $COLOR in
             white) echo_white "$MSG" ;;
+            blue)  echo_blue "$MSG"  ;;
             red)    echo_red "$MSG"  ;;
             *) echo "$MSG"           ;;
         esac
