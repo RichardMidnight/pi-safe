@@ -960,4 +960,17 @@ Verification (all agent-safe — no device touched):
 * **Push:** `origin/dev` `125f20e` → `9abb395`/docs commit (2 new commits) + tag `v1.2.12-beta.4` — supersedes origin's `v1.2.12-beta.3`; local branches `dev` and `development` left in sync at the docs commit.
 * **README wiring (on `main`, per the established beta-link pattern):** `**Beta Version**` section updated `v1.2.12-beta.3` → `v1.2.12-beta.4` (heading + tag-URL `wget`), and a `v1.2.12-beta.4` line added to the `## Release notes` list (issue #55 wording). `main` is otherwise untouched (local `main` fast-forwarded to origin's `75aee3d` first — it was stale at `a0fe391`, an ancestor).
 * **PR #54:** stays open, superseded by the xz size-parse fix in beta.3 — no merge.
-* **Remaining at final release:** push the full `1.2.12` to `main`, copyright date range, README "Old Stable" row.
+* **Remaining at final release:** push the full `1.2.12` to `main`, README "Old Stable" row. (Copyright date range itself closed in `3e9ecfd` — see backlog line, updated `f3c72a8`.)
+
+## Release — tag `v1.2.12-beta.5` + push (2026-10-18, user-approved release action)
+
+* **Code batch (`d454123`, report-item cleanup from the config/env review answers):**
+  * Ghost settings dropped from `config_var_set_defaults`: `settings_script_ver`, `parallel_compression`, `safety` (verified write-only, zero readers file-wide) — new confs no longer carry them; existing confs' stale lines remain inert.
+  * `config_var_clear` deleted (zero call sites).
+  * `env_terminal`: `x-terminal-emulator` fallback now resolves the symlink and dispatches by target basename — xfce4/mate/terminator → `-x bash -c`, gnome-terminal → `-- bash -c`, xterm/konsole/qterminal/unknown → previous `-e bash -c` (no new flag guesses).
+  * `env_texteditor`: `TEXT_EDITORS`/`TEXT_EDITOR` now `local` (the config-driven `TEXT_EDITOR` global at the settings-load and editor call sites is untouched).
+  * `media_format`: all four fs-tool-ensure arms (fat16/fat32/exfat/ntfs) gained the `[[ -z $INSTALL ]]` guard the other two installer consumers already had — a no-PM box now gets a clear "…install <pkg> manually" warning instead of `sudo <pkg>` → "command not found".
+  * **Verification:** 36-check battery (`/tmp/opencode/fixes_battery.sh`; real functions extracted, all externals stubbed, no device touched) — fresh + `FORCE=false` repair config inits (ghosts gone, anchors/repair intact), `env_texteditor` no-leak ×2, six `x-terminal-emulator` target cases, `media_format` no-PM/PM × fat32/ntfs/exfat (guard fires, package installs intact, mkfs attempts proceed) — **all pass**. `bash -n` ✓, `bash pisafe -v` → `1.2.12-beta.5` ✓, `./lint.sh` → shellcheck 0 findings.
+* **Tag:** annotated `v1.2.12-beta.5` (message `PiSafe 1.2.12-beta.5`) on `7f41618` (the version-bump commit); this docs commit sits above the tag and is pushed with it — same arrangement as beta.4.
+* **Push:** `origin/dev` pushed past the beta.4 tip with `d454123`, `7f41618`, docs commit + tag `v1.2.12-beta.5`; local `dev`/`development` left in sync.
+* **README wiring (on `main`):** beta download `v1.2.12-beta.4` → `v1.2.12-beta.5` (heading + tag-URL `wget`) + `v1.2.12-beta.5` release-notes line.
