@@ -506,14 +506,6 @@ config_var_set() {
 }
 
 
-config_var_clear(){
-    # replace a setting's value (VAL may be empty); anchored to the line start
-    local SETTING=$1
-    local VAL=$2
-    sed -i "s~^$SETTING=.*~$SETTING=$VAL~" "$CONFIG"
-}
-
-
 config_var_get(){
     # match the setting only at the start of a line (names are [a-z_], so grep/sed-safe)
     grep "^$1=" "$CONFIG" | sed "s~^$1=~~"
@@ -523,7 +515,6 @@ config_var_get(){
 config_var_set_defaults(){
     FORCE=${1:-true}        # if false, will only update if var not set.
 
-    config_var_set settings_script_ver "$SCRIPTVER"
     config_var_set default_path_cli_from_settings off "$FORCE"
     config_var_set default_path "$HOME/Downloads" "$FORCE"
     config_var_set check_for_updates_on_startup on "$FORCE"
@@ -539,13 +530,11 @@ config_var_set_defaults(){
     config_var_set auto_expand_fs on "$FORCE"
     config_var_set default_extension xz "$FORCE"
     config_var_set compression_level 1 "$FORCE"
-    config_var_set parallel_compression on "$FORCE"
     config_var_set large_device_read_warning 16gb "$FORCE"
     config_var_set skip_freespace on "$FORCE"
 
     #restore settings
     config_var_set large_device_write_warning 16gb "$FORCE"
-    config_var_set safety on "$FORCE"
 }
 
 
@@ -619,6 +608,7 @@ env_root_device() {
 
 env_terminal(){
     local TERMINAL1=
+    local XTE=
     if [[ $(env_which lxterminal) ]]; then
         TERMINAL1="lxterminal --geometry=110x40 --title=PiSafe -e bash -c "
     elif [[ $(env_which xfce4-terminal) ]]; then
@@ -636,7 +626,16 @@ env_terminal(){
     elif [[ $(env_which qterminal) ]]; then
         TERMINAL1="qterminal -e bash -c "
     elif [[ $(env_which x-terminal-emulator) ]]; then
-        TERMINAL1="$(readlink -f /usr/bin/x-terminal-emulator) -e bash -c "
+        # the Debian-family fallback is a symlink to the real terminal -
+        # use that terminal's own exec flag (as in the arms above)
+        XTE="$(readlink -f /usr/bin/x-terminal-emulator)"
+        case "${XTE##*/}" in
+            xfce4-terminal) TERMINAL1="$XTE --geometry=110x40 --title=PiSafe -x bash -c " ;;
+            mate-terminal)  TERMINAL1="$XTE --geometry=110x40 --title=PiSafe -x bash -c " ;;
+            gnome-terminal) TERMINAL1="$XTE --geometry=110x40 --title=PiSafe -- bash -c " ;;
+            terminator)     TERMINAL1="$XTE --geometry=110x40 -T PiSafe -x bash -c " ;;
+            *)              TERMINAL1="$XTE -e bash -c " ;;   # xterm, konsole, qterminal, unknown: previous behavior
+        esac
     else
       echo "Failed to locate any terminal emulators. "
       return 1
@@ -646,7 +645,8 @@ env_terminal(){
 
 
 env_texteditor(){
-    TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
+    local TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
+    local TEXT_EDITOR=
     for TEXT_EDITOR in $TEXT_EDITORS; do
         if [[ $(env_which "$TEXT_EDITOR") ]]; then
             echo "$TEXT_EDITOR"
@@ -2157,7 +2157,11 @@ media_format(){
         fat16)
             if [[ -z $(which mkfs.vfat) ]]; then
                 echo Installing vfat support ...
-                run_command "sudo $INSTALL dosfstools" "$LINENO"
+                if [[ -z $INSTALL ]]; then
+                    ui_msg_warning $LINENO "no supported package manager found - install dosfstools manually"
+                else
+                    run_command "sudo $INSTALL dosfstools" "$LINENO"
+                fi
             fi
             run_command "sudo mkfs.vfat -F16 -v -I -n FAT16 $PARTITION" "$LINENO"
             ES=$?
@@ -2166,7 +2170,11 @@ media_format(){
         fat32)
             if [[ -z $(which mkfs.vfat) ]]; then
                 echo Installing vfat support ...
-                run_command "sudo $INSTALL dosfstools" "$LINENO"
+                if [[ -z $INSTALL ]]; then
+                    ui_msg_warning $LINENO "no supported package manager found - install dosfstools manually"
+                else
+                    run_command "sudo $INSTALL dosfstools" "$LINENO"
+                fi
             fi
             run_command "sudo mkfs.vfat -v -I -n FAT32 $PARTITION" "$LINENO"
             ES=$?
@@ -2176,8 +2184,12 @@ media_format(){
             #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
             if [[ -z $(which mkfs.exfat) ]]; then
                 echo Installing exfat support ...
-                run_command "sudo $INSTALL exfat-utils" "$LINENO"
-                run_command "sudo $INSTALL exfat-fuse" "$LINENO"
+                if [[ -z $INSTALL ]]; then
+                    ui_msg_warning $LINENO "no supported package manager found - install exfat-utils manually"
+                else
+                    run_command "sudo $INSTALL exfat-utils" "$LINENO"
+                    run_command "sudo $INSTALL exfat-fuse" "$LINENO"
+                fi
                 #sudo modprobe fuse
                 #echo "fuse" | sudo tee -a /etc/modules
             fi
@@ -2189,9 +2201,13 @@ media_format(){
             if [[ -z $(which mkfs.ntfs) ]]; then
                 #sudo apt-get install fuse ntfs-3g
                 echo Installing ntfs support...
-                run_command "sudo $INSTALL fuse" "$LINENO"
-                run_command "sudo $INSTALL ntfs-3g" "$LINENO"
-                run_command "sudo $INSTALL ntfsprogs" "$LINENO" #ntfsprogs is for arch
+                if [[ -z $INSTALL ]]; then
+                    ui_msg_warning $LINENO "no supported package manager found - install ntfs-3g/ntfsprogs manually"
+                else
+                    run_command "sudo $INSTALL fuse" "$LINENO"
+                    run_command "sudo $INSTALL ntfs-3g" "$LINENO"
+                    run_command "sudo $INSTALL ntfsprogs" "$LINENO" #ntfsprogs is for arch
+                fi
                 #sudo modprobe fuse
                 #echo "fuse" | sudo tee -a /etc/modules
             fi
