@@ -944,3 +944,20 @@ Verification (all agent-safe — no device touched):
   1. `61f167b review fix: #55 no-media backup checklist — explain hidden boot disk + suggest explicit device (drops two dead 'No media found.' comments)`
   2. `version 1.2.12-beta.4 — issue #55: no-media backup checklist message` (this commit: SCRIPTVER bump + this log entry)
 * **Tag / push:** awaiting a separate explicit user action (`v1.2.12-beta.4` annotated tag, then branch + tag to `origin`).
+
+## Canonical workspace → SMB share (2026-09-29, user-approved migration; not a review round)
+
+* **Context:** `smb://omv.local/shared/Richard-server/dev/pisafe` becomes the canonical working copy; local `/home/pi/Documents/pisafe` archived. No GitHub interaction: no push, no tag, no version bump (`SCRIPTVER` untouched — still `1.2.12-beta.4`).
+* **Share state:** was on `development` @ `cb188b6` (`v1.3.0-beta.1`) with a dirty tree. Steps: share's WIP `pisafe` variant (3,281 lines, unique to the share) backed up to `historical/pisafe_wip_share_2026-09-29` → local fetch `refs/heads/dev:refs/heads/dev` from the local checkout → `git reset --hard 9abb395` (dev tip, v1.2.12-beta.4).
+* **Verification:** `bash -n` OK; `bash pisafe -v` → `1.2.12-beta.4`; `git status` clean apart from pre-existing untracked data (`historical/`, `junk/`, `pisafe_test.sh`, `pisafe_test_notes`); recursive diff vs the old local worktree: identical.
+* **Archive:** old local folder moved (copy verified byte-identical, 480 files incl. `.git`; original then deleted) to `historical/Documents-pisafe_snapshot_2026-09-29`.
+* **Share-local repo tweak:** `.git/config` `core.filemode = false` (written directly; `git config` rename/lock path is unsupported on this SMB layer) — the share forces the exec bit on every file, which git was reporting as mode changes.
+* **Open notes:** `v1.2.12-beta.4` tag + push still awaiting a separate explicit user action; local `development` tip `0339e3b` (10 commits past the old share HEAD, never pushed) survives only in the archived snapshot's `.git`.
+
+## Release — tag `v1.2.12-beta.4` + push (2026-10-18, user-approved release action)
+
+* **Tag:** annotated `v1.2.12-beta.4` (message `PiSafe 1.2.12-beta.4`, matching the `v1.2.12-beta.2` annotation style) on `9abb395` (`version 1.2.12-beta.4 — issue #55: no-media backup checklist message`) — the version-bump commit, i.e. the exact beta.4 code; this log/docs commit sits above the tag and is pushed with it (same arrangement beta.3 had with `125f20e`).
+* **Push:** `origin/dev` `125f20e` → `9abb395`/docs commit (2 new commits) + tag `v1.2.12-beta.4` — supersedes origin's `v1.2.12-beta.3`; local branches `dev` and `development` left in sync at the docs commit.
+* **README wiring (on `main`, per the established beta-link pattern):** `**Beta Version**` section updated `v1.2.12-beta.3` → `v1.2.12-beta.4` (heading + tag-URL `wget`), and a `v1.2.12-beta.4` line added to the `## Release notes` list (issue #55 wording). `main` is otherwise untouched (local `main` fast-forwarded to origin's `75aee3d` first — it was stale at `a0fe391`, an ancestor).
+* **PR #54:** stays open, superseded by the xz size-parse fix in beta.3 — no merge.
+* **Remaining at final release:** push the full `1.2.12` to `main`, copyright date range, README "Old Stable" row.
