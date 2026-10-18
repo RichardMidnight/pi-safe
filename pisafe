@@ -2434,7 +2434,8 @@ whiptail_fselect() {
 
     IFS=$'\t\n'
 
-    FILES=("FILENAME" "     SIZE   (IMAGESIZE)")
+    # append (not assign): keeps the conditional ".." back-entry added above
+    FILES+=("FILENAME" "     SIZE   (IMAGESIZE)")
 
     # First add folders
     for DIR in $(find "$LOCAL_PATH" -maxdepth 1 -mindepth 1 -name "[!.]*" -type d -printf "%f\t" | sort 2> /dev/null)

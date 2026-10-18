@@ -1,6 +1,6 @@
 # PiSafe — function inventory (dependency order)
 
-* **Source:** `development` @ `b33c890` (R11) + the R12 one-line fix (blob `b0ddbd1`) · generated 2026-10-18 (v4 scanner, re-run after the R12 fix) · file is 3008 lines, **78 functions** + top-level flow
+* **Source:** `development` @ `8f02414` (R13) + the R14 one-line fix (blob `58440e9`) · generated 2026-10-18 (v4 scanner, re-run after the R14 fix) · file is 3009 lines, **78 functions** + top-level flow
 * **Rev 2026-10-18 (v4):** dependency re-scan with a context-correct parser. The v3 scanner missed function calls made as `$( … )` inside double-quoted strings (and nested-quote contexts could shuffle state). v4 recovers **42 such edges** (all verified against source lines); **zero spurious edges were removed** — so v3's "no deps" claims were undercounts, never overcounts. Depths rose for 25 of 78 functions; the group order below reflects the corrected depths.
 * **Purpose:** make the campaign goal "review all leaf → mid → top functions" a finite, checkable checklist. Work through this list **in document order** (leaves first, menus/dispatch last) — every `open`/`partial` function gets a round; `reviewed` rows stay marked with their evidence.
 * **Order:** groups sorted by their **maximum** dependency depth (increasing dependency, as requested); within a group, functions by depth then line number. `deps` = other pisafe functions it calls (verified against the code; quoted strings and comments excluded, so string mentions do not create edges).
@@ -40,7 +40,7 @@
 | `echo_red` | 40–40 | 1 | 0 | — | reviewed — R11 leaf layer — ANSI wrapper + $* safety verified (T02) |
 | `echo_blue` | 41–41 | 1 | 0 | — | reviewed — R11 leaf layer — ANSI wrapper + $* safety verified (T03) |
 | `notes_performance` | 91–112 | 22 | 0 | — | reviewed — R10 user decision: keep dead text block as-is; R11 confirmed dead (0 call sites) — see O6 |
-| `echo_if_cli` | 2529–2540 | 12 | 1 | echo_blue, echo_red, echo_white | reviewed — R11 — CLI dispatch verified (T19; white+blue+red all colorize); O1 `blue` arm added in R11 fix |
+| `echo_if_cli` | 2530–2541 | 12 | 1 | echo_blue, echo_red, echo_white | reviewed — R11 — CLI dispatch verified (T19; white+blue+red all colorize); O1 `blue` arm added in R11 fix |
 | `run_command` | 115–125 | 11 | 2 | ui_echo | reviewed — R11 — eval/ES path verified (T17-T18); R10 B1 quoting; O2 dead local `LINE=$2` removed in R11 fix |
 
 ## 3. settings-file I/O  ·  depth 0–3
@@ -110,9 +110,9 @@
 
 | function | lines | size | depth | deps (pisafe functions it calls) | status |
 |---|---|---|---|---|---|
-| `whiptail_calc_wt_size` | 2377–2403 | 27 | 0 | — | open |
-| `whiptail_countdown` | 2512–2526 | 15 | 0 | — | open |
-| `whiptail_fselect` | 2406–2509 | 104 | 6 | file_image_size, get_bytes | open |
+| `whiptail_calc_wt_size` | 2377–2403 | 27 | 0 | — | reviewed — R14 — size calc + 120-wide clamp verified (T01-T02); tput-empty → negative pin (T03); dead-guards/negative-clamp noted (O1/O2) |
+| `whiptail_countdown` | 2513–2527 | 15 | 0 | — | reviewed — R14 — yes/stop gate + --defaultno verified (T04-T05); dead-MAX param pinned (T06, O6) |
+| `whiptail_fselect` | 2406–2510 | 105 | 6 | file_image_size, get_bytes | reviewed — R14 — menu build, descent/pick, ESC, back-entry + back-protocol, spaced dirs, empty dir, Box guard verified (T07-T14); D-1 fixed (the '..' entry was clobbered by an array reset) |
 
 ## 9. small action runners  ·  depth 0–7
 *beeps, countdown, list-info (list-info composes the file/media layer).*
@@ -152,16 +152,16 @@
 
 | function | lines | size | depth | deps (pisafe functions it calls) | status |
 |---|---|---|---|---|---|
-| `menu_select_device` | 2701–2738 | 38 | 2 | media_list | open |
-| `menu_set_compression` | 2741–2758 | 18 | 2 | config_var_set | open |
-| `menu_settings_default_extension` | 2801–2825 | 25 | 2 | config_var_set | open |
-| `menu_settings_options` | 2852–2887 | 36 | 2 | config_var_get_settings, config_var_set | open |
-| `menu_settings_default_path` | 2828–2849 | 22 | 4 | config_var_set, ui_msg_error | open |
-| `menu_settings` | 2761–2798 | 38 | 5 | config_var_get_settings, config_var_set_defaults, menu_set_compression, menu_settings_default_extension, menu_settings_default_path, menu_settings_options, ui_log, ui_yesno | open |
-| `menu_get_outfile` | 2601–2656 | 56 | 8 | file_base, file_ext, media_backup_check_outfile, media_backup_estimate, media_name, media_os | open |
-| `menu_tools` | 2890–2964 | 75 | 8 | media_details, media_format, menu_select_device, pisafe_about, pisafe_help, pisafe_install, pisafe_uninstall, pisafe_update, ui_msg_error | open |
-| `menu_gui` | 2659–2698 | 40 | 11 | config_var_get_settings, do_list_info, media_backup, media_restore, menu_settings, menu_tools, pisafe_about, pisafe_help, ui_msg, whiptail_calc_wt_size | open |
-| `menu_cli` | 2545–2598 | 54 | 12 | config_var_set_defaults, do_beep, do_beep_down, do_beep_up, do_list_info, env_sysinfo, env_which, media_backup, media_details, media_format, media_restore, menu_gui, pisafe_about, pisafe_help, pisafe_install, pisafe_uninstall, pisafe_update, ui_yesno | open |
+| `menu_select_device` | 2702–2739 | 38 | 2 | media_list | open |
+| `menu_set_compression` | 2742–2759 | 18 | 2 | config_var_set | open |
+| `menu_settings_default_extension` | 2802–2826 | 25 | 2 | config_var_set | open |
+| `menu_settings_options` | 2853–2888 | 36 | 2 | config_var_get_settings, config_var_set | open |
+| `menu_settings_default_path` | 2829–2850 | 22 | 4 | config_var_set, ui_msg_error | open |
+| `menu_settings` | 2762–2799 | 38 | 5 | config_var_get_settings, config_var_set_defaults, menu_set_compression, menu_settings_default_extension, menu_settings_default_path, menu_settings_options, ui_log, ui_yesno | open |
+| `menu_get_outfile` | 2602–2657 | 56 | 8 | file_base, file_ext, media_backup_check_outfile, media_backup_estimate, media_name, media_os | open |
+| `menu_tools` | 2891–2965 | 75 | 8 | media_details, media_format, menu_select_device, pisafe_about, pisafe_help, pisafe_install, pisafe_uninstall, pisafe_update, ui_msg_error | open |
+| `menu_gui` | 2660–2699 | 40 | 11 | config_var_get_settings, do_list_info, media_backup, media_restore, menu_settings, menu_tools, pisafe_about, pisafe_help, ui_msg, whiptail_calc_wt_size | open |
+| `menu_cli` | 2546–2599 | 54 | 12 | config_var_set_defaults, do_beep, do_beep_down, do_beep_up, do_list_info, env_sysinfo, env_which, media_backup, media_details, media_format, media_restore, menu_gui, pisafe_about, pisafe_help, pisafe_install, pisafe_uninstall, pisafe_update, ui_yesno | open |
 
 ## 12. Top-level flow (outside any function)
 Line regions not covered by the 78 definitions (blank-line/comment gaps between functions omitted):
@@ -170,7 +170,7 @@ Line regions not covered by the 78 definitions (blank-line/comment gaps between 
 |---|---|
 | 1–38 | header + license, `set -o pipefail`, globals and defaults (SCRIPTVER, paths, colors, sizes) |
 | 42–90 | commented-out dead function `notes_desktop_environment` (per the in-code comment: zero call sites — kept as reference documentation) |
-| 2965–3008 | **the main flow:** `-v` early-exit, product banner, settings init, arg parse/dispatch into the entry points below |
+| 2966–3009 | **the main flow:** `-v` early-exit, product banner, settings init, arg parse/dispatch into the entry points below |
 
 Directly called from the top-level flow (the real entry points): `config_var_get_settings` · `config_var_init_configfile` · `get_args` · `menu_cli` · `pisafe_install_tools` · `pisafe_uninstall` · `pisafe_update` · `ui_echo`
 
@@ -178,13 +178,13 @@ Directly called from the top-level flow (the real entry points): `config_var_get
 
 | status | count | functions |
 |---|---|---|
-| reviewed | 44 | `env_installer`, `env_root_device`, `env_terminal`, `env_texteditor`, `env_which`, `env_sysinfo`, `echo_white`, `echo_red`, `echo_blue`, `notes_performance`, `run_command`, `echo_if_cli`, `config_var_init_configfile`, `config_var_set`, `config_var_get`, `config_var_set_defaults`, `config_var_get_settings`, `ui_countdown`, `ui_echo`, `ui_log`, `ui_msg`, `ui_msg_error`, `ui_msg_warning`, `ui_yesno`, `get_elapsed_time`, `get_ver_to_int`, `get_args`, `get_bytes`, `pisafe_about`, `pisafe_help`, `pisafe_install`, `pisafe_install_tool`, `pisafe_install_tools`, `pisafe_update`, `pisafe_uninstall`, `file_base`, `file_device`, `file_ext`, `file_folder_size`, `file_fs_freespace`, `file_image_size`, `file_list_image_files`, `file_path`, `file_size` |
+| reviewed | 47 | `env_installer`, `env_root_device`, `env_terminal`, `env_texteditor`, `env_which`, `env_sysinfo`, `echo_white`, `echo_red`, `echo_blue`, `notes_performance`, `run_command`, `echo_if_cli`, `config_var_init_configfile`, `config_var_set`, `config_var_get`, `config_var_set_defaults`, `config_var_get_settings`, `ui_countdown`, `ui_echo`, `ui_log`, `ui_msg`, `ui_msg_error`, `ui_msg_warning`, `ui_yesno`, `get_elapsed_time`, `get_ver_to_int`, `get_args`, `get_bytes`, `pisafe_about`, `pisafe_help`, `pisafe_install`, `pisafe_install_tool`, `pisafe_install_tools`, `pisafe_update`, `pisafe_uninstall`, `file_base`, `file_device`, `file_ext`, `file_folder_size`, `file_fs_freespace`, `file_image_size`, `file_list_image_files`, `file_path`, `file_size`, `whiptail_calc_wt_size`, `whiptail_fselect`, `whiptail_countdown` |
 | partial | 2 | `media_backup_checklist`, `media_format` |
-| open | 32 | `whiptail_calc_wt_size`, `whiptail_fselect`, `whiptail_countdown`, `do_beep`, `do_beep_up`, `do_beep_down`, `do_countdown`, `do_list_info`, `media_name`, `media_size`, `media_backup`, `media_backup_bytes_to_read`, `media_backup_check_indev`, `media_backup_check_outfile`, `media_backup_estimate`, `media_restore`, `media_restore_checklist`, `media_list`, `media_mount`, `media_details`, `media_partition_info`, `media_os`, `menu_cli`, `menu_get_outfile`, `menu_gui`, `menu_select_device`, `menu_set_compression`, `menu_settings`, `menu_settings_default_extension`, `menu_settings_default_path`, `menu_settings_options`, `menu_tools` |
+| open | 29 | `do_beep`, `do_beep_up`, `do_beep_down`, `do_countdown`, `do_list_info`, `media_name`, `media_size`, `media_backup`, `media_backup_bytes_to_read`, `media_backup_check_indev`, `media_backup_check_outfile`, `media_backup_estimate`, `media_restore`, `media_restore_checklist`, `media_list`, `media_mount`, `media_details`, `media_partition_info`, `media_os`, `menu_cli`, `menu_get_outfile`, `menu_gui`, `menu_select_device`, `menu_set_compression`, `menu_settings`, `menu_settings_default_extension`, `menu_settings_default_path`, `menu_settings_options`, `menu_tools` |
 | **total** | **78** | + top-level flow |
 
 ## Method + caveats
-- Parsed from the live worktree file on 2026-10-18 (blob `b0ddbd1` = `dev:pisafe` @ `b33c890` + the R12 one-line fix, hash-verified).
+- Parsed from the live worktree file on 2026-10-18 (blob `58440e9` = `dev:pisafe` @ `8f02414` + the R14 one-line fix, hash-verified).
 - Function ends = first column-0 `}` line after the definition; cross-checked — **every** column-0 `}` in the file is claimed by exactly one function, and no function span contains a nested one, so spans are provably exact.
 - `deps` = word-boundary matches of other function names in the function's **code**, found by a context scanner that blanks single-quoted strings, double-quoted strings, and comments — while still parsing into `$( … )` command substitutions in any context (including nested, and across lines). A name appearing *only* inside a string or comment creates no edge. v3→v4 delta audited: 42 edges added (all `$( )`-in-quotes calls, each verified on its source line), 0 removed.
 - `reviewed` marks a *logged* review round for that function/family; it does not mean the function is defect-free, and `open` functions are untouched by the SAFE quoting/shellcheck passes (which were file-wide).
