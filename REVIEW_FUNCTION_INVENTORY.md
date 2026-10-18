@@ -95,15 +95,15 @@
 
 | function | lines | size | depth | deps (pisafe functions it calls) | status |
 |---|---|---|---|---|---|
-| `file_base` | 883–894 | 12 | 0 | — | open |
-| `file_device` | 897–901 | 5 | 0 | — | open |
-| `file_ext` | 904–906 | 3 | 0 | — | open |
-| `file_folder_size` | 909–922 | 14 | 0 | — | open |
-| `file_path` | 1006–1008 | 3 | 0 | — | open |
-| `file_fs_freespace` | 925–949 | 25 | 5 | get_bytes | open |
-| `file_image_size` | 952–980 | 29 | 5 | file_ext, get_bytes | open |
-| `file_size` | 1011–1030 | 20 | 5 | get_bytes | open |
-| `file_list_image_files` | 983–1003 | 21 | 6 | file_image_size, file_size | open |
+| `file_base` | 883–894 | 12 | 0 | — | reviewed — R13 — dirname/basename/first-dot-strip verified (T01) |
+| `file_device` | 897–901 | 5 | 0 | — | reviewed — R13 — df+lsblk parse: positive (/ → /dev/mmcblk0) + graceful-empty on tmpfs mount (T04-T05) |
+| `file_ext` | 904–906 | 3 | 0 | — | reviewed — R13 — single/absent/multi-dot verified (T02) |
+| `file_folder_size` | 909–922 | 14 | 0 | — | reviewed — R13 — du chain + missing-dir guard verified (T06); trailing-space noted (O2) |
+| `file_path` | 1006–1008 | 3 | 0 | — | reviewed — R13 — dirname single-token verified (T03) |
+| `file_fs_freespace` | 925–949 | 25 | 5 | get_bytes | reviewed — R13 — bytes/-h + df-failure rc verified (T07-T08); ES=$? relies on the file-wide pipefail (R10) |
+| `file_image_size` | 952–980 | 29 | 5 | file_ext, get_bytes | reviewed — R13 — img/iso/zip/xz/gz/zst all measured 100000 exactly vs real tools (T10-T15) + unsupported/-h guards (T16-T17); O1 version-parse risk |
+| `file_size` | 1011–1030 | 20 | 5 | get_bytes | reviewed — R13 — exact bytes + -h + missing-file guard verified (T18) |
+| `file_list_image_files` | 983–1003 | 21 | 6 | file_image_size, file_size | reviewed — R13 — seeded dir incl. spaced name, sizes, CWD + IFS restore verified (T19) |
 
 ## 8. whiptail dialog helpers  ·  depth 0–6
 *calc-size + countdown are pure plumbing; fselect is a file browser (calls the file/size helpers).*
@@ -178,9 +178,9 @@ Directly called from the top-level flow (the real entry points): `config_var_get
 
 | status | count | functions |
 |---|---|---|
-| reviewed | 35 | `env_installer`, `env_root_device`, `env_terminal`, `env_texteditor`, `env_which`, `env_sysinfo`, `echo_white`, `echo_red`, `echo_blue`, `notes_performance`, `run_command`, `echo_if_cli`, `config_var_init_configfile`, `config_var_set`, `config_var_get`, `config_var_set_defaults`, `config_var_get_settings`, `ui_countdown`, `ui_echo`, `ui_log`, `ui_msg`, `ui_msg_error`, `ui_msg_warning`, `ui_yesno`, `get_elapsed_time`, `get_ver_to_int`, `get_args`, `get_bytes`, `pisafe_about`, `pisafe_help`, `pisafe_install`, `pisafe_install_tool`, `pisafe_install_tools`, `pisafe_update`, `pisafe_uninstall` |
+| reviewed | 44 | `env_installer`, `env_root_device`, `env_terminal`, `env_texteditor`, `env_which`, `env_sysinfo`, `echo_white`, `echo_red`, `echo_blue`, `notes_performance`, `run_command`, `echo_if_cli`, `config_var_init_configfile`, `config_var_set`, `config_var_get`, `config_var_set_defaults`, `config_var_get_settings`, `ui_countdown`, `ui_echo`, `ui_log`, `ui_msg`, `ui_msg_error`, `ui_msg_warning`, `ui_yesno`, `get_elapsed_time`, `get_ver_to_int`, `get_args`, `get_bytes`, `pisafe_about`, `pisafe_help`, `pisafe_install`, `pisafe_install_tool`, `pisafe_install_tools`, `pisafe_update`, `pisafe_uninstall`, `file_base`, `file_device`, `file_ext`, `file_folder_size`, `file_fs_freespace`, `file_image_size`, `file_list_image_files`, `file_path`, `file_size` |
 | partial | 2 | `media_backup_checklist`, `media_format` |
-| open | 41 | `file_base`, `file_device`, `file_ext`, `file_folder_size`, `file_fs_freespace`, `file_image_size`, `file_list_image_files`, `file_path`, `file_size`, `whiptail_calc_wt_size`, `whiptail_fselect`, `whiptail_countdown`, `do_beep`, `do_beep_up`, `do_beep_down`, `do_countdown`, `do_list_info`, `media_name`, `media_size`, `media_backup`, `media_backup_bytes_to_read`, `media_backup_check_indev`, `media_backup_check_outfile`, `media_backup_estimate`, `media_restore`, `media_restore_checklist`, `media_list`, `media_mount`, `media_details`, `media_partition_info`, `media_os`, `menu_cli`, `menu_get_outfile`, `menu_gui`, `menu_select_device`, `menu_set_compression`, `menu_settings`, `menu_settings_default_extension`, `menu_settings_default_path`, `menu_settings_options`, `menu_tools` |
+| open | 32 | `whiptail_calc_wt_size`, `whiptail_fselect`, `whiptail_countdown`, `do_beep`, `do_beep_up`, `do_beep_down`, `do_countdown`, `do_list_info`, `media_name`, `media_size`, `media_backup`, `media_backup_bytes_to_read`, `media_backup_check_indev`, `media_backup_check_outfile`, `media_backup_estimate`, `media_restore`, `media_restore_checklist`, `media_list`, `media_mount`, `media_details`, `media_partition_info`, `media_os`, `menu_cli`, `menu_get_outfile`, `menu_gui`, `menu_select_device`, `menu_set_compression`, `menu_settings`, `menu_settings_default_extension`, `menu_settings_default_path`, `menu_settings_options`, `menu_tools` |
 | **total** | **78** | + top-level flow |
 
 ## Method + caveats
