@@ -708,8 +708,8 @@ do_beep_up(){
 
 
 do_beep_down(){
-   do_beep 600 .3
-   do_beep 500 .6
+    do_beep 600 .3
+    do_beep 500 .6
 }
 
 
@@ -1037,7 +1037,7 @@ do_list_info() {
  #   DIR=${1:-$PWD}
 
     echo "~~~ CURRENT SYSTEM ~~~"
-    echo $PRODUCTNAME ver $SCRIPTVER
+    echo "$PRODUCTNAME" ver "$SCRIPTVER"
     echo "$(grep "PRETTY_NAME=" /etc/os-release | cut -d '"' -f2)" hw="$(uname -m)" kernel="$(uname -r)"
     echo "Root device   = $(env_root_device)"
     echo "Root size     = $(media_size "$(env_root_device)" -h )"

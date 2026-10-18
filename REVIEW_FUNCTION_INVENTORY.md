@@ -119,11 +119,11 @@
 
 | function | lines | size | depth | deps (pisafe functions it calls) | status |
 |---|---|---|---|---|---|
-| `do_countdown` | 727–751 | 25 | 0 | — | open |
-| `do_beep` | 694–701 | 8 | 1 | env_which | open |
-| `do_beep_up` | 704–707 | 4 | 2 | do_beep | open |
-| `do_beep_down` | 710–713 | 4 | 2 | do_beep | open |
-| `do_list_info` | 1036–1054 | 19 | 7 | env_root_device, file_folder_size, file_fs_freespace, file_list_image_files, media_list, media_size | open |
+| `do_countdown` | 727–751 | 25 | 0 | — | reviewed — R15 — rc contract (y=rc0 / any other key=rc1 / run-out=rc0) + ENTRY stops (T04-T06); O4 N+1 timing pin (T07, re-confirms R11 O5); O5 bare return + global INPUT |
+| `do_beep` | 694–701 | 8 | 1 | env_which | reviewed — R15 — SOUND gate + timed speaker-test verified (T01-T02); kill -9 reaps the target, no leak (T02b); O1 FREQ/TIME globals, O2 stderr not redirected |
+| `do_beep_up` | 704–707 | 4 | 2 | do_beep | reviewed — R15 — chirp order verified against fake record (T03 up-half) |
+| `do_beep_down` | 710–713 | 4 | 2 | do_beep | reviewed — R15 — chirp order verified against fake record (T03 down-half); O3 3-space indent FIXED (SAFE, normalized) |
+| `do_list_info` | 1036–1054 | 19 | 7 | env_root_device, file_folder_size, file_fs_freespace, file_list_image_files, media_list, media_size | reviewed — R15 — full composition vs real R13 layer + media stubs (T09); media_size called `<dev> -h` (args captured); O6 $1 unused; $PRODUCTNAME quote FIXED (SAFE) |
 
 ## 10. media ops — backup/restore/format core  ·  depth 0–10
 *the engine: checklists, est, backup, restore, format.*
@@ -178,9 +178,9 @@ Directly called from the top-level flow (the real entry points): `config_var_get
 
 | status | count | functions |
 |---|---|---|
-| reviewed | 47 | `env_installer`, `env_root_device`, `env_terminal`, `env_texteditor`, `env_which`, `env_sysinfo`, `echo_white`, `echo_red`, `echo_blue`, `notes_performance`, `run_command`, `echo_if_cli`, `config_var_init_configfile`, `config_var_set`, `config_var_get`, `config_var_set_defaults`, `config_var_get_settings`, `ui_countdown`, `ui_echo`, `ui_log`, `ui_msg`, `ui_msg_error`, `ui_msg_warning`, `ui_yesno`, `get_elapsed_time`, `get_ver_to_int`, `get_args`, `get_bytes`, `pisafe_about`, `pisafe_help`, `pisafe_install`, `pisafe_install_tool`, `pisafe_install_tools`, `pisafe_update`, `pisafe_uninstall`, `file_base`, `file_device`, `file_ext`, `file_folder_size`, `file_fs_freespace`, `file_image_size`, `file_list_image_files`, `file_path`, `file_size`, `whiptail_calc_wt_size`, `whiptail_fselect`, `whiptail_countdown` |
+| reviewed | 52 | `env_installer`, `env_root_device`, `env_terminal`, `env_texteditor`, `env_which`, `env_sysinfo`, `echo_white`, `echo_red`, `echo_blue`, `notes_performance`, `run_command`, `echo_if_cli`, `config_var_init_configfile`, `config_var_set`, `config_var_get`, `config_var_set_defaults`, `config_var_get_settings`, `ui_countdown`, `ui_echo`, `ui_log`, `ui_msg`, `ui_msg_error`, `ui_msg_warning`, `ui_yesno`, `get_elapsed_time`, `get_ver_to_int`, `get_args`, `get_bytes`, `pisafe_about`, `pisafe_help`, `pisafe_install`, `pisafe_install_tool`, `pisafe_install_tools`, `pisafe_update`, `pisafe_uninstall`, `file_base`, `file_device`, `file_ext`, `file_folder_size`, `file_fs_freespace`, `file_image_size`, `file_list_image_files`, `file_path`, `file_size`, `whiptail_calc_wt_size`, `whiptail_fselect`, `whiptail_countdown`, `do_beep`, `do_beep_up`, `do_beep_down`, `do_countdown`, `do_list_info` |
 | partial | 2 | `media_backup_checklist`, `media_format` |
-| open | 29 | `do_beep`, `do_beep_up`, `do_beep_down`, `do_countdown`, `do_list_info`, `media_name`, `media_size`, `media_backup`, `media_backup_bytes_to_read`, `media_backup_check_indev`, `media_backup_check_outfile`, `media_backup_estimate`, `media_restore`, `media_restore_checklist`, `media_list`, `media_mount`, `media_details`, `media_partition_info`, `media_os`, `menu_cli`, `menu_get_outfile`, `menu_gui`, `menu_select_device`, `menu_set_compression`, `menu_settings`, `menu_settings_default_extension`, `menu_settings_default_path`, `menu_settings_options`, `menu_tools` |
+| open | 24 | `media_name`, `media_size`, `media_backup`, `media_backup_bytes_to_read`, `media_backup_check_indev`, `media_backup_check_outfile`, `media_backup_estimate`, `media_restore`, `media_restore_checklist`, `media_list`, `media_mount`, `media_details`, `media_partition_info`, `media_os`, `menu_cli`, `menu_get_outfile`, `menu_gui`, `menu_select_device`, `menu_set_compression`, `menu_settings`, `menu_settings_default_extension`, `menu_settings_default_path`, `menu_settings_options`, `menu_tools` |
 | **total** | **78** | + top-level flow |
 
 ## Method + caveats
