@@ -66,4 +66,4 @@ We are stepping through the code from the published `v1.2.11` baseline toward a 
 | Unquoted single-token expansions | throughout | R1 (SAFE subset) |
 | `get_ver_to_int`: no `local`s, global `parts` array, `let`, tab indentation | `pisafe`:710–717 | R2+ (indent is R1) |
 | Stale harness: references removed `pisafe_beta` file | `test_pisafe` | later, user decides |
-| Copyright header says `2018 - 2022` | `pisafe`:3 | release round |
+| Copyright header says `2018 - 2022` | `pisafe`:3 | **done in `3e9ecfd`** (now `2018 - 2026`; in beta.3/beta.4 + remote dev) |
