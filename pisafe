@@ -334,6 +334,7 @@ pisafe_install_tool() {
 
 
 pisafe_install_tools() {
+    SILENT=${1:-"-n"}
     local MISSING_TOOLS=
 
     #scan for missing tools
