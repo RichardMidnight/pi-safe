@@ -8,10 +8,15 @@
 #
 # Usage:
 #   pisafe_test DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+#   Example:  pisafe_test /dev/sda --full
 #
 #   DEVICE    target block device to test (required), e.g. /dev/sdb.
 #             must not be mounted anywhere; if it is, the script offers to
 #             umount it first and refuses if it is still mounted afterwards.
+#             the card is DISPOSABLE and should contain real data (an OS
+#             install or random files): an empty or freshly-formatted card
+#             weakens the test and can false-fail the --full "card changed"
+#             check. put nothing on it that you keep.
 #   BASE      prefix for the images (default: $PWD/test_<hostname>). pisafe inserts
 #             '.img' into the output name, so the files actually written are
 #             BASE.img.zip, BASE.img.gz, BASE.img.xz, BASE.img.zst - or only
@@ -124,6 +129,10 @@ Arguments:
               must not be mounted anywhere; if it is, the script offers to
               umount it and refuses if it is still mounted afterwards.
               never point this at a system disk.
+              card state: DISPOSABLE, with real data on it (an OS install
+              or random files) - an empty or freshly-formatted card
+              weakens the test and can false-fail the --full "card
+              changed" check. put nothing on it that you keep.
   BASE        prefix for the test images (default: \$PWD/test_<hostname>). pisafe
               inserts '.img' into the output name, so the actual files are
               BASE.img.zip, BASE.img.gz, BASE.img.xz, BASE.img.zst - only the
@@ -144,6 +153,11 @@ Arguments:
               nothing is read from stdin when set. use only on a target you
               are sure is disposable.
   -h, --help  this text
+
+Examples:
+  bash pisafe_test /dev/sda --full                # all four arms + byte checks
+  bash pisafe_test /dev/sda --compress=zip,zst    # a subset of arms
+  bash pisafe_test /dev/sdb /media/pi/imgs -y     # images elsewhere, no prompts
 
 Per step, both modes check:  pisafe exit status == 0  AND  the log window of
 this exact step contains its "complete" marker and no error/abort lines.
