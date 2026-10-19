@@ -11,7 +11,7 @@ Guidance for AI coding agents working in this repository.
 | Path | Purpose |
 |---|---|
 | `pisafe` | The application itself (single file) |
-| `test_pisafe` | Interactive, **destructive** test harness (formats/restores a real device, defaults to `/dev/sda`). Human-driven only — agents must never run it. |
+| `pisafe_test` | Interactive, **destructive** test harness (formats/restores a real device, defaults to `/dev/sda`). Human-driven only — agents must never run it. |
 | `REVIEW_ROUNDS.md` | Progress log for the review campaign (user may keep their own copy in the worktree — inspect before overwriting) |
 | `REVIEW_STATUS.md` | High-level campaign position doc, **user-maintained** — treat as the source of truth for campaign state; update only when asked |
 | `REVIEW_FUNCTION_INVENTORY.md` | Function checklist + dependency order (generated 2026-10-18 from `dev` @ `16158f3`; 78 functions, 12 groups) |
@@ -54,7 +54,7 @@ We are stepping through the code from the published `v1.2.11` baseline toward a 
 * `bash pisafe -v` — prints the version and exits (safe, non-interactive)
 * Subshell spot-tests of pure functions: extract with `sed -n 'START,ENDp'` into a standalone file that stubs UI helpers, run test inputs, compare output
 * `git diff --stat` and a read-through of the full `git diff` before reporting
-* **Never run:** `test_pisafe`, or any `pisafe` command that installs, formats, restores, erases, or writes to a device. Actual functional testing is done by the user.
+* **Never run:** `pisafe_test`, or any `pisafe` command that installs, formats, restores, erases, or writes to a device. Actual functional testing is done by the user.
 
 ## Environment caveats — SMB share, live surface (2026-10-18, diagnosed)
 
@@ -80,5 +80,5 @@ We are stepping through the code from the published `v1.2.11` baseline toward a 
 | TB multiplier typo `2014` | `pisafe`:844 | R1 (approved) |
 | Unquoted single-token expansions | throughout | R1 (SAFE subset) |
 | `get_ver_to_int`: no `local`s, global `parts` array, `let`, tab indentation | `pisafe`:710–717 | R2+ (indent is R1) |
-| Stale harness: references removed `pisafe_beta` file | `test_pisafe` | later, user decides |
+| Stale harness: references removed `pisafe_beta` file | `pisafe_test` | later, user decides |
 | Copyright header says `2018 - 2022` | `pisafe`:3 | **done in `3e9ecfd`** (now `2018 - 2026`; in beta.3/beta.4 + remote dev) |
