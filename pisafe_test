@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# test_pisafe v2.0 - pisafe integration test harness (2026-09-26)
+# pisafe_test v2.0 - pisafe integration test harness (2026-09-26)
 #
 # DESTRUCTIVE tool: it formats $DEVICE and writes backup images onto it.
 # Pass the target card explicitly; never run it against a system disk.
 # Human-driven only: AI agents must never execute this script.
 #
 # Usage:
-#   test_pisafe DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+#   pisafe_test DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
 #
 #   DEVICE    target block device to test (required), e.g. /dev/sdb.
 #             must not be mounted anywhere; if it is, the script offers to
@@ -115,9 +115,9 @@ DIE()   { echo "${RED}FATAL: $*${RST}" >&2; exit 2; }
 
 usage(){
   cat <<EOF
-test_pisafe v$VERSION - destructive pisafe integration test harness
+pisafe_test v$VERSION - destructive pisafe integration test harness
 
-Usage: test_pisafe DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+Usage: pisafe_test DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
 
 Arguments:
   DEVICE      target block device to test (required), e.g. /dev/sdb.
