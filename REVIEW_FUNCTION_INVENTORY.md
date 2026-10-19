@@ -130,22 +130,22 @@
 
 | function | lines | size | depth | deps (pisafe functions it calls) | status |
 |---|---|---|---|---|---|
-| `media_name` | 1060–1073 | 14 | 0 | — | open |
-| `media_mount` | 1905–1917 | 13 | 0 | — | open |
-| `media_partition_info` | 2268–2352 | 85 | 0 | — | open |
-| `media_list` | 1877–1902 | 26 | 1 | env_root_device | open |
-| `media_os` | 2355–2370 | 16 | 1 | media_partition_info | open |
-| `media_format` | 2057–2246 | 190 | 4 | env_installer, env_root_device, env_which, media_name, run_command, ui_countdown, ui_echo, ui_msg, ui_msg_error, ui_msg_warning, ui_yesno | partial — beta.5 batch: no-PM install guards on the 4 ensure arms; rest of body open |
-| `media_size` | 1076–1102 | 27 | 5 | get_bytes | open |
-| `media_backup_bytes_to_read` | 1328–1349 | 22 | 6 | media_size, ui_msg_warning | open |
-| `media_backup_check_indev` | 1352–1401 | 50 | 6 | env_root_device, get_bytes, media_name, media_os, media_size, ui_msg_error, ui_msg_warning, ui_yesno | open |
-| `media_backup_estimate` | 1546–1633 | 88 | 6 | get_bytes, media_size, ui_echo | open |
-| `media_backup_check_outfile` | 1404–1485 | 82 | 7 | file_base, file_ext, file_fs_freespace, file_path, get_bytes, media_backup_bytes_to_read, media_name, pisafe_install_tool, ui_msg_error, ui_msg_warning | open |
-| `media_restore_checklist` | 1765–1874 | 110 | 7 | do_beep, echo_if_cli, env_root_device, file_device, file_ext, file_image_size, get_bytes, media_name, media_size, menu_select_device, pisafe_install_tool, ui_echo, ui_msg, ui_msg_error, ui_msg_warning, ui_yesno, whiptail_fselect | open |
-| `media_details` | 2249–2265 | 17 | 7 | media_backup_estimate, media_name, media_os, ui_msg | open |
-| `media_restore` | 1636–1762 | 127 | 8 | do_beep_up, echo_if_cli, echo_red, echo_white, file_ext, file_image_size, get_elapsed_time, media_name, media_restore_checklist, run_command, ui_countdown, ui_echo, ui_msg, ui_msg_error | open |
-| `media_backup_checklist` | 1488–1543 | 56 | 9 | media_backup_check_indev, media_backup_check_outfile, media_name, menu_get_outfile, menu_select_device, ui_log, ui_msg_error, ui_yesno | partial — #55 no-media/boot-disk message; rest of checklist flow open |
-| `media_backup` | 1105–1325 | 221 | 10 | do_beep_down, do_beep_up, echo_white, file_base, file_ext, file_size, get_bytes, get_elapsed_time, media_backup_bytes_to_read, media_backup_checklist, media_name, media_size, run_command, ui_echo, ui_msg, ui_msg_error | open |
+| `media_name` | 1060–1073 | 14 | 0 | — | reviewed — R16: no defects; battery N1/N2 |
+| `media_mount` | 1905–1917 | 13 | 0 | — | reviewed — R16: no defects; battery M1–M3 |
+| `media_partition_info` | 2268–2352 | 85 | 0 | — | reviewed — R16: no defects; O3 (`lsblk -I` no-op L1895); battery P1–P7 |
+| `media_list` | 1877–1902 | 26 | 1 | env_root_device | reviewed — R16: no defects; empty→rc1 via pipefail (O8); battery L1–L3 |
+| `media_os` | 2355–2370 | 16 | 1 | media_partition_info | reviewed — R16: no defects; battery P-arm |
+| `media_format` | 2057–2246 | 190 | 4 | env_installer, env_root_device, env_which, media_name, run_command, ui_countdown, ui_echo, ui_msg, ui_msg_error, ui_msg_warning, ui_yesno | reviewed — R16: **D-1 fixed** (unknown format was silent success → `return 1`); O1 `?`-glob umount L2135, O5 install branch; battery F1–F9 |
+| `media_size` | 1076–1102 | 27 | 5 | get_bytes | reviewed — R16: no defects; O7 `SIZE_BYTES` global; battery S1–S3 |
+| `media_backup_bytes_to_read` | 1328–1349 | 22 | 6 | media_size, ui_msg_warning | reviewed — R16: no defects; L1334/L1340 machine-mode parse verified vs real parted 3.6; battery B-arm |
+| `media_backup_check_indev` | 1352–1401 | 50 | 6 | env_root_device, get_bytes, media_name, media_os, media_size, ui_msg_error, ui_msg_warning, ui_yesno | reviewed — R16: no defects; battery B1–B4 |
+| `media_backup_estimate` | 1546–1633 | 88 | 6 | get_bytes, media_size, ui_echo | reviewed — R16: **D-4 fixed (corrected shape)** (parted 3.6 trailing blank line defeated `tail -1` at both sites → 2 `sed` blank-line deletions L1569/L1574; L1560 verified correct as-is against real 3.6); battery E1/E1b |
+| `media_backup_check_outfile` | 1404–1485 | 82 | 7 | file_base, file_ext, file_fs_freespace, file_path, get_bytes, media_backup_bytes_to_read, media_name, pisafe_install_tool, ui_msg_error, ui_msg_warning | reviewed — R16: no functional defect; O4 dead `parted` L1462; battery C1 |
+| `media_restore_checklist` | 1765–1874 | 110 | 7 | do_beep, echo_if_cli, env_root_device, file_device, file_ext, file_image_size, get_bytes, media_name, media_size, menu_select_device, pisafe_install_tool, ui_echo, ui_msg, ui_msg_error, ui_msg_warning, ui_yesno, whiptail_fselect | reviewed — R16: no further defects; O2 ES flattening L1641–1648; battery R-arm |
+| `media_details` | 2249–2265 | 17 | 7 | media_backup_estimate, media_name, media_os, ui_msg | reviewed — R16: no defects; battery D1 |
+| `media_restore` | 1636–1762 | 127 | 8 | do_beep_up, echo_if_cli, echo_red, echo_white, file_ext, file_image_size, get_elapsed_time, media_name, media_restore_checklist, run_command, ui_countdown, ui_echo, ui_msg, ui_msg_error | reviewed — R16: **D-2 fixed** (unsudoed umount L1664), **D-3 fixed** (4 GUI arms missing `conv=fsync`); O1 `?`-glob L1664, O2 ES flattening; battery R1–R15/R20 |
+| `media_backup_checklist` | 1488–1543 | 56 | 9 | media_backup_check_indev, media_backup_check_outfile, media_name, menu_get_outfile, menu_select_device, ui_log, ui_msg_error, ui_yesno | reviewed — R16: partial (beta.5 batch) completed; no further defects; O2 ES propagation (contrast with restore); battery B5–B8 |
+| `media_backup` | 1105–1325 | 221 | 10 | do_beep_down, do_beep_up, echo_white, file_base, file_ext, file_size, get_bytes, get_elapsed_time, media_backup_bytes_to_read, media_backup_checklist, media_name, media_size, run_command, ui_echo, ui_msg, ui_msg_error | reviewed — R16: no defects; O6 zip pv placeholder; battery B9–B15 |
 
 ## 11. menus + main dispatch  ·  depth 2–12
 *drives everything above; deepest functions in the file.*
@@ -178,9 +178,9 @@ Directly called from the top-level flow (the real entry points): `config_var_get
 
 | status | count | functions |
 |---|---|---|
-| reviewed | 52 | `env_installer`, `env_root_device`, `env_terminal`, `env_texteditor`, `env_which`, `env_sysinfo`, `echo_white`, `echo_red`, `echo_blue`, `notes_performance`, `run_command`, `echo_if_cli`, `config_var_init_configfile`, `config_var_set`, `config_var_get`, `config_var_set_defaults`, `config_var_get_settings`, `ui_countdown`, `ui_echo`, `ui_log`, `ui_msg`, `ui_msg_error`, `ui_msg_warning`, `ui_yesno`, `get_elapsed_time`, `get_ver_to_int`, `get_args`, `get_bytes`, `pisafe_about`, `pisafe_help`, `pisafe_install`, `pisafe_install_tool`, `pisafe_install_tools`, `pisafe_update`, `pisafe_uninstall`, `file_base`, `file_device`, `file_ext`, `file_folder_size`, `file_fs_freespace`, `file_image_size`, `file_list_image_files`, `file_path`, `file_size`, `whiptail_calc_wt_size`, `whiptail_fselect`, `whiptail_countdown`, `do_beep`, `do_beep_up`, `do_beep_down`, `do_countdown`, `do_list_info` |
-| partial | 2 | `media_backup_checklist`, `media_format` |
-| open | 24 | `media_name`, `media_size`, `media_backup`, `media_backup_bytes_to_read`, `media_backup_check_indev`, `media_backup_check_outfile`, `media_backup_estimate`, `media_restore`, `media_restore_checklist`, `media_list`, `media_mount`, `media_details`, `media_partition_info`, `media_os`, `menu_cli`, `menu_get_outfile`, `menu_gui`, `menu_select_device`, `menu_set_compression`, `menu_settings`, `menu_settings_default_extension`, `menu_settings_default_path`, `menu_settings_options`, `menu_tools` |
+| reviewed | 68 | `env_installer`, `env_root_device`, `env_terminal`, `env_texteditor`, `env_which`, `env_sysinfo`, `echo_white`, `echo_red`, `echo_blue`, `notes_performance`, `run_command`, `echo_if_cli`, `config_var_init_configfile`, `config_var_set`, `config_var_get`, `config_var_set_defaults`, `config_var_get_settings`, `ui_countdown`, `ui_echo`, `ui_log`, `ui_msg`, `ui_msg_error`, `ui_msg_warning`, `ui_yesno`, `get_elapsed_time`, `get_ver_to_int`, `get_args`, `get_bytes`, `pisafe_about`, `pisafe_help`, `pisafe_install`, `pisafe_install_tool`, `pisafe_install_tools`, `pisafe_update`, `pisafe_uninstall`, `file_base`, `file_device`, `file_ext`, `file_folder_size`, `file_fs_freespace`, `file_image_size`, `file_list_image_files`, `file_path`, `file_size`, `whiptail_calc_wt_size`, `whiptail_fselect`, `whiptail_countdown`, `do_beep`, `do_beep_up`, `do_beep_down`, `do_countdown`, `do_list_info`, `media_name`, `media_size`, `media_mount`, `media_list`, `media_backup`, `media_backup_bytes_to_read`, `media_backup_check_indev`, `media_backup_check_outfile`, `media_backup_checklist`, `media_backup_estimate`, `media_restore`, `media_restore_checklist`, `media_details`, `media_partition_info`, `media_os`, `media_format` |
+| partial | 0 | — |
+| open | 10 | `menu_cli`, `menu_get_outfile`, `menu_gui`, `menu_select_device`, `menu_set_compression`, `menu_settings`, `menu_settings_default_extension`, `menu_settings_default_path`, `menu_settings_options`, `menu_tools` |
 | **total** | **78** | + top-level flow |
 
 ## Method + caveats

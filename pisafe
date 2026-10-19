@@ -1566,12 +1566,12 @@ Switch to terminal and create image-file now?"
 
     PARTED_OUTPUT=$(sudo parted "$MEDIA" unit B print free )
 
-    MEDIA_FREESPACE_AT_END=$(echo "$PARTED_OUTPUT" | tail -1 | grep Free | sed 's/[ ]\+/ /g' | cut -d " " -f 4 | tr -d 'B' )
+    MEDIA_FREESPACE_AT_END=$(echo "$PARTED_OUTPUT" | sed '/^[[:space:]]*$/d' | tail -1 | grep Free | sed 's/[ ]\+/ /g' | cut -d " " -f 4 | tr -d 'B' )
     if [[ -z $MEDIA_FREESPACE_AT_END ]]; then
         MEDIA_FREESPACE_AT_END=0
     fi
 
-    if ! echo "$PARTED_OUTPUT" | grep -v Free | tail -1 | sed 's/[ ]\+/ /g' | grep -q primary; then
+    if ! echo "$PARTED_OUTPUT" | grep -v Free | sed '/^[[:space:]]*$/d' | tail -1 | sed 's/[ ]\+/ /g' | grep -q primary; then
         MEDIA_LAST_PARTITION_TYPE=logical
     else
         MEDIA_LAST_PARTITION_TYPE=primary
@@ -1661,7 +1661,7 @@ media_restore(){
     #################################################
 
     echo_if_cli "Unmounting device $OUTDEV ..." "white"
-    umount "$OUTDEV"? 2> /dev/null
+    sudo umount "$OUTDEV"? 2> /dev/null
 
     local INFILEEXT
     INFILEEXT=$(file_ext "$INFILE")
@@ -1684,7 +1684,7 @@ media_restore(){
                 ES=$?
             else
                 ui_echo "~ Running: pv -s $RESTORE_BYTES '$INFILE' | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (pv -n -s "$RESTORE_BYTES" "$INFILE" | sudo dd of="$OUTDEV" bs=4M) 2>&1 | \
+                (pv -n -s "$RESTORE_BYTES" "$INFILE" | sudo dd of="$OUTDEV" bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
@@ -1696,7 +1696,7 @@ media_restore(){
                 ES=$?
             else
                 ui_echo "~ Running: unzip -p '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (unzip -p "$INFILE" | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M) 2>&1 | \
+                (unzip -p "$INFILE" | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
@@ -1709,7 +1709,7 @@ media_restore(){
                 ES=$?
             else
                 ui_echo "~ Running: xz -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (xz -d -c "$INFILE"  | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M) 2>&1 | \
+                (xz -d -c "$INFILE"  | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
@@ -1736,7 +1736,7 @@ media_restore(){
                 ES=$?
             else
                 ui_echo "~ Running: zstd -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (zstd -d -c "$INFILE" | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M) 2>&1 | \
+                (zstd -d -c "$INFILE" | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
@@ -2222,7 +2222,7 @@ media_format(){
 
         *)
             ui_msg_error $LINENO "Unknown format '$FORMAT'"
-
+            return 1
     esac
 
     if (( ES)); then
