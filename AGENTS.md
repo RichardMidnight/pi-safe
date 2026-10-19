@@ -80,5 +80,6 @@ We are stepping through the code from the published `v1.2.11` baseline toward a 
 | TB multiplier typo `2014` | `pisafe`:844 | R1 (approved) |
 | Unquoted single-token expansions | throughout | R1 (SAFE subset) |
 | `get_ver_to_int`: no `local`s, global `parts` array, `let`, tab indentation | `pisafe`:710–717 | R2+ (indent is R1) |
-| Stale harness: references removed `pisafe_beta` file | `pisafe_test` | later, user decides |
+| Stale harness: references removed `pisafe_beta` file | `pisafe_test` | **done** (harness R11–R16 rewrite, 2026-10-18) |
+| gz images ≥ 4 GiB: truncated footer size mis-read as `13.32gb` → spurious `restore [gz]` refusal | `pisafe` `file_image_size` gz branch | **done in `166f997`** (restore now measures/asks; listing `unknown (>= ~4 GiB)`; backup warns — 2026-10-19) |
 | Copyright header says `2018 - 2022` | `pisafe`:3 | **done in `3e9ecfd`** (now `2018 - 2026`; in beta.3/beta.4 + remote dev) |
