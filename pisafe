@@ -535,6 +535,9 @@ config_var_set_defaults(){
 
     #restore settings
     config_var_set large_device_write_warning 16gb "$FORCE"
+    # off: image listings show 'unknown (>= ~4 GiB)' for big gz images
+    #      instead of calculating the size (a full decompress pass); on: calculate.
+    config_var_set exact_gz_image_size off "$FORCE"
 }
 
 
@@ -559,6 +562,7 @@ config_var_get_settings(){
 
     # restore settings
     LARGE_DEVICE_WRITE_WARNING=$(config_var_get large_device_write_warning)
+    EXACT_GZ_IMAGE_SIZE=$(config_var_get exact_gz_image_size)
 
     if [[ "$INTERFACE" = cli ]] && [[ "$DEFAULT_PATH_CLI_FROM_SETTINGS" != on ]]; then
         DEFAULT_PATH=$(pwd)
@@ -960,12 +964,31 @@ file_image_size() {
         #  older xz prints bare digits (optional " B" / ", B" suffix). Pin the trailing byte field and
         #  keep digits only -- a naive whole-line digit strip would turn that 5.8.1 line into "20020971520".
         xz)             SIZE_BYTES=$(xz -l -v "$INFILE" 2> /dev/null | grep Uncompressed | sed 's/\s\s*/ /g' | grep -oE '[0-9,]+( B)?\)?' | tail -n 1 | tr -cd '0123456789') ;;
-        gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 | sed 's/?/0/g') ;;
-     #  gz)             SIZE_BYTES=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f 2 )                ;;
+        #  2026-10-19 fix: the gz footer stores only the size mod 2^32, so an
+        #  image >= 4 GiB carries a truncated residue there (pigz flags it with
+        #  'unk'/'?'; the old sed 's/?/0/g' turned that flag into an extra zero
+        #  digit -> a ~10x wrong size).  Truncated footer -> non-numeric
+        #  'unknown' so callers decide: measure exactly (slow), skip, or show.
+        gz)  if RAW_SZ=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f2) && [[ $RAW_SZ =~ ^[0-9]+$ ]]; then
+                  SIZE_BYTES=$RAW_SZ
+              else
+                  SIZE_BYTES=unknown
+              fi ;;
         zst)            SIZE_BYTES=$(zstd -v -l "$INFILE" 2> /dev/null | grep Decompressed | cut -d"(" -f2 | cut -d" " -f1)                                           ;;
         *)              echo 0
                         return 1                                                                                                                                      ;;
     esac
+
+    if [[ $SIZE_BYTES = unknown ]]; then
+        # non-numeric on purpose: callers decide (measure / skip / display),
+        # never do arithmetic on this value.
+        if [[ "$HUMAN" = -h ]]; then
+            echo "unknown (>= ~4 GiB)"
+        else
+            echo "$SIZE_BYTES"
+        fi
+        return 1
+    fi
 
     if [[ -z $SIZE_BYTES ]]; then
         echo 0
@@ -976,6 +999,30 @@ file_image_size() {
         printf '%s\n' "$(get_bytes "$SIZE_BYTES" -h)"
     else
         echo "$SIZE_BYTES"
+    fi
+}
+
+
+measure_gz_size(){
+    # exact (decompressed) size of a gzip image - one full decompress pass.
+    # only used for images whose gz footer does not carry the size (>= 4 GiB).
+    gzip -dc -- "$1" 2> /dev/null | wc -c | tr -dc '0-9'
+}
+
+
+image_size_display(){
+    # listing display: honours EXACT_GZ_IMAGE_SIZE for big gz images,
+    # otherwise reports 'unknown (>= ~4 GiB)' instead of a wrong number
+    local IMG_SZ
+    IMG_SZ=$(file_image_size "$1")
+    if [[ $IMG_SZ = unknown && "${EXACT_GZ_IMAGE_SIZE:-off}" = on ]]; then
+        echo "Calculating the actual size of '$1' (takes as long as a restore-write)..." >&2
+        IMG_SZ=$(measure_gz_size "$1")
+    fi
+    if [[ $IMG_SZ =~ ^[0-9]+$ ]]; then
+        get_bytes "$IMG_SZ" -h
+    else
+        echo "unknown (>= ~4 GiB)"
     fi
 }
 
@@ -993,7 +1040,7 @@ file_list_image_files(){
     for FILE in *.img *.zip *.xz *.gz *.zst *.iso; do
         [[ -e $FILE ]] || continue
         FILE_NS=$(printf '%s\n' "$FILE" | sed 's/ /_/g')
-        FILES="$FILES $FILE_NS  $(file_size "$FILE" -h)  ($(file_image_size "$FILE" -h)) \n "
+        FILES="$FILES $FILE_NS  $(file_size "$FILE" -h)  ($(image_size_display "$FILE")) \n "
     done
 
     printf '%b' "$FILES" | column -t
@@ -1258,6 +1305,11 @@ media_backup(){
  ;;
 
         gz)
+            # 2026-10-19: the gz footer only carries size mod 2^32 - a raw
+            # image >= 4 GiB cannot have its size read back later
+            if RAWB=$(stat -c%s -- "$OUTFILE_BASE.img" 2> /dev/null) && [[ $RAWB =~ ^[0-9]+$ ]] && [[ $RAWB -ge 4294967296 ]]; then
+                ui_msg_warning $LINENO "'$OUTFILE' will not carry its own size (gz images >= 4 GiB); later size checks will ask or calculate it.  xz and zst carry exact sizes"
+            fi
             if [[ -n $(which pv) ]]; then
                 run_command "pv '$OUTFILE_BASE.img' | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
                 ES=$?
@@ -1716,13 +1768,21 @@ media_restore(){
  ;;
 
         gz)
+            # size only known for images < 4 GiB (gz footer truncated above
+            # that) - then leave the progress-bar total off
+            PV_ARGS=(-n)
+            PV_T=
+            if [[ $RESTORE_BYTES =~ ^[0-9]+$ ]]; then
+                PV_T="-s $RESTORE_BYTES"
+                PV_ARGS+=(-s "$RESTORE_BYTES")
+            fi
             if [[ "$INTERFACE" = cli ]]; then
                 #run_command "pv '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" "$LINENO"
-                run_command "pigz -d -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" "$LINENO"
+                run_command "pigz -d -c '$INFILE' | pv $PV_T | sudo dd of=$OUTDEV bs=4M conv=fsync" "$LINENO"
                 ES=$?
             else
-                ui_echo "~ Running: pigz -d -k -c '$INFILE' | pv -s $RESTORE_BYTES | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (pigz -d -k -c "$INFILE" | pv -n -s "$RESTORE_BYTES" | sudo dd of="$OUTDEV" bs=4M conv=fsync) 2>&1 | \
+                ui_echo "~ Running: pigz -d -k -c '$INFILE' | pv -n $PV_T | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                (pigz -d -k -c "$INFILE" | pv "${PV_ARGS[@]}" | sudo dd of="$OUTDEV" bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
@@ -1850,11 +1910,70 @@ media_restore_checklist(){
 Be sure this is the right device"
     fi
 
-    # Stop if imagefile is larger than device
-    if [[ $(file_image_size "$INFILE") -gt $(media_size "$OUTDEV") ]]; then
-        ui_msg_error $LINENO "The image in '$INFILE' is ' $(file_image_size "$INFILE" -h)' 
+    # Stop if imagefile is larger than device.
+    # gz images >= 4 GiB do not carry their size in the file (the footer
+    # stores it mod 2^32), so the compare is impossible there:
+    #   SILENT=-y (automation/harness): calculate the actual size (one
+    #       decompress pass - announced) and then do the normal compare.
+    #   interactive: offer calculate / continue anyway / quit.
+    #   non-interactive without -y: quit - fail-safe, no one to confirm.
+    IMG_SZ=$(file_image_size "$INFILE")
+    if [[ ! $IMG_SZ =~ ^[0-9]+$ ]]; then
+        MEDIA_SZ=$(media_size "$OUTDEV")
+        CH=
+        if [[ "$SILENT" = -y ]]; then
+            CH=a
+        elif [[ "$INTERFACE" = cli ]]; then
+            if [[ -t 0 ]]; then
+                CH=
+                while true; do
+                    printf "%s: size of '%s' not carried (gz >= 4 GiB); '%s' is %s.\n[a] calculate the actual size (one decompress pass)  [b] continue anyway  [c] quit? " "$PRODUCTNAME" "$INFILE" "$(media_name "$OUTDEV")" "$(get_bytes "$MEDIA_SZ" -h)"
+                    read -r CH || { CH=c; break; }
+                    case $CH in a | b | c) break ;; esac
+                done
+            else
+                ui_msg_warning $LINENO "size of '$INFILE' not carried (gz >= 4 GiB) and no one is available to confirm - restore not started.  Rerun interactively, or with -y which calculates the actual size"
+                CH=c
+            fi
+        else
+            CH=$(whiptail --backtitle "$BACKTITLE" --title "SIZE UNKNOWN (gz >= 4 GiB)" \
+                --menubox "The size of '$INFILE' could not be read from the file
+(gz images >= 4 GiB do not carry their size).
+'$(media_name "$OUTDEV")' is $(get_bytes "$MEDIA_SZ" -h).
+
+Choose:" "$WT_MB_HEIGHT" "$WT_MB_WIDTH" 3 \
+                a "Calculate the actual size (one decompress pass - takes as long as a restore-write)" \
+                b "Continue anyway (skip the size check and restore)" \
+                c "Quit" 3>&1 1>&2 2>&3)
+            [[ $CH = a || $CH = b ]] || CH=c
+        fi
+        case $CH in
+            a)
+                ui_msg RESTORE "~ Calculating the actual size of '$INFILE' (images >= 4 GiB - takes as long as a restore-write)..." "" "" log
+                MEAS_SZ=$(measure_gz_size "$INFILE")
+                if [[ ! $MEAS_SZ =~ ^[0-9]+$ ]] || [[ $MEAS_SZ -lt 1 ]]; then
+                    ui_msg_error $LINENO "Could not calculate the actual size of '$INFILE' - restore not started"
+                    return 1
+                fi
+                ui_msg RESTORE "~ '$INFILE' is $(get_bytes "$MEAS_SZ" -h); '$(media_name "$OUTDEV")' is $(get_bytes "$MEDIA_SZ" -h)" "" "" log
+                if [[ $MEAS_SZ -gt $MEDIA_SZ ]]; then
+                    ui_msg_error $LINENO "The image in '$INFILE' is '$(get_bytes "$MEAS_SZ" -h)'
+and '$OUTDEV' is only '$(get_bytes "$MEDIA_SZ" -h)'"
+                    return 1
+                fi
+                ;;
+            b)
+                ui_msg RESTORE "~ Warning: actual size of '$INFILE' is unknown (gz >= 4 GiB); the size check was skipped at your choice.  '$(media_name "$OUTDEV")' is $(get_bytes "$MEDIA_SZ" -h)" "" "" log
+                ;;
+            *)
+                ui_msg RESTORE "~ Restore of '$INFILE' ended - quit chosen (actual size unknown, gz >= 4 GiB)." "" "" log
+                return 1
+                ;;
+        esac
+    elif [[ $IMG_SZ -gt $(media_size "$OUTDEV") ]]; then
+        ui_msg_error $LINENO "The image in '$INFILE' is ' $(file_image_size "$INFILE" -h)'
 and '$OUTDEV' is only '$(media_size "$OUTDEV" -h)'"
-         return 1
+        return 1
     fi
 
 
@@ -2465,7 +2584,7 @@ whiptail_fselect() {
         arrayelement=$(printf '%s\n' "${FILES[$i]}" | sed 's/ *//g')
         if [[ "$arrayelement" =~ $num ]]; then
            # FILES[$i]=$(echo "    " $(get_bytes "$arrayelement" -h))
-            FILES[i]="    $(get_bytes "$arrayelement" -h) ($(file_image_size "$LOCAL_PATH/$PREVIOUS_ELEMENT" -h))"
+            FILES[i]="    $(get_bytes "$arrayelement" -h) ($(image_size_display "$LOCAL_PATH/$PREVIOUS_ELEMENT"))"
         else
             PREVIOUS_ELEMENT="${FILES[$i]}"
         fi
