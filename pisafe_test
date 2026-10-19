@@ -615,6 +615,10 @@ main(){
   echo
   echo "============================= REPORT ================================="
   echo "  machine  : $(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown)${os_stamp:+ - $os_stamp}"
+  # uname -m = userland architecture of the running pisafe (the 32/64-bit
+  # answer); uname -r = kernel - together they split identical PRETTY_NAMEs
+  # (e.g. 32-bit userland on an aarch64 kernel)
+  echo "  arch     : $(uname -m 2>/dev/null || echo unknown) (kernel $(uname -r 2>/dev/null || echo unknown))"
   echo "  date     : $(date '+%Y-%m-%d %H:%M:%S')"
   echo "  pisafe   : $PISAFE${pver:+ ($pver)}"
   echo "  harness  : v$VERSION"
