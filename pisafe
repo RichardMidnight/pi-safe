@@ -18,7 +18,7 @@
 set -o pipefail
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.12-beta.5"   # 2026/10/18
+SCRIPTVER="1.2.12-beta.6"   # 2026/10/19
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -2671,7 +2671,8 @@ menu_gui(){
                 "SETTINGS"  "   Change settings" \
                 "TOOLS"     "   Various tools"\
                  "  "        "   " \
-                 "HELP"     "   Help"\
+                 "HELP"     "   Help" \
+                 "ABOUT"    "   About $PRODUCTNAME" \
                 3>&1 1>&2 2>&3)
 
         whiptail_calc_wt_size
@@ -2838,7 +2839,7 @@ menu_settings_default_path(){
 
         if [[ -n "$NEWPATH" ]]; then
             if [[ -d "$NEWPATH" ]]; then
-                DEFAULT_PATH=$(echo "$NEWPATH" | sed 's/[/\t]*$//')
+                DEFAULT_PATH=$(echo "$NEWPATH" | sed $'s/[/\t]*$//')   # $'' = real tab in the bracket (a POSIX-strict sed would read '\t' as '\' + 't' — e.g. eat the 't' of '/tmp')
                 config_var_set default_path "$DEFAULT_PATH"
                 return 0
             else
