@@ -12,7 +12,7 @@
 #   DEVICE    target block device to test (required), e.g. /dev/sdb.
 #             must not be mounted anywhere; if it is, the script offers to
 #             umount it first and refuses if it is still mounted afterwards.
-#   BASE      prefix for the images (default: $PWD/test). pisafe inserts
+#   BASE      prefix for the images (default: $PWD/test_<hostname>). pisafe inserts
 #             '.img' into the output name, so the files actually written are
 #             BASE.img.zip, BASE.img.gz, BASE.img.xz, BASE.img.zst - or only
 #             the ones you select with --compress (default: all four). pisafe
@@ -54,7 +54,7 @@
 #      and then continues to backup-complete).
 #
 # Environment:
-#   PISAFE  path to the pisafe script (default: ./pisafe)
+#   PISAFE  path to the pisafe script (default: the pisafe alongside this harness)
 #
 set -u
 
@@ -70,7 +70,11 @@ EXTS=(zip gz xz zst)
 # marker check, so this scan is a supplement, not the primary signal.
 FAIL_RE='~ Error at line|~ Backup canceled|~ Restore stopped|~ Erase Media stopped|not erased'
 LOG_FILE="$HOME/.config/pisafe/pisafe.log"
-PISAFE="${PISAFE:-./pisafe}"
+# default to the copy of pisafe that sits next to this harness, so the pair
+# can be run as two files from any CWD (e.g. straight off the share);
+# override with PISAFE=/path/to/pisafe
+SCRIPT_DIR="$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+PISAFE="${PISAFE:-$SCRIPT_DIR/pisafe}"
 
 # deterministic, non-interactive flags for every pisafe invocation
 STD_FLAGS=(--log=on --updates=off --dependencies=off --sound=off)
@@ -120,7 +124,7 @@ Arguments:
               must not be mounted anywhere; if it is, the script offers to
               umount it and refuses if it is still mounted afterwards.
               never point this at a system disk.
-  BASE        prefix for the test images (default: \$PWD/test). pisafe
+  BASE        prefix for the test images (default: \$PWD/test_<hostname>). pisafe
               inserts '.img' into the output name, so the actual files are
               BASE.img.zip, BASE.img.gz, BASE.img.xz, BASE.img.zst - only the
               ones selected with --compress are tested (default: all four).
@@ -144,7 +148,7 @@ Arguments:
 Per step, both modes check:  pisafe exit status == 0  AND  the log window of
 this exact step contains its "complete" marker and no error/abort lines.
 
-Environment: PISAFE=/path/to/pisafe   (default: ./pisafe)
+Environment: PISAFE=/path/to/pisafe   (default: the pisafe alongside this harness)
 
 Human-driven only: this script will format the target card.
 EOF
@@ -389,6 +393,10 @@ preflight(){
   [[ $DEVICE =~ ^/dev/[a-zA-Z0-9._-]+$ ]] || DIE "device '$DEVICE' does not look like a block device (expected /dev/xxx)"
   [[ -b $DEVICE ]]                        || DIE "device '$DEVICE' is not found or not a block device"
 
+  # the mounted-disk guard below depends on findmnt; without it the guard
+  # would silently pass (fail-open) - refuse instead (fail-closed)
+  command -v findmnt >/dev/null 2>&1 || DIE "findmnt not found - cannot verify '$DEVICE' is unmounted"
+
   # if any filesystem on this device (or its partitions) is mounted, ask.
   # this catches the root disk no matter which partition the system is booted from.
   mounts=$(mounted_targets)
@@ -535,7 +543,9 @@ main(){
     exit 2
   fi
   DEVICE=${POSITIONAL[0]}
-  BASE=${POSITIONAL[1]:-$(pwd)/test}
+  # hostname in the default BASE keeps per-machine runs from colliding on the
+  # same image names when the pair is run from a shared directory
+  BASE=${POSITIONAL[1]:-$(pwd)/test_$(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown)}
   if (( ${#POSITIONAL[@]} > 2 )); then
     echo "${RED}error: too many positional arguments (see -h)${RST}" >&2
     exit 2
@@ -597,8 +607,17 @@ main(){
   done
 
   # ------------------------------------------------------------------ report --
+  local pver os_stamp
+  pver=$(grep -m1 '^[[:space:]]*SCRIPTVER=' "$PISAFE" 2>/dev/null | cut -d'"' -f2)
+  # sourced inside $( ): /etc/os-release defines its own VERSION=, and the
+  # subshell confines that assignment - the harness's own VERSION stays intact
+  os_stamp=$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-}")
   echo
   echo "============================= REPORT ================================="
+  echo "  machine  : $(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown)${os_stamp:+ - $os_stamp}"
+  echo "  date     : $(date '+%Y-%m-%d %H:%M:%S')"
+  echo "  pisafe   : $PISAFE${pver:+ ($pver)}"
+  echo "  harness  : v$VERSION"
   for a in "${REPORT[@]}"; do
     printf '  %s\n' "$a"
   done
