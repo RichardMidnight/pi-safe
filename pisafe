@@ -689,7 +689,7 @@ do_countdown(){
 		echo -n ".$(($MAX-$number))"
         read -s -t 1 -N 1 INPUT
         if [[ ! -z $INPUT ]]; then
-            if [[ $INPUT = y ]]; then
+            if [[ $INPUT = [yY] ]]; then
                 echo Continuing...
                 return
             else
