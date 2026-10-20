@@ -1311,7 +1311,7 @@ media_backup(){
             # 2026-10-19: the gz footer only carries size mod 2^32 - a raw
             # image >= 4 GiB cannot have its size read back later
             if RAWB=$(stat -c%s -- "$OUTFILE_BASE.img" 2> /dev/null) && [[ $RAWB =~ ^[0-9]+$ ]] && [[ $RAWB -ge 4294967296 ]]; then
-                ui_msg_warning $LINENO "gz is NOT RECOMMENDED for images over 4GB because gz cannot remember the true size of files over 4GB, so it has to be calculated each time which is very slow. 
+                ui_msg_warning $LINENO "gz is NOT RECOMMENDED for images over 4GB because gz cannot remember the true size of files over 4GB, so it has to be calculated each time which is very slow."
             fi
             if [[ -n $(which pv) ]]; then
                 run_command "pv '$OUTFILE_BASE.img' | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
