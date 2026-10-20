@@ -1308,7 +1308,7 @@ media_backup(){
             # 2026-10-19: the gz footer only carries size mod 2^32 - a raw
             # image >= 4 GiB cannot have its size read back later
             if RAWB=$(stat -c%s -- "$OUTFILE_BASE.img" 2> /dev/null) && [[ $RAWB =~ ^[0-9]+$ ]] && [[ $RAWB -ge 4294967296 ]]; then
-                ui_msg_warning $LINENO "'$OUTFILE' will not carry its own size (gz images >= 4 GiB); later size checks will ask or calculate it.  xz and zst carry exact sizes"
+                ui_msg_warning $LINENO "gz is NOT RECOMMENDED for images over 4GB because gz cannot remember the true size of files over 4GB, so it has to be calculated each time which is very slow.  xz and zst have no such limit"
             fi
             if [[ -n $(which pv) ]]; then
                 run_command "pv '$OUTFILE_BASE.img' | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
@@ -1570,6 +1570,47 @@ Back up an explicit device instead:  pisafe backup /dev/sda"
         ES=$?
         if (( ES )); then
             return "$ES"
+        fi
+    fi
+
+    #################################################
+    # gzip >= 4 GiB IMAGE GUARD (pre-backup)
+    #
+    # A gz trailer only carries the decompressed size mod 2^32, so a raw image
+    # of 4 GiB or more cannot report its true size later - PiSafe would have to
+    # decompress to re-measure it on every restore (slow).  xz/zst/zip have no
+    # such limit, so offer a switch to xz before the (long) backup starts.
+    #
+    # The size here is UNCOMPRESSED_BYTES - the same post-shrink raw value shown
+    # on the '... Shrink filesystem by X => Y' estimate line.  We call
+    # media_backup_estimate in-process (NOT in a $(...) subshell) so that global
+    # is set for us to read; the report text itself is discarded.
+    #################################################
+    if [[ $(file_ext "$OUTFILE") = gz ]]; then
+        if media_backup_estimate "$INDEV" > /dev/null 2> /dev/null; then
+            if [[ "$UNCOMPRESSED_BYTES" =~ ^[0-9]+$ ]] && (( UNCOMPRESSED_BYTES >= 4294967296 )); then
+                if [[ "$SILENT" = -y ]]; then
+                    # non-interactive: can't prompt, so warn and carry on (-y = "just do it")
+                    ui_msg_warning $LINENO "gz image is ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) raw (>= 4 GiB): each restore will have to re-measure its size (slow). Continuing because of -y. xz has no such limit."
+                else
+                    GZ_GUARD_MSG="This image will be ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) (raw, after shrink).
+
+gz can't carry the true size of images >= 4 GiB, so every restore must decompress again just to measure it (slow).
+
+Switch to xz for this backup?  (xz has no such limit)"
+                    if [[ $(ui_yesno "gzip SIZE WARNING" "$GZ_GUARD_MSG") = y ]]; then
+                        OUTFILE="${OUTFILE%.gz}.xz"
+                        ui_log "~ Switched backup format gz -> xz: '$OUTFILE'"
+                        media_backup_check_outfile
+                        ES=$?
+                        if (( ES )); then
+                            return "$ES"
+                        fi
+                    else
+                        ui_msg_warning $LINENO "Continuing with gz for an image >= 4 GiB (~$(get_bytes "$UNCOMPRESSED_BYTES" -h) raw); each restore will need to re-measure its size."
+                    fi
+                fi
+            fi
         fi
     fi
 
