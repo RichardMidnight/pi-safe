@@ -175,11 +175,14 @@ pisafe_help() {
     echo "  help | -h  | --h             - help"
     echo
     echo "Notes: "
-    echo " - Supports .img .zip .xz .gz and .zst files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
-    echo " - Specifying an '.img' extension is faster but twice the size because it is not compressed."
+    echo " - Supports .xz .zip .gz .zst and .img files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
+    echo " - An '.img' file is faster but twice the size because it is not compressed."
     echo " - -y answers 'y' to prompts."
     echo " - There are a number of settings that can be changed in the settings file. "
     echo
+    echo ".zip was raspberry pi's origional image format. An old standard"
+    echo ".img.xz was adopted in 2022.  A new standard with higher compression"
+    echo ".gz is good for fast, high compression on images < 4GB"
     echo
     echo "Examples:"
     echo "$SCRIPTNAME "
@@ -187,7 +190,7 @@ pisafe_help() {
     echo "$SCRIPTNAME backup sda newimage"
     echo "$SCRIPTNAME backup /dev/sdb newimage.xz -y"
     echo "$SCRIPTNAME restore newimage.img.zip sda"
-    echo "$SCRIPTNAME backup /dev/sda /home/pi/Downloads/backup_\$(date +%Y-%d-%m_%I%M%p).img.gz -y"
+    echo "$SCRIPTNAME backup /dev/sda /home/pi/Downloads/backup_\$(date +%Y-%d-%m_%I%M%p).img.xz -y"
     echo "$SCRIPTNAME format /dev/sda fat32"
     echo "$SCRIPTNAME settings"
     echo "$SCRIPTNAME log"
@@ -1308,7 +1311,7 @@ media_backup(){
             # 2026-10-19: the gz footer only carries size mod 2^32 - a raw
             # image >= 4 GiB cannot have its size read back later
             if RAWB=$(stat -c%s -- "$OUTFILE_BASE.img" 2> /dev/null) && [[ $RAWB =~ ^[0-9]+$ ]] && [[ $RAWB -ge 4294967296 ]]; then
-                ui_msg_warning $LINENO "gz is NOT RECOMMENDED for images over 4GB because gz cannot remember the true size of files over 4GB, so it has to be calculated each time which is very slow.  xz and zst have no such limit"
+                ui_msg_warning $LINENO "gz is NOT RECOMMENDED for images over 4GB because gz cannot remember the true size of files over 4GB, so it has to be calculated each time which is very slow. 
             fi
             if [[ -n $(which pv) ]]; then
                 run_command "pv '$OUTFILE_BASE.img' | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
@@ -1591,7 +1594,7 @@ Back up an explicit device instead:  pisafe backup /dev/sda"
             if [[ "$UNCOMPRESSED_BYTES" =~ ^[0-9]+$ ]] && (( UNCOMPRESSED_BYTES >= 4294967296 )); then
                 if [[ "$SILENT" = -y ]]; then
                     # non-interactive: can't prompt, so warn and carry on (-y = "just do it")
-                    ui_msg_warning $LINENO "gz image is ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) raw (>= 4 GiB): each restore will have to re-measure its size (slow). Continuing because of -y. xz has no such limit."
+                    ui_msg_warning $LINENO "gz image is ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) raw (>= 4 GiB): each restore will have to re-measure its size (slow). Continuing because of -y. "
                 else
                     GZ_GUARD_MSG="This image will be ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) (raw, after shrink).
 
@@ -1763,12 +1766,19 @@ media_restore(){
     echo_white "Writing '$INFILE' to '$OUTDEV' ... "
     date
     TIME1=$(date +%s)
-    echo_if_cli "$(file_image_size "$INFILE" -h) to write"
+    SZ_WRITE=$(file_image_size "$INFILE" -h)
+    [[ $MEAS_SZ =~ ^[0-9]+$ ]] && SZ_WRITE=$(get_bytes "$MEAS_SZ" -h)   # gate measured the size
+    echo_if_cli "$SZ_WRITE to write"
 
     ui_echo "~ Erasing MBR, signature, and partition table from '$OUTDEV'..."
     run_command "sudo dd if=/dev/zero of=$OUTDEV bs=512 count=2 > /dev/null" "$LINENO"
 
     RESTORE_BYTES=$(file_image_size "$INFILE")
+    # gz >= 4 GiB: the checklist gate may already have measured the exact
+    # size (one decompress pass) - reuse it as the progress-bar total
+    if [[ ! $RESTORE_BYTES =~ ^[0-9]+$ && $MEAS_SZ =~ ^[0-9]+$ ]]; then
+        RESTORE_BYTES=$MEAS_SZ
+    fi
 
     case $INFILEEXT in
         img | iso)
@@ -1864,6 +1874,7 @@ media_restore(){
 
 
 media_restore_checklist(){
+    MEAS_SZ=    # fresh for every restore - gate arm 'a/calculate' (or -y) below is the only setter
     #GET INFILE if missing  ##################################
     if [[ -z "$INFILE" ]]; then
         if whiptail_fselect "RESTORE : Select an Image-file" "$DEFAULT_PATH" "zip" "no"; then
@@ -1990,7 +2001,7 @@ Choose:" "$WT_MB_HEIGHT" "$WT_MB_WIDTH" 3 \
         fi
         case $CH in
             a)
-                ui_msg RESTORE "~ Calculating the actual size of '$INFILE' (images >= 4 GiB - takes as long as a restore-write)..." "" "" log
+                ui_msg RESTORE "~ Calculating the actual size of '$INFILE' (.gz images >= 4 GiB - takes some time)..." "" "" log
                 MEAS_SZ=$(measure_gz_size "$INFILE")
                 if [[ ! $MEAS_SZ =~ ^[0-9]+$ ]] || [[ $MEAS_SZ -lt 1 ]]; then
                     ui_msg_error $LINENO "Could not calculate the actual size of '$INFILE' - restore not started"
