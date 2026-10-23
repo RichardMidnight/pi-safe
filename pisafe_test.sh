@@ -1,13 +1,16 @@
 #!/bin/bash
 #
-# pisafe_test v2.0 - pisafe integration test harness (2026-09-26)
+# pisafe_test v2.1 - pisafe integration test harness (2026-10-20)
 #
 # DESTRUCTIVE tool: it formats $DEVICE and writes backup images onto it.
+# (except 'setup' mode, which only copies the pisafe pair from GitHub and, if the box has no
+#  fetcher at all, installs a web-fetch tool; it never installs runtime tools or touches a device; see usage below)
 # Pass the target card explicitly; never run it against a system disk.
 # Human-driven only: AI agents must never execute this script.
 #
 # Usage:
 #   pisafe_test DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+#   pisafe_test setup [DIR|-y]                  (non-destructive bootstrap)
 #   Example:  pisafe_test /dev/sda --full
 #
 #   DEVICE    target block device to test (required), e.g. /dev/sdb.
@@ -59,11 +62,12 @@
 #      and then continues to backup-complete).
 #
 # Environment:
-#   PISAFE  path to the pisafe script (default: the pisafe alongside this harness)
+#   PISAFE      path to the pisafe script (default: the pisafe alongside this harness)
+#   PISAFE_REF  ref for setup mode downloads (default: 'development')
 #
 set -u
 
-VERSION="2.0"
+VERSION="2.2"
 EXTS=(zip gz xz zst)
 # exact strings pisafe logs ONLY on fatal paths (verified against source):
 #   ~ Error at line ...   ui_msg_error  (pisafe:1995, all callers abort)
@@ -81,8 +85,14 @@ LOG_FILE="$HOME/.config/pisafe/pisafe.log"
 SCRIPT_DIR="$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PISAFE="${PISAFE:-$SCRIPT_DIR/pisafe}"
 
-# deterministic, non-interactive flags for every pisafe invocation
-STD_FLAGS=(--log=on --updates=off --dependencies=off --sound=off)
+# deterministic, non-interactive flags for every pisafe invocation.
+# --dependencies=ON is deliberate: installing the missing runtime tools is
+# pisafe's own job, and that is exactly what the battery is supposed to
+# prove.  On a bare box the first step hits pisafe's own
+# "Install dependencies?" prompt, the harness answers 'y' for it (see
+# run_step), and pisafe installs through its own installer (apt + the
+# pishrink download); the step's PASS/FAIL records how that went.
+STD_FLAGS=(--log=on --updates=off --dependencies=on --sound=off)
 
 # unquoted-on-purpose: expands to nothing when empty (running as root)
 SUDO=""
@@ -103,6 +113,7 @@ SUCCESS_MARKER=""
 PASS_CNT=0
 FAIL_CNT=0
 REPORT=()
+SURFACE=""   # native surface capture: set before the battery, printed in the report
 
 # ---------------------------------------------------------------- utilities --
 
@@ -123,6 +134,7 @@ usage(){
 pisafe_test v$VERSION - destructive pisafe integration test harness
 
 Usage: pisafe_test DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+       pisafe_test setup [DIR|-y]
 
 Arguments:
   DEVICE      target block device to test (required), e.g. /dev/sdb.
@@ -154,15 +166,32 @@ Arguments:
               are sure is disposable.
   -h, --help  this text
 
+Setup mode (non-destructive, no card needed - bootstrap for a new test box):
+  setup [DIR]  1. create DIR (default: ~/Downloads),
+                2. copy the latest pisafe plus a fresh pisafe_test from GitHub
+                   into it (ref 'development'; set PISAFE_REF to a tag, e.g.
+                   v1.2.12-beta.6, to pin),
+                3. leave you in DIR (prints the ready-to-paste one-line cd +
+                   test command).
+               Shows this plan first and waits for ENTER (-y skips the gate).
+               The ONLY install it may do: 'wget', if the box has no wget/curl
+               at all. Runtime tools (pv, pishrink, ...) are NOT installed
+               here - pisafe's own installer does that, and the battery tests
+               exactly that (the dependency check stays ON). The file running
+               this command is never overwritten.
+
 Examples:
   bash pisafe_test /dev/sda --full                # all four arms + byte checks
   bash pisafe_test /dev/sda --compress=zip,zst    # a subset of arms
   bash pisafe_test /dev/sdb /media/pi/imgs -y     # images elsewhere, no prompts
+  bash pisafe_test setup                          # new box: ~/Downloads + pair
+  bash pisafe_test setup /opt/pisafe -y           # other dir, no prompts
 
 Per step, both modes check:  pisafe exit status == 0  AND  the log window of
 this exact step contains its "complete" marker and no error/abort lines.
 
-Environment: PISAFE=/path/to/pisafe   (default: the pisafe alongside this harness)
+Environment: PISAFE=/path/to/pisafe    (default: the pisafe alongside this harness)
+            PISAFE_REF=REF            (setup mode; default 'development')
 
 Human-driven only: this script will format the target card.
 EOF
@@ -182,6 +211,76 @@ log_window(){
   tail -n +$(( $1 + 1 )) "$LOG_FILE" 2>/dev/null
 }
 
+# --------------------------------------------------------- environment probe --
+# Read-only snapshot of the box's interactive surface, mirroring the exact
+# chains pisafe itself resolves at runtime (same order):
+#   TUI       the menus literally call the `whiptail` command
+#             (pisafe:1801,2166,2223,2658); the newt install (pisafe:380-381)
+#             is a fallback pisafe PULLS, not a render path - a newt-only box
+#             has no working menu, so whiptail is the real gate and newt is
+#             only a "present but may not render" note
+#   installer (pisafe:589)   : apt pacman dnf
+#   terminal  (pisafe:629-645): lxterminal xfce4-terminal mate-terminal
+#                               gnome-terminal xterm terminator konsole
+#                               qterminal x-terminal-emulator
+#   editor    (pisafe:665)   : leafpad xed gedit featherpad kwrite pluma
+#                               kate mousepad geany gnome-text-editor nano
+# Deliberately built on `command -v` (bash builtin) and never shelling out to
+# pisafe's env_which (pisafe:682), which has an install side effect - it tries
+# to `sudo install which` when the `which` binary is missing. This capture can
+# therefore never change the box.
+
+# walk a chain: first present entry wins (that is what pisafe picks); the other
+# present entries are listed too, so the report carries both the choice and the
+# full shape of the box
+chain_probe(){
+  local first="" also="" t
+  for t in "$@"; do
+    command -v "$t" >/dev/null 2>&1 || continue
+    if [[ -z $first ]]; then first=$t; else also="${also:+$also, }$t"; fi
+  done
+  if [[ -z $first ]]; then echo "none"; return 0; fi
+  if [[ -n $also ]]; then echo "$first (also: $also)"; else echo "$first"; fi
+  return 0
+}
+
+native_surface(){
+  local tui inst whichp t ed snd xte
+  # a box with no whiptail passes the CLI battery yet cannot open a menu - the
+  # single most important "does it actually work" fact to record per box
+  if command -v whiptail >/dev/null 2>&1; then
+    tui="whiptail"
+  elif command -v newt >/dev/null 2>&1; then
+    tui="MISSING - newt present, but the menus need the whiptail command"
+  else
+    tui="MISSING - no TUI found, menus cannot render"
+  fi
+  inst=$(chain_probe apt pacman dnf)
+  if command -v which >/dev/null 2>&1; then whichp="present"
+  else whichp="ABSENT - pisafe's env_which will try to install it (pisafe:685)"; fi
+  t=$(chain_probe lxterminal xfce4-terminal mate-terminal gnome-terminal xterm terminator konsole qterminal x-terminal-emulator)
+  ed=$(chain_probe leafpad xed gedit featherpad kwrite pluma kate mousepad geany gnome-text-editor nano)
+  if command -v speaker-test >/dev/null 2>&1; then snd="speaker-test"
+  else snd="absent (beeps are a no-op)"; fi
+  # name the real terminal behind Debian's x-terminal-emulator symlink (pisafe:648)
+  if command -v x-terminal-emulator >/dev/null 2>&1; then
+    xte=$(readlink -f "$(command -v x-terminal-emulator)" 2>/dev/null)
+    xte=${xte:-?}
+  fi
+
+  echo "  ---- native surface (measured before the battery) ----"
+  echo "  TUI backend  : $tui"
+  echo "  installer    : $inst"
+  echo "  which binary : $whichp"
+  echo "  terminal     : $t"
+  echo "  editor       : $ed"
+  [[ -n $xte ]] && echo "  x-term-emul  : -> $xte"
+  echo "  sound tool   : $snd"
+  echo "  shell/user   : $(id -un 2>/dev/null || echo ?) (EUID $(id -u 2>/dev/null || echo ?))"
+  echo "  -------------------------------------------------------"
+  return 0
+}
+
 # bookkeeping: one report row + tally
 record(){   # label status duration detail
   local label=$1 status=$2 dur=${3:-0} detail=${4:-}
@@ -194,10 +293,18 @@ run_step(){   # label pisafe-args...
   local label=$1; shift
   local seed es dur reason="" win hit t0=$SECONDS
   seed=$(log_seed)
+  # feed the child ONE 'y' on stdin. The battery passes -y, which pisafe
+  # honors on every prompt EXCEPT one: the "Install dependencies?" prompt
+  # (pisafe:363) reads a key from stdin - only the 'install -y' subcommand
+  # auto-approves it. So the harness supplies that key: the install is
+  # allowed to happen, pisafe's own installer does all the work, and its
+  # outcome (success or failure) lands in this step's record. If no prompt
+  # fires, the 'y' is simply unread; and any UNEXPECTED later prompt gets
+  # EOF (answered 'n', fails closed) instead of hanging the battery.
   if [[ -x $PISAFE ]]; then
-    "$PISAFE" "$@"
+    printf 'y' | "$PISAFE" "$@"
   else
-    bash "$PISAFE" "$@"
+    printf 'y' | bash "$PISAFE" "$@"
   fi
   es=$?
   dur=$(( SECONDS - t0 ))
@@ -439,8 +546,10 @@ preflight(){
     command -v sudo >/dev/null 2>&1 || DIE "need sudo (or run this script as root)"
   fi
 
-  # tooling for the selected arms + common steps (a missing tool still fails
-  # its step with a clear log error; warn here surfaces it early)
+  # tooling for the selected arms + common steps. Missing tools are not
+  # fatal: pisafe installs them itself on the first step (the dependency
+  # check is ON in STD_FLAGS, and that is the product behavior under test);
+  # the warn just surfaces it early
   local e need="dd md5sum"
   for e in "${EXTS[@]}"; do
     case $e in
@@ -451,7 +560,8 @@ preflight(){
     esac
   done
   for t in $need; do
-    command -v "$t" >/dev/null 2>&1 || warn "tool '$t' not found in PATH"
+    command -v "$t" >/dev/null 2>&1 \
+      || warn "tool '$t' not found in PATH - pisafe will install it during the first step (auto-approved); the step's record shows how that goes"
   done
 
   base_dir=$(dirname -- "$BASE")
@@ -533,10 +643,179 @@ confirm(){
   fi
 }
 
+# ------------------------------------------------------------------ setup --
+
+# 'bash pisafe_test setup [DIR]': bootstrap a new test machine. Non-destructive:
+# no device is ever touched. Creates DIR (default: ~/Downloads), shows a plan
+# and waits for one ENTER to confirm (-y bypasses), then copies the latest
+# pisafe plus a fresh pisafe_test from GitHub ref SETUP_REF into it.
+# The file running THIS command is never overwritten, because bash reads its
+# script incrementally.
+SETUP_BASE="https://raw.githubusercontent.com/RichardMidnight/pi-safe"
+SETUP_REF="${PISAFE_REF:-development}"
+
+# The ONLY install setup may do on its own: a web-fetch tool, needed to
+# download the pair. Every other runtime tool (pv, pishrink, xz, ...) is
+# installed by pisafe's own installer - and the battery proving that works is
+# the point (STD_FLAGS keeps the dependency check ON); setup must not
+# pre-empt it.
+
+# download URL to FILE with whichever of wget/curl exists (rc != 0 on failure)
+setup_fetch(){   # URL FILE
+  local url=$1 out=$2
+  if command -v wget >/dev/null 2>&1; then
+    wget --quiet --show-progress "$url" -O "$out"
+  elif command -v curl >/dev/null 2>&1; then
+    curl -fsSL --progress-bar "$url" -o "$out"
+  else
+    return 1
+  fi
+}
+
+# a box with NO fetcher at all (no wget, no curl): install wget via apt.
+# Runs ONLY after the confirm gate, and only in that one situation.
+ensure_fetcher(){
+  command -v apt-get >/dev/null 2>&1 \
+    || DIE "no wget/curl here and no apt-get to install one - add a fetcher manually and re-run setup"
+  $SUDO apt-get update -qq
+  $SUDO apt-get install -y wget \
+    || DIE "could not install 'wget' - run it manually ($SUDO apt-get install wget) and re-run setup"
+}
+
+setup_mode(){   # [DIR]
+  local dest=${1:-$HOME/Downloads}
+  local self out f tmp pver t fetch_need plan_a plan_b
+  local tools="dd unzip zip pigz xz zstd pv findmnt"
+
+  [[ $dest == /* ]] || dest="$PWD/$dest"
+  mkdir -p -- "$dest" || DIE "cannot create '$dest'"
+  [[ -d $dest && -w $dest ]] || DIE "directory '$dest' is not writable"
+  dest=$(cd -P -- "$dest" && pwd)   # absolute, no trailing '/.' for clean output
+
+  # the fully-resolved path of the file running this script (if resolvable)
+  self=$(readlink -f -- "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")
+
+  # ---- plan (described below, BEFORE anything happens) ----
+  if [[ -f $dest/pisafe ]]; then
+    plan_a="replace (existing file)"
+  else
+    plan_a="fetch (new)"
+  fi
+  if [[ -f $dest/pisafe_test ]]; then
+    if [[ $(readlink -f -- "$dest/pisafe_test" 2>/dev/null) == "$self" ]]; then
+      plan_b="keep (this is the running harness)"
+    else
+      plan_b="replace (existing file)"
+    fi
+  else
+    plan_b="fetch (new)"
+  fi
+  fetch_need=0
+  command -v wget >/dev/null 2>&1 || command -v curl >/dev/null 2>&1 || fetch_need=1
+
+  echo
+  echo "=========================================================================="
+  echo " PISAFE_TEST setup (non-destructive - no device is ever touched)"
+  echo "   this will:"
+  echo "     1. create the directory : $dest"
+  echo "     2. copy from GitHub into it:"
+  echo "          pisafe      : $plan_a"
+  echo "          pisafe_test : $plan_b"
+  echo "          ref: $SETUP_REF @ $SETUP_BASE"
+  if [[ $SETUP_REF == development ]]; then
+    echo "          'development' is the LIVE beta branch - set PISAFE_REF to a tag to pin"
+  fi
+  echo "     3. leave you in that directory (see the cd line at the end)"
+  if (( fetch_need )); then
+    echo "     +  install 'wget' (web fetch tool - this box has no wget/curl)"
+  fi
+  echo "   runtime tools (pv, pishrink, ...) are NOT installed by setup:"
+  echo "   pisafe's own installer does that, and the battery tests exactly that."
+  echo "   this command only downloads - it does NOT run the test battery;"
+  echo "   the battery (the NEXT command) is DESTRUCTIVE and formats the card."
+  echo "=========================================================================="
+  if [[ -n $YES ]]; then
+    echo "  -y set: confirmation skipped (all prompts auto-answered)"
+  else
+    echo
+    echo "Press ENTER to start, or Ctrl-C to abort."
+    read -r _ || DIE "no confirmation input (stdin closed?) - setup did not run"
+  fi
+
+  # ---- execute ----
+  if (( fetch_need )); then
+    info "Installing web fetch tool 'wget' ..."
+    ensure_fetcher
+  fi
+  for out in "$dest/pisafe" "$dest/pisafe_test"; do
+    f=${out##*/}
+    if [[ $f == pisafe_test ]]; then
+      # refuse to replace the very script that is executing right now
+      if [[ -f $out && $(readlink -f -- "$out" 2>/dev/null) == "$self" ]]; then
+        info "keeping the running harness: '$out'"
+        continue
+      fi
+    fi
+    info "Fetching ${f} (ref ${SETUP_REF}) ..."
+    tmp="$dest/.${f}.setup.tmp"
+    if ! setup_fetch "$SETUP_BASE/${SETUP_REF}/${f}" "$tmp" || [[ ! -s $tmp ]]; then
+      rm -f -- "$tmp"
+      DIE "download of '${f}' failed (ref '${SETUP_REF}')"
+    fi
+    if ! bash -n "$tmp" 2>/dev/null; then
+      rm -f -- "$tmp"
+      DIE "downloaded '${f}' does not parse - bad download or unknown ref '${SETUP_REF}'"
+    fi
+    mv -f -- "$tmp" "$out"
+    chmod +x -- "$out"
+  done
+
+  echo
+  echo "============================= SETUP =================================="
+  echo "  dir     : $dest"
+  ls -l -- "$dest/pisafe" "$dest/pisafe_test" 2>/dev/null | sed 's/^/  /'
+  # 'pisafe -v' is the safe, non-interactive version probe (prints and exits)
+  pver=$(bash "$dest/pisafe" -v 2>/dev/null | head -1)
+  echo "  version : ${pver:-unknown}"
+  echo "  tools   :  (informational only - not installed by setup)"
+  for t in $tools; do
+    if command -v "$t" >/dev/null 2>&1; then
+      echo "            ok      ${t}"
+    else
+      echo "            missing ${t}   (fine - pisafe installs it on the first battery run)"
+    fi
+  done
+  echo "========================================================================"
+  echo
+  # leave the session in the test folder (persists for sourced callers; a child
+  # process cannot move its parent shell's CWD, hence the printed command too)
+  cd -- "$dest" 2>/dev/null || :
+  warn "test mode is DESTRUCTIVE - it formats the target card"
+  echo "  when ready (paste as one line):"
+  echo "    cd ${dest} && bash pisafe_test /dev/sdX [--full]"
+  echo
+}
+
 # --------------------------------------------------------------------- main --
 
 main(){
   local POSITIONAL=() a ext F FILE
+
+  # 'setup' as first argument = non-destructive bootstrap mode:
+  # setup [DIR] [-y]  (order-insensitive; anything else is an error)
+  if [[ ${1:-} == setup ]]; then
+    local sd=""
+    for a in "${@:2}"; do
+      case $a in
+        -y|--yes) YES=1 ;;
+        -*)       echo "error: unknown option '$a' after 'setup' (allowed: a DIR and -y)" >&2; exit 2 ;;
+        "")       : ;;
+        *)        [[ -n $sd ]] && { echo "error: 'setup' takes at most one DIR argument" >&2; exit 2; }; sd=$a ;;
+      esac
+    done
+    setup_mode "$sd"
+    exit 0
+  fi
 
   for a in "$@"; do
     case $a in
@@ -569,6 +848,10 @@ main(){
 
   preflight
   confirm
+
+  # snapshot the box's native interactive surface NOW - before any battery step
+  # can install tools - so the report records what the box actually ships
+  SURFACE=$(native_surface)
 
   TMPD=$(mktemp -d "${TMPDIR:-/tmp}/pisafe_test.XXXXXX") || DIE "could not create temp dir"
   trap 'rm -rf "$TMPD"' EXIT
@@ -621,26 +904,37 @@ main(){
   done
 
   # ------------------------------------------------------------------ report --
-  local pver os_stamp
+  local pver os_stamp rep rf
   pver=$(grep -m1 '^[[:space:]]*SCRIPTVER=' "$PISAFE" 2>/dev/null | cut -d'"' -f2)
   # sourced inside $( ): /etc/os-release defines its own VERSION=, and the
   # subshell confines that assignment - the harness's own VERSION stays intact
   os_stamp=$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-}")
-  echo
-  echo "============================= REPORT ================================="
-  echo "  machine  : $(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown)${os_stamp:+ - $os_stamp}"
-  # uname -m = userland architecture of the running pisafe (the 32/64-bit
-  # answer); uname -r = kernel - together they split identical PRETTY_NAMEs
-  # (e.g. 32-bit userland on an aarch64 kernel)
-  echo "  arch     : $(uname -m 2>/dev/null || echo unknown) (kernel $(uname -r 2>/dev/null || echo unknown))"
-  echo "  date     : $(date '+%Y-%m-%d %H:%M:%S')"
-  echo "  pisafe   : $PISAFE${pver:+ ($pver)}"
-  echo "  harness  : v$VERSION"
-  for a in "${REPORT[@]}"; do
-    printf '  %s\n' "$a"
-  done
-  printf '  totals: %d passed, %d failed\n' "$PASS_CNT" "$FAIL_CNT"
-  echo "========================================================================"
+  rep=$(
+    echo "============================= REPORT ================================="
+    echo "  machine  : $(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown)${os_stamp:+ - $os_stamp}"
+    # uname -m = userland architecture of the running pisafe (the 32/64-bit
+    # answer); uname -r = kernel - together they split identical PRETTY_NAMEs
+    # (e.g. 32-bit userland on an aarch64 kernel)
+    echo "  arch     : $(uname -m 2>/dev/null || echo unknown) (kernel $(uname -r 2>/dev/null || echo unknown))"
+    echo "  date     : $(date '+%Y-%m-%d %H:%M:%S')"
+    echo "  pisafe   : $PISAFE${pver:+ ($pver)}"
+    echo "  harness  : v$VERSION"
+    printf '%s\n' "$SURFACE"
+    for a in "${REPORT[@]}"; do
+      printf '  %s\n' "$a"
+    done
+    printf '  totals: %d passed, %d failed\n' "$PASS_CNT" "$FAIL_CNT"
+    echo "========================================================================"
+  )
+  printf '%s\n' "$rep"
+  # the report is saved in the directory the test was RUN FROM (the CWD),
+  # same place the image files default to
+  rf="$PWD/pisafe_test-report.txt"
+  if printf '%s\n' "$rep" > "$rf" 2>/dev/null; then
+    echo "  report saved: $rf"
+  else
+    warn "could not save report to '$rf' (directory not writable?)"
+  fi
   if (( FAIL_CNT > 0 )); then
     bad "OVERALL: FAIL ($FAIL_CNT step(s) failed)"
     exit 1

@@ -1,0 +1,355 @@
+pisafe_test_plan.txt
+pisafe — test plan and status (as of 2026-10-22)
+=====================================================================
+
+1. What is being tested
+---------------------------------------------------------------------
+pisafe (script under test: 1.2.12-beta.6 across the fleet) and the
+test harness (pisafe_test, v2.0-v2.2). Each battery run exercises:
+
+  - backup in 4 arms     : zip, gz, xz, zst (dd + pishrink shrink + compress)
+  - restore in 4 arms    : zip, gz, xz, zst (uncompress + pishrink expand + dd)
+  - 4 erase/confirm steps between arms
+  - 12 steps total per run
+
+Per-step contract (harness):
+  PASS = pisafe exits 0 AND a fresh pisafe-log window after the step's
+         seed point contains the step's success marker AND no failure
+         line (FAIL_RE) appears.
+  FAIL = anything else; the record then shows exit status, and — when a
+         pisafe error line matched — a log-window dump.
+
+Battery-level properties also under test:
+  - dependency install: pisafe must install missing tools on the box
+    (harness auto-approves that one prompt; the step's record must then
+    prove the install actually worked)
+  - failure handling: a failed step must be caught with a usable reason,
+    the card must not be left half-written, and the remainder of the
+    battery must still complete
+  - setup mode (v2.1): one-file bootstrap of the pair from GitHub
+  - report capture: report block on screen + saved to
+    <CWD>/pisafe_test-report.txt
+
+
+2. What must be covered (the matrix)
+---------------------------------------------------------------------
+  a) package-manager family (pisafe's installer speaks apt, pacman, dnf)
+       apt    — Debian / Raspberry Pi OS / Ubuntu / Mint / DietPi
+       pacman — Manjaro (ARM)
+       dnf    — Fedora-family          [NONE YET]
+  b) architecture
+       aarch64 — most fleet boxes
+       x86_64  — laptop boxes
+       armv7l  — 32-bit userland       [none of the "32"-named boxes was
+                                        real 32-bit until buster]
+  c) distro age
+       current (trixie) through EOL (buster) — tests the installer's
+       behavior when repos still work and when they no longer do
+  d) GUI vs headless
+       headless/minimal proven (trixie-lite)
+       desktop boxes carry whiptail/newt; the battery itself runs CLI
+  e) harness features
+       v2.1: setup mode, one-`y` dependency auto-approve, report saving
+       v2.2: pre-battery native-surface capture in the report (TUI
+             backend, installer family, `which`, terminal +
+             x-terminal-emulator target, editor, sound, EUID) —
+             read-only (`command -v` only, no installs); this is what
+             fills the TERMINAL/EDITOR cells of section 4
+  f) interactive surface (install footprint, TUI, text editor,
+     terminal, `which`)
+       the battery runs CLI flags only — the install footprint (CLI
+       script, icon, desktop entry), the whiptail/newt menus, the
+       editor chain, the terminal chain and the `which` primitive that
+       every install check depends on are never exercised by it; each
+       needs one confirmed manual pass per box (see the checklist)
+  g) network
+       every fleet box reaches a package repo; the fully-offline
+       failure path is only observed on buster (dead EOL repos)
+  h) card size
+       fleet cards are small (the 4-GiB gz-footer edge is the only
+       size-class known); a 64-128 GiB round trip is untested
+
+
+3. What has been tested — 11 runs, pisafe 1.2.12-beta.6
+---------------------------------------------------------------------
+  #  box                        distro                arch    harness  result
+  1  trixie-32                  Raspberry Pi OS 13    arm64   v2.0     12/12 PASS
+  2  trixie-lite64              Raspberry Pi OS Lite  arm64   v2.1     12/12 PASS
+  3  DietPi                     DietPi 13 (Pi OS base) arm64   v2.1     12/12 PASS
+  4  bookworm32                 Raspberry Pi OS 12    arm64   v2.0     12/12 PASS
+  5  pi-inspiron137378          Debian 13 (x86)       x86_64  v2.1     12/12 PASS
+  6  Bullseye64                 Debian 11 (arm)       arm64   v2.0     12/12 PASS
+  7  bullseye64                 Debian 11 (x86)       x86_64  v2.1     12/12 PASS
+  8  raspberrypi                Raspberry Pi OS 10    armv7l  v2.1     10/12 *
+  9  richard-raspberrypi4       Manjaro ARM (pacman)  arm64   v2.1     10/12 *
+  10  lmde                      LMDE 7 "gigi" (x86)   x86_64  v2.1     12/12 PASS
+  11  richard-desktop           Ubuntu 24.04 (noble)  arm64   v2.1+2.2 12/12 PASS
+
+  * both fail only the zst arm, both for the same root cause: zstd could
+    not be installed on that box (buster: EOL repos, apt dead; Manjaro:
+    install did not land the tool). Every box where zstd was present
+    passes the zst arm both directions.
+
+  Coverage so far:  apt family 10 runs,  pacman 1 run,  dnf 0 runs
+                    arm64 x7,  x86_64 x3,  armv7l x1
+                    128 of 132 step-results PASS overall
+  Note: the "32"-named boxes (1, 4) reported aarch64 — real 32-bit
+  coverage only arrived with run 8 (buster).
+  Note: "report saved:" (v2.1 feature) first verified in run 7.
+  Note: run 11 is the first v2.2 native-surface capture (TUI backend,
+  installer, which, terminal, editor, sound, EUID) plus a 3-step zip
+  re-arm on the same box; its script copy reported 1.2.12-beta.6x
+  (a local marker — the working tree's SCRIPTVER is still beta.6).
+  Full records: pisafe_test_log.txt (12 report blocks + user notes).
+
+
+4. Distro list — full picture (tested + expected shape)
+---------------------------------------------------------------------
+  The full cross-cutting list. The TERMINAL and TEXT EDITOR columns are
+  the first match pisafe would pick, in its own fixed chain —
+    terminal: lxterminal, xfce4-terminal, mate-terminal, gnome-terminal,
+              xterm, terminator, konsole, qterminal, x-terminal-emulator
+    editor:   leafpad, xed, gedit, featherpad, kwrite, pluma, kate,
+              mousepad, geany, gnome-text-editor, nano   (nano last)
+  gnome-text-editor is the new link (run 11): it is the GUI text
+  editor on modern GNOME, and it was missing from the chain, so the
+  noble box silently fell back to nano. It is in the working tree
+  (uncommitted) between geany and nano — ship / position is your call.
+  A box with no terminal emulator at all gets NoDisplay=true in the
+  menu entry — install reports success, menu shows nothing (see section
+  8). The interactive-test column is filled on the first manual pass of
+  each box; that record proves the shape actually matches. The results
+  column is the battery outcome. Since harness v2.2 the report block
+  itself records the native surface (terminal, editor, TUI backend,
+  installer, `which`, sound, EUID), so the "?" cells above can be filled
+  straight off each box's report.
+
+  DISTRO                 ARCH    Pkg    TERMINAL        EDITOR       harness  RESULTS     INTERACTIVE   NOTES
+  -- measured (battery) --
+  RaspberryPiOS-13       arm64   apt    ?lxterminal     ?mousepad    v2.0     12/12 PASS  PENDING       run 1 (trixie)
+  RaspberryPiOS-13-lite  arm64   apt    -- (no X)       nano         v2.1     12/12 PASS  PENDING       run 2 (trixie); NoDisplay shape
+  DietPi-13              arm64   apt    ?no X           ? to record  v2.1     12/12 PASS  PENDING       run 3
+  RaspberryPiOS-12       arm64   apt    ?lxterminal     ?mousepad    v2.0     12/12 PASS  PENDING       run 4 (bookworm)
+  Debian-13-x86          x86_64  apt    ? to record     ? to record  v2.1     12/12 PASS  PENDING       run 5 (laptop)
+  Debian-11-arm          arm64   apt    ? to record     ? to record  v2.0     12/12 PASS  PENDING       run 6 (bullseye)
+  Debian-11-x86          x86_64  apt    ? to record     ? to record  v2.1     12/12 PASS  PENDING       run 7 (bullseye)
+  RaspberryPiOS-10       armv7l  apt    lxterminal      mousepad     v2.1     10/12 *     PENDING       run 8 (buster); *zst-arm, apt dead
+  Manjaro-ARM-xfce       arm64   pacman xfce4-terminal  mousepad     v2.1     10/12 *     PENDING       run 9; *zst-arm, install failed
+  LMDE-7                 x86_64  apt    xfce4-terminal  xed          v2.1     12/12 PASS  PENDING       run 10; Cinnamon default shape; terminal was gnome-terminal — cinnamon ships xfce4-terminal (verify)
+  Ubuntu-24.04.5-desktop arm64   apt    gnome-terminal  nano*        v2.1+2.2 12/12 PASS  PENDING       run 11 (noble); whiptail + which binary native to 24.04; *harness probe predates the chain fix — GUI editor = gnome-text-editor
+  -- untested (modern) --
+  RaspberryPiOS-11       arm64   apt    lxterminal      mousepad     --       NO DATA     PENDING       EOL
+  Arch-linux             arm64   pacman -- (no X)       nano         --       NO DATA     PENDING       rolling; headless/minimal assumed
+  Puppy-bionic           x86_64  ppm    ?roxterm        geany        --       NO DATA     PENDING       not in Pisafe's 3 family list; default terminal roxterm — not in the pisafe chain (NoDisplay risk, verify)
+  Debian-13-GNOME        both    apt    gnome-terminal  ?gedit       --       NO DATA     PENDING       gedit or gnome-text-editor (GNOME 47+)
+  Debian-Xfce            x86_64  apt    xfce4-terminal  mousepad     --       NO DATA     PENDING
+  Debian-KDE-Plasma      x86_64  apt    konsole         kwrite       --       NO DATA     PENDING
+  Debian-Cinnamon        x86_64  apt    xfce4-terminal  xed          --       NO DATA     PENDING       cinnamon ships xfce4-terminal + xed (was xterm/uxterm, gedit)
+  Debian-MATE            ?x86_64 apt    mate-terminal   pluma        --       NO DATA     PENDING
+  Debian-LXDE            ?x86_64 apt    lxterminal      mousepad     --       NO DATA     PENDING
+  Debian-LXQt            ?x86_64 apt    qterminal       ?featherpad  --       NO DATA     PENDING
+  Ubuntu-GNOME           both    apt    gnome-terminal  ?gedit       --       NO DATA     PENDING
+  Lubuntu-LXQt           both    apt    qterminal       featherpad   --       NO DATA     PENDING
+  LMDE-Cinnamon          x86_64  apt    xfce4-terminal  xed          --       NO DATA     PENDING       cinnamon ships xfce4-terminal (was gnome-terminal)
+  Mint-Cinnamon          x86_64  apt    xfce4-terminal  xed          --       NO DATA     PENDING       cinnamon ships xfce4-terminal (was gnome-terminal)
+  Mint-MATE              x86_64  apt    mate-terminal   pluma        --       NO DATA     PENDING       mate editor = pluma (was xed)
+  Mint-Xfce              x86_64  apt    xfce4-terminal  mousepad     --       NO DATA     PENDING       xfce editor = mousepad (was xed)
+  Zorin-OS               both    apt    gnome-terminal  ?gedit       --       NO DATA     PENDING       ubuntu-based, gnome-based (verify)
+  Fedora                 both    dnf    gnome-terminal  ?gedit       --       NO DATA     PENDING       only untested family; x86_64+arm64 (no 32-bit)
+  Kali-2026.3-ARM        arm64   apt    ?gnome-terminal ?gedit       --       NO DATA     PENDING       queued; default pi image = GNOME (verify)
+  Kali-2022              arm64   apt    xterm           mousepad     --       NO DATA     PENDING       tested ver 1.2.5
+  -- queued (flashed next) --
+  Ubuntu-22.04.5-armhf   armhf   apt    ?gnome-terminal ?gedit       v2.2     NO DATA     PENDING       last official 32-bit; assumes desktop image (server -> no X)
+
+  Coverage gaps this list exposes:
+   - installer family: dnf (Fedora) never exercised
+   - package managers beyond the 3: ppm (puppy), apk (alpine), emerge
+     (gentoo) — not in Pisafe's 3 families (apt, pacman, dnf)
+   - desktop environments not yet on the fleet: KDE, MATE, LXDE, LXQt
+     (Cinnamon covered by run 10 (LMDE 7); GNOME by run 11 (noble))
+   - the "32" axis is filled (buster); the dnf axis is not
+
+  Reading this table against section 8:
+   - the expected editor is always found (nano is last in the chain),
+     so the editor line can never be the empty shape
+   - the expected terminal can be absent (no fallback in the chain),
+     and that empty shape is the NoDisplay=true silent install
+   - the historical entries (buster, manjaro-xfce, kali) are the
+     shapes this table is filling in against; the kali 2026.3 queued
+     run is the one that confirms the kali row
+
+
+5. Known / expected failures (not defects)
+---------------------------------------------------------------------
+  buster (run 8)
+    backup [zst]  FAIL  exit 22, no zstd installable (repos archived)
+    restore[zst] FAIL  exit 127 (command not found), clean 0-second
+                       cascade for the restore of the missing image
+    -> the behavior we wanted to observe on an EOL box: the battery
+       caught it, said why, and finished the other arms.
+  Manjaro ARM (run 9)
+    backup [zst]  FAIL  exit 20, "zst not installed"
+    restore[zst] FAIL  0s "image missing" (correct cascade)
+    user notes on the box: screen lock prompt, pishrink asked for a
+    sudo password per call, SMB client did not connect (environment,
+    not confirmed pisafe/harness related)
+
+
+6. Not yet run (queued artifacts, checksum-verified in ~/Downloads)
+---------------------------------------------------------------------
+  kali-linux-2026.3-installer-arm64.iso
+    3.8 GB  Kali ARM64 (Kali's current Pi route — generic arm64)
+  ubuntu-22.04.5-preinstalled-server-armhf+raspi.img.xz
+    951 M   last official 32-bit (armhf) Ubuntu Pi image
+  ubuntu-24.04.5-preinstalled-desktop-arm64+raspi.img.xz
+    3.1 G   Ubuntu 24.04.5 desktop (LXQt/Lubuntu slot — Lubuntu no
+            longer ships Pi images; consumed by run 11)
+  Manjaro-ARM-xfce-rpi4-20261012.img.xz
+    1.2 G   (run 9 used an earlier Manjaro ARM build; this one is the
+    current dated build, re-runnable)
+  2020-02-13-raspbian-buster-full.zip
+    2.5 G   (already consumed by run 8)
+
+
+7. To do (no data yet — the queue)
+---------------------------------------------------------------------
+  A) queued images (in ~/Downloads, checksum-verified; flash + run)
+       kali-linux-2026.3-installer-arm64.iso         apt / arm64 / security distro
+       ubuntu-22.04.5-preinstalled-server-armhf+raspi.img.xz
+                                                      second real 32-bit (armhf) box
+       Manjaro-ARM-xfce-rpi4-20261012.img.xz         current Manjaro ARM build
+                                                      (run 9 used an earlier one);
+                                                      also the second pacman data point
+  B) axis gaps (need a box or artifact first)
+       - dnf installer branch — the one untested installer family (Fedora)
+       - interactive surface on every box — the manual checklist in
+         section 8 (install footprint: script, icon, menu entry; TUI,
+         editor, terminal, which; sound, update-check, uninstall);
+         the battery is CLI only by design and reaches none of it
+       - an image >= 4 GiB round trip (footer-size fix landed but was
+         never exercised end-to-end on a genuinely large image)
+       - a 64-128 GiB card round trip (large-volume size + time path)
+       - a fully-offline box (installer + update-check paths with no
+         reachable repos; buster/EOL is the closest thing we have)
+       - a box with nothing preinstalled at all (trixie-lite is close)
+
+  C) process, not testing
+       - the harness work (v2.1 setup mode + report saving, v2.2
+         native-surface capture) is still uncommitted — release-ladder
+         gate: code done + battery green -> your destructive pass on
+         that exact code -> tag, each step by explicit confirmation
+       - observations parked from the log review (no code changes yet):
+           * FAIL records with a missing marker but no matched error
+             line show no log window (the "no zst available" notes had
+             to be hand-written); candidate: always dump the log tail
+             on FAIL, from the child's stderr when there is none
+           * dependency-install failures lost their reason (buster
+             exit 22, Manjaro exit 20 — no apt/pacman error text
+             captured anywhere in the record)
+           * pishrink sudo-per-call on the Manjaro box — understand
+             before it shows up on another box
+           * gnome-text-editor inserted in the editor chain (uncommitted,
+             after run 11 showed noble's GUI editor is invisible to the
+             old chain — it fell back to nano); decide: ship it as is,
+             move it, or drop it (behavior change — your call)
+           * env_terminal's x-terminal-emulator arm case-matches the
+             readlink -f target's basename; noble's target is
+             gnome-terminal.wrapper (a script, not the binary) — it
+             would land in the * arm and emit '<wrapper> -e bash -c'.
+             Latent: the chain hits gnome-terminal itself first
+
+
+8. Per-box interactive-surface checklist (manual, at a console)
+---------------------------------------------------------------------
+  The battery cannot prove any of this; someone with the box can, in
+  a few minutes at a console. Record each line under the box's entry in
+  pisafe_test_log.txt. Status column: P = works, F = broken, ? = absent.
+  Suggested order: the shape checks first (TUI, editor, terminal,
+  which), then the install cycle, and uninstall last — the install
+  cycle on one box per distro family is enough for the cycle itself;
+  every box gets the shape checks.
+    [ ] install   `pisafe install` (TUI: Install, or CLI) and check
+                  every artifact it claims:
+                    * script at /usr/local/bin/pisafe, and its `-v`
+                      matches the version you ran (if the GitHub
+                      fetch failed the running copy is installed
+                      instead and a warning is printed)
+                    * icon at /usr/share/pisafe/pisafe_icon.png
+                      (a warning = default icon in the menu; note it)
+                    * /usr/share/applications/PiSafe.desktop exists
+                      and is syntactically a desktop entry
+    [ ] menu      the entry is actually findable in the box's menu -
+                  record the menu name and the icon shown, and that
+                  selecting it opens a terminal window running the
+                  whiptail TUI.  The install message says
+                  'Accessories' but the entry's category is Utility;
+                  where it lands depends on the desktop, so record the
+                  fact, not the message.  Silent shape: a box with no
+                  terminal emulator gets NoDisplay=true - install
+                  reports success and the menu shows nothing; record
+                  which shape the box has
+    [ ] TUI       the whiptail menus load, open and navigate. Record
+                  which renderer the box got: whiptail (installed by
+                  pisafe) or the newt fallback (the box's installer
+                  ran `newt` on fedora / `libnewt` on arch+manjaro
+                  when whiptail could not be installed). Note: the
+                  newt build has no --timeout, so the erase countdown
+                  appears as a Yes/No gate instead of a ticking timer
+                  - that is the intended behavior, not a defect
+    [ ] which     the box can `which` (pisafe's env_which probes with
+                  `which` and tries to `install which` on first use if
+                  it is missing — note that apt + pacman + dnf attempts
+                  all fire without checking the family first) and that
+                  it resolves a known tool, e.g. `which dd`
+    [ ] editor    pisafe's `settings` / `log` commands open the file in
+                  the first editor it finds in its chain (leafpad, xed,
+                  gedit, featherpad, kwrite, pluma, kate, mousepad,
+                  geany, nano); record which one the box picked and
+                  that the file opens and saves back
+    [ ] terminal  env_terminal locates one of: lxterminal,
+                  xfce4-terminal, mate-terminal, gnome-terminal, xterm,
+                  terminator, konsole, qterminal, x-terminal-emulator
+                  (its symlink read resolves to the real one); record
+                  which one, and that a pisafe terminal window actually
+                  launches from the desktop path
+    [ ] sound     the beeps need SOUND=on in the config and a working
+                  speaker-test. Record the shape: beep heard, silent
+                  with speaker-test present, or silent with it absent
+                  (pisafe degrades to silence - the intended behavior,
+                  but confirm the menu still works in that shape)
+    [ ] update    at launch the update check fetches the main-branch
+                  script and compares versions: record which path the
+                  box took - the up-to-date message, the update
+                  prompt (and its from/to versions), or the
+                  'Can't connect to server' error with no install
+                  attempted. Do not accept an update offer during a
+                  battery window
+    [ ] uninstall `pisafe uninstall` (TUI: Uninstall, or CLI) and
+                  verify the reverse: script, icon, desktop entry and
+                  config file all gone - and the log file is still
+                  there (it is deliberately kept, and the message
+                  says so)
+
+  Reading across the fleet:
+    - a minimal box's expected shape is nano + x-terminal-emulator or
+      nothing on the terminal line — that is the shape that proves the
+      fallback chains work on a lean install
+    - a desktop box whose TUI is newt means whiptail failed to install
+      there — which means the installer ran and was refused; worth a
+      note before the next dnf box hits the same wall
+    - if `which` itself is absent on a box, env_which masks it (the
+      first probe auto-installs it) — record both whether the install
+      actually happened and which package manager landed it
+
+
+9. How to run (one box, short recipe)
+---------------------------------------------------------------------
+  Flash the SD, boot the box:
+    bash <pisafe_test> setup           # pulls the pair + creates the dir
+  or, if the pair is already on the box:
+    cd <pair-dir>
+  Run:
+    bash pisafe_test /dev/sdX -y       # erases the card at every step
+  Output:
+    report block on screen, plus <CWD>/pisafe_test-report.txt
+  Append the report block (and any manual notes) to pisafe_test_log.txt.
