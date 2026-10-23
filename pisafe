@@ -18,7 +18,7 @@
 set -o pipefail
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.12-beta.6"   # 2026/10/19
+SCRIPTVER="1.2.12-beta.6"   # 2026/10/22
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
@@ -662,7 +662,7 @@ env_terminal(){
 
 
 env_texteditor(){
-    local TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany nano "
+    local TEXT_EDITORS=" leafpad xed gedit featherpad kwrite pluma kate mousepad geany gnome-text-editor nano "
     local TEXT_EDITOR=
     for TEXT_EDITOR in $TEXT_EDITORS; do
         if [[ $(env_which "$TEXT_EDITOR") ]]; then
