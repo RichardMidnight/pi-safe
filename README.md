@@ -66,9 +66,7 @@ Install your OS (e.g. Raspberry Pi OS, Debian, Ubuntu, Manjaro) on a smaller SD 
 Originally developed and tested on Raspberry Pi 4 running Raspberry Pi OS Buster.  
 Also tested on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.04 for Raspberry Pi, Linux Mint, LMDE.
 
-- **v1.2.12-beta.6** — Full function-by-function review pass (R1–R17): shellcheck clean, quoting and edge-case hardening, GUI/CLI polish
-- **v1.2.12-beta.4** — Clarified the "no media found" backup message (GitHub issue #55)
-- **v1.2.12-beta.1** — Cleaned up and standardized a lot of code with shellcheck
+- **v1.2.12-beta.6** — Pure hardening pass over 1.2.11: about 30 reliability, standards, and bug fixes across the full function review (R1–R17) — no new features, no default changes
 - **v1.2.11** — The stable release since Dec 2023
 - **v1.2.10** — Adds support for Bookworm and NVMe media  
 - **v1.2.9** — Started adding command-line settings override options (undocumented)  
