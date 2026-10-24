@@ -548,9 +548,6 @@ config_var_set_defaults(){
 
     #restore settings
     config_var_set large_device_write_warning 16gb "$FORCE"
-    # off: image listings show 'unknown (>= ~4 GiB)' for big gz images
-    #      instead of calculating the size (a full decompress pass); on: calculate.
-    config_var_set exact_gz_image_size off "$FORCE"
 }
 
 
@@ -575,7 +572,6 @@ config_var_get_settings(){
 
     # restore settings
     LARGE_DEVICE_WRITE_WARNING=$(config_var_get large_device_write_warning)
-    EXACT_GZ_IMAGE_SIZE=$(config_var_get exact_gz_image_size)
 
     if [[ "$INTERFACE" = cli ]] && [[ "$DEFAULT_PATH_CLI_FROM_SETTINGS" != on ]]; then
         DEFAULT_PATH=$(pwd)
@@ -977,11 +973,12 @@ file_image_size() {
         #  older xz prints bare digits (optional " B" / ", B" suffix). Pin the trailing byte field and
         #  keep digits only -- a naive whole-line digit strip would turn that 5.8.1 line into "20020971520".
         xz)             SIZE_BYTES=$(xz -l -v "$INFILE" 2> /dev/null | grep Uncompressed | sed 's/\s\s*/ /g' | grep -oE '[0-9,]+( B)?\)?' | tail -n 1 | tr -cd '0123456789') ;;
-        #  2026-10-19 fix: the gz footer stores only the size mod 2^32, so an
-        #  image >= 4 GiB carries a truncated residue there (pigz flags it with
-        #  'unk'/'?'; the old sed 's/?/0/g' turned that flag into an extra zero
-        #  digit -> a ~10x wrong size).  Truncated footer -> non-numeric
-        #  'unknown' so callers decide: measure exactly (slow), skip, or show.
+        #  gz: trust the footer size (pigz -l).  The trailer only carries
+        #  the size mod 2^32, but the backup guard refuses to MAKE gz
+        #  images >= 4 GiB, so every gz this app creates reads back an
+        #  exact size.  (Old/foreign >4 GiB files still read as a
+        #  truncated residue - unverifiable, accepted.)  Unparseable
+        #  (corrupt file) -> 'unknown'.
         gz)  if RAW_SZ=$(pigz -l "$INFILE" 2> /dev/null | grep -v compressed | sed 's/\s\s*/ /g' | sed -e 's/^[ \t]*//' | cut -d' ' -f2) && [[ $RAW_SZ =~ ^[0-9]+$ ]]; then
                   SIZE_BYTES=$RAW_SZ
               else
@@ -993,13 +990,9 @@ file_image_size() {
     esac
 
     if [[ $SIZE_BYTES = unknown ]]; then
-        # non-numeric on purpose: callers decide (measure / skip / display),
-        # never do arithmetic on this value.
-        if [[ "$HUMAN" = -h ]]; then
-            echo "unknown (>= ~4 GiB)"
-        else
-            echo "$SIZE_BYTES"
-        fi
+        # non-numeric on purpose (gz whose footer could not be parsed):
+        # listings display this and the restore gate warns; never arithmetic.
+        echo "unknown"
         return 1
     fi
 
@@ -1016,26 +1009,15 @@ file_image_size() {
 }
 
 
-measure_gz_size(){
-    # exact (decompressed) size of a gzip image - one full decompress pass.
-    # only used for images whose gz footer does not carry the size (>= 4 GiB).
-    gzip -dc -- "$1" 2> /dev/null | wc -c | tr -dc '0-9'
-}
-
-
 image_size_display(){
-    # listing display: honours EXACT_GZ_IMAGE_SIZE for big gz images,
-    # otherwise reports 'unknown (>= ~4 GiB)' instead of a wrong number
+    # listing display: gz sizes come from the footer (pigz -l) - exact for
+    # everything PiSafe creates (it never makes gz images >= 4 GiB).
     local IMG_SZ
     IMG_SZ=$(file_image_size "$1")
-    if [[ $IMG_SZ = unknown && "${EXACT_GZ_IMAGE_SIZE:-off}" = on ]]; then
-        echo "Calculating the actual size of '$1' (takes as long as a restore-write)..." >&2
-        IMG_SZ=$(measure_gz_size "$1")
-    fi
     if [[ $IMG_SZ =~ ^[0-9]+$ ]]; then
         get_bytes "$IMG_SZ" -h
     else
-        echo "unknown (>= ~4 GiB)"
+        echo "unknown"
     fi
 }
 
@@ -1318,10 +1300,16 @@ media_backup(){
  ;;
 
         gz)
-            # 2026-10-19: the gz footer only carries size mod 2^32 - a raw
-            # image >= 4 GiB cannot have its size read back later
+            # 2026-10-23: the gz footer only carries size mod 2^32 - a raw
+            # image >= 4 GiB would list with a wrong, unverifiable size.
+            # Backstop for the pre-backup guard (which refuses at ~3.9 GiB):
+            # if the ACTUAL raw is still >= 4 GiB, refuse and clean up
+            # instead of creating a file whose size we couldn't verify.
             if RAWB=$(stat -c%s -- "$OUTFILE_BASE.img" 2> /dev/null) && [[ $RAWB =~ ^[0-9]+$ ]] && [[ $RAWB -ge 4294967296 ]]; then
-                ui_msg_warning $LINENO "gz is NOT RECOMMENDED for images over 4GB because gz cannot remember the true size of files over 4GB, so it has to be calculated each time which is very slow."
+                ui_msg_error $LINENO "gz can't carry an accurate size for a raw image of $(get_bytes "$RAWB" -h) (>= 4 GiB) - not making the file.  Rerun with an xz (or zst) target."
+                ui_log "~ Backup refused at compress step (gzip size limit): raw image $(get_bytes "$RAWB" -h) is >= 4 GiB"
+                rm -f "$OUTFILE_BASE".img
+                return 1
             fi
             if [[ -n $(which pv) ]]; then
                 run_command "pv '$OUTFILE_BASE.img' | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
@@ -1587,12 +1575,17 @@ Back up an explicit device instead:  pisafe backup /dev/sda"
     fi
 
     #################################################
-    # gzip >= 4 GiB IMAGE GUARD (pre-backup)
+    # gzip SIZE GUARD (pre-backup) - refuse to make a gz file this large
     #
     # A gz trailer only carries the decompressed size mod 2^32, so a raw image
-    # of 4 GiB or more cannot report its true size later - PiSafe would have to
-    # decompress to re-measure it on every restore (slow).  xz/zst/zip have no
-    # such limit, so offer a switch to xz before the (long) backup starts.
+    # of 4 GiB or more would list with a wrong, unverifiable size afterwards.
+    # So PiSafe simply does not make gz files at or above ~3.9 GiB raw (a
+    # little under the limit, headroom for the estimate being optimistic).
+    # Below that, every gz this app creates sizes correctly, and the reader
+    # side stays uniform (one size path for all formats).
+    #
+    # Yes on the prompt = switch THIS backup to xz (no such limit) and carry
+    # on; No/ESC/EOF = cancel.  -y and no-TTY cannot be asked, so they refuse.
     #
     # The size here is UNCOMPRESSED_BYTES - the same post-shrink raw value shown
     # on the '... Shrink filesystem by X => Y' estimate line.  We call
@@ -1601,27 +1594,37 @@ Back up an explicit device instead:  pisafe backup /dev/sda"
     #################################################
     if [[ $(file_ext "$OUTFILE") = gz ]]; then
         if media_backup_estimate "$INDEV" > /dev/null 2> /dev/null; then
-            if [[ "$UNCOMPRESSED_BYTES" =~ ^[0-9]+$ ]] && (( UNCOMPRESSED_BYTES >= 4294967296 )); then
+            # ~3.9 GiB = 1073741824 * 39 / 10 bytes
+            if [[ "$UNCOMPRESSED_BYTES" =~ ^[0-9]+$ ]] && (( UNCOMPRESSED_BYTES >= 1073741824 * 39 / 10 )); then
                 if [[ "$SILENT" = -y ]]; then
-                    # non-interactive: can't prompt, so warn and carry on (-y = "just do it")
-                    ui_msg_warning $LINENO "gz image is ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) raw (>= 4 GiB): each restore will have to re-measure its size (slow). Continuing because of -y. "
-                else
-                    GZ_GUARD_MSG="This image will be ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) (raw, after shrink).
+                    # non-interactive: can't prompt, and won't switch format silently -> refuse
+                    ui_msg_warning $LINENO "gz image is ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) raw (>= ~3.9 GiB): PiSafe does not make gz files this large (gz can't carry an accurate size above 4 GiB).  Rerun with an xz (or zst) target - those have no such limit."
+                    ui_log "~ Backup refused (gzip size limit): ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) raw is above the ~3.9 GiB gz limit"
+                    return 1
+                fi
+                if [[ "$INTERFACE" = cli && ! -t 0 ]]; then
+                    # nobody to answer -> fail-safe refuse, don't start a long backup
+                    ui_msg_warning $LINENO "gz image is ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) raw (>= ~3.9 GiB) and nobody is available to confirm - backup not started.  Rerun interactively"
+                    ui_log "~ Backup refused (gzip size limit, nobody to confirm): ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) raw"
+                    return 1
+                fi
+                GZ_GUARD_MSG="This image will be ~$(get_bytes "$UNCOMPRESSED_BYTES" -h) (raw, after shrink).
 
-gz can't carry the true size of images >= 4 GiB, so every restore must decompress again just to measure it (slow).
+gz can't carry an accurate size above 4 GiB (the size field wraps there), so PiSafe doesn't make gz files this large - the size would list as a wrong, unverifiable number afterwards.
 
-Switch to xz for this backup?  (xz has no such limit)"
-                    if [[ $(ui_yesno "gzip SIZE WARNING" "$GZ_GUARD_MSG") = y ]]; then
-                        OUTFILE="${OUTFILE%.gz}.xz"
-                        ui_log "~ Switched backup format gz -> xz: '$OUTFILE'"
-                        media_backup_check_outfile
-                        ES=$?
-                        if (( ES )); then
-                            return "$ES"
-                        fi
-                    else
-                        ui_msg_warning $LINENO "Continuing with gz for an image >= 4 GiB (~$(get_bytes "$UNCOMPRESSED_BYTES" -h) raw); each restore will need to re-measure its size."
+Switch this backup to xz?  (xz has no such limit; 'n' cancels)"
+                if [[ $(ui_yesno "gzip SIZE LIMIT" "$GZ_GUARD_MSG") = y ]]; then
+                    OUTFILE="${OUTFILE%.gz}.xz"
+                    ui_log "~ Switched backup format gz -> xz: '$OUTFILE'"
+                    media_backup_check_outfile
+                    ES=$?
+                    if (( ES )); then
+                        return "$ES"
                     fi
+                else
+                    ui_log "~ Backup canceled (at gzip SIZE LIMIT)"
+                    echo
+                    return 1
                 fi
             fi
         fi
@@ -1632,8 +1635,8 @@ Switch to xz for this backup?  (xz has no such limit)"
         if [[ $INTERFACE = gui ]]; then
             MSG="Backup '$(media_name "$INDEV")' 
 to     '$OUTFILE'. \n\n
-A good 8GB SD-card with RaspiOS on a Pi4 takes about 11 minutes with zip 
-and about 8 minutes with gz. \n\n
+A good 8GB SD-card with RaspiOS on a Pi 5 takes about 6 minutes with zip 
+and about 10 minutes with xz. \n\n
 Switch to terminal and create image-file now?"
         else
             MSG="Backup '$(media_name "$INDEV")' to '$OUTFILE' now?"
@@ -1777,18 +1780,12 @@ media_restore(){
     date
     TIME1=$(date +%s)
     SZ_WRITE=$(file_image_size "$INFILE" -h)
-    [[ $MEAS_SZ =~ ^[0-9]+$ ]] && SZ_WRITE=$(get_bytes "$MEAS_SZ" -h)   # gate measured the size
     echo_if_cli "$SZ_WRITE to write"
 
     ui_echo "~ Erasing MBR, signature, and partition table from '$OUTDEV'..."
     run_command "sudo dd if=/dev/zero of=$OUTDEV bs=512 count=2 > /dev/null" "$LINENO"
 
     RESTORE_BYTES=$(file_image_size "$INFILE")
-    # gz >= 4 GiB: the checklist gate may already have measured the exact
-    # size (one decompress pass) - reuse it as the progress-bar total
-    if [[ ! $RESTORE_BYTES =~ ^[0-9]+$ && $MEAS_SZ =~ ^[0-9]+$ ]]; then
-        RESTORE_BYTES=$MEAS_SZ
-    fi
 
     case $INFILEEXT in
         img | iso)
@@ -1828,9 +1825,11 @@ media_restore(){
             fi
  ;;
 
+        # 'pv -s' total comes from the footer (pigz -l) - exact for every gz
+        # PiSafe creates (it refuses to make gz images >= 4 GiB); an
+        # unparseable footer (old/foreign or corrupt) just leaves the total
+        # off, so the bar runs without one.
         gz)
-            # size only known for images < 4 GiB (gz footer truncated above
-            # that) - then leave the progress-bar total off
             PV_ARGS=(-n)
             PV_T=
             if [[ $RESTORE_BYTES =~ ^[0-9]+$ ]]; then
@@ -1838,12 +1837,11 @@ media_restore(){
                 PV_ARGS+=(-s "$RESTORE_BYTES")
             fi
             if [[ "$INTERFACE" = cli ]]; then
-                #run_command "pv '$INFILE' | pigz -d -k -c | sudo dd of=$OUTDEV bs=4M conv=fsync" "$LINENO"
                 run_command "pigz -d -c '$INFILE' | pv $PV_T | sudo dd of=$OUTDEV bs=4M conv=fsync" "$LINENO"
                 ES=$?
             else
-                ui_echo "~ Running: pigz -d -k -c '$INFILE' | pv -n $PV_T | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
-                (pigz -d -k -c "$INFILE" | pv "${PV_ARGS[@]}" | sudo dd of="$OUTDEV" bs=4M conv=fsync) 2>&1 | \
+                ui_echo "~ Running: pigz -d -c '$INFILE' | pv -n $PV_T | sudo dd of=$OUTDEV bs=4M conv=fsync" blue
+                (pigz -d -c "$INFILE" | pv "${PV_ARGS[@]}" | sudo dd of="$OUTDEV" bs=4M conv=fsync) 2>&1 | \
                 whiptail --backtitle "$BACKTITLE" --title "RESTORE" --gauge "\nWriting '$INFILE' \n\nto '$(media_name "$OUTDEV")' ..." "$WT_HEIGHT" "$WT_WIDTH" 0
                 ES=$?
             fi
@@ -1884,7 +1882,6 @@ media_restore(){
 
 
 media_restore_checklist(){
-    MEAS_SZ=    # fresh for every restore - gate arm 'a/calculate' (or -y) below is the only setter
     #GET INFILE if missing  ##################################
     if [[ -z "$INFILE" ]]; then
         if whiptail_fselect "RESTORE : Select an Image-file" "$DEFAULT_PATH" "zip" "no"; then
@@ -1973,68 +1970,20 @@ Be sure this is the right device"
     fi
 
     # Stop if imagefile is larger than device.
-    # gz images >= 4 GiB do not carry their size in the file (the footer
-    # stores it mod 2^32), so the compare is impossible there:
-    #   SILENT=-y (automation/harness): calculate the actual size (one
-    #       decompress pass - announced) and then do the normal compare.
-    #   interactive: offer calculate / continue anyway / quit.
-    #   non-interactive without -y: quit - fail-safe, no one to confirm.
+    # One size path for every format (gz: footer via pigz -l).  PiSafe no
+    # longer MAKES gz images >= 4 GiB (the backup guard refuses), so the
+    # only >4 GiB gz left in the wild are old/foreign files - a size that
+    # can't be read is refused like every other unreadable size.
+    MEDIA_SZ=$(media_size "$OUTDEV")
     IMG_SZ=$(file_image_size "$INFILE")
-    if [[ ! $IMG_SZ =~ ^[0-9]+$ ]]; then
-        MEDIA_SZ=$(media_size "$OUTDEV")
-        CH=
-        if [[ "$SILENT" = -y ]]; then
-            CH=a
-        elif [[ "$INTERFACE" = cli ]]; then
-            if [[ -t 0 ]]; then
-                CH=
-                while true; do
-                    printf "%s: size of '%s' not carried (gz >= 4 GiB); '%s' is %s.\n[a] calculate the actual size (one decompress pass)  [b] continue anyway  [c] quit? " "$PRODUCTNAME" "$INFILE" "$(media_name "$OUTDEV")" "$(get_bytes "$MEDIA_SZ" -h)"
-                    read -r CH || { CH=c; break; }
-                    case $CH in a | b | c) break ;; esac
-                done
-            else
-                ui_msg_warning $LINENO "size of '$INFILE' not carried (gz >= 4 GiB) and no one is available to confirm - restore not started.  Rerun interactively, or with -y which calculates the actual size"
-                CH=c
-            fi
-        else
-            CH=$(whiptail --backtitle "$BACKTITLE" --title "SIZE UNKNOWN (gz >= 4 GiB)" \
-                --menubox "The size of '$INFILE' could not be read from the file
-(gz images >= 4 GiB do not carry their size).
-'$(media_name "$OUTDEV")' is $(get_bytes "$MEDIA_SZ" -h).
-
-Choose:" "$WT_MB_HEIGHT" "$WT_MB_WIDTH" 3 \
-                a "Calculate the actual size (one decompress pass - takes as long as a restore-write)" \
-                b "Continue anyway (skip the size check and restore)" \
-                c "Quit" 3>&1 1>&2 2>&3)
-            [[ $CH = a || $CH = b ]] || CH=c
-        fi
-        case $CH in
-            a)
-                ui_msg RESTORE "~ Calculating the actual size of '$INFILE' (.gz images >= 4 GiB - takes some time)..." "" "" log
-                MEAS_SZ=$(measure_gz_size "$INFILE")
-                if [[ ! $MEAS_SZ =~ ^[0-9]+$ ]] || [[ $MEAS_SZ -lt 1 ]]; then
-                    ui_msg_error $LINENO "Could not calculate the actual size of '$INFILE' - restore not started"
-                    return 1
-                fi
-                ui_msg RESTORE "~ '$INFILE' is $(get_bytes "$MEAS_SZ" -h); '$(media_name "$OUTDEV")' is $(get_bytes "$MEDIA_SZ" -h)" "" "" log
-                if [[ $MEAS_SZ -gt $MEDIA_SZ ]]; then
-                    ui_msg_error $LINENO "The image in '$INFILE' is '$(get_bytes "$MEAS_SZ" -h)'
+    if [[ ! $IMG_SZ =~ ^[0-9]+$ ]] || [[ $IMG_SZ -lt 1 ]]; then
+        ui_msg_error $LINENO "Could not determine the size of '$INFILE' (corrupt or empty image?) - restore not started"
+        return 1
+    fi
+    if [[ $IMG_SZ -gt $MEDIA_SZ ]]; then
+        ui_msg RESTORE "~ '$INFILE' is $(get_bytes "$IMG_SZ" -h); '$(media_name "$OUTDEV")' is $(get_bytes "$MEDIA_SZ" -h)" "" "" log
+        ui_msg_error $LINENO "The image in '$INFILE' is '$(get_bytes "$IMG_SZ" -h)'
 and '$OUTDEV' is only '$(get_bytes "$MEDIA_SZ" -h)'"
-                    return 1
-                fi
-                ;;
-            b)
-                ui_msg RESTORE "~ Warning: actual size of '$INFILE' is unknown (gz >= 4 GiB); the size check was skipped at your choice.  '$(media_name "$OUTDEV")' is $(get_bytes "$MEDIA_SZ" -h)" "" "" log
-                ;;
-            *)
-                ui_msg RESTORE "~ Restore of '$INFILE' ended - quit chosen (actual size unknown, gz >= 4 GiB)." "" "" log
-                return 1
-                ;;
-        esac
-    elif [[ $IMG_SZ -gt $(media_size "$OUTDEV") ]]; then
-        ui_msg_error $LINENO "The image in '$INFILE' is ' $(file_image_size "$INFILE" -h)'
-and '$OUTDEV' is only '$(media_size "$OUTDEV" -h)'"
         return 1
     fi
 
