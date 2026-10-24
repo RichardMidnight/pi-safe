@@ -82,3 +82,31 @@ Short variants:
   `05c13ac`, `fe47be2`, and the two 2026-10-24 rounds: install semantics, zip-default revert).
   Ladder: code green → *user's* destructive pass on that exact code → tag + push (each remote
   action with its own explicit GO).
+  **GREEN 2026-10-24:** 08:44:44 Debian-trixie RPi 12/12 (top entry of `testing/pisafe_test_log.txt`),
+  second platform after the 10-23 10:57 Manjaro 12/12. Ladder (c) pending — user call: beta.7 or
+  straight `v1.2.12`.
+
+## Appendix — beta trail (beta.1 → beta.6)
+
+Migrated from the dev README release-notes list (which now carries a single beta.6 line).
+Sourced from `REVIEW_ROUNDS.md` release entries + the pre-tightening README bullets.
+
+- **1.2.12-beta.1** — Cleaned up and standardized a lot of code with shellcheck
+  (first 1.2.12 line; the reviewed lineage resumed at beta.2 and `v1.2.12-beta.1` is retained
+  as a tag on GitHub)
+- **1.2.12-beta.2** — Full shellcheck processing (17 findings → 0) + beta lock-in; version string
+  standardized to SemVer (`1.2.12.beta1` → `1.2.12-beta.2`)
+- **1.2.12-beta.3** — The big one: settings-file read/write robustness (a `# log=off` comment no
+  longer leaks into values; unanchored rewrites and `clear` clobbering fixed), `bc` dependency
+  dropped (pure-bash size math), version-string crash fix (`1.2.12rc1`-style inputs), RAM-disk
+  (`zram0`) noise out of the device list, install/update/uninstall path hardening (guarded
+  downloads, `--backup` consistent, self-copy guard, desktop-entry fixes), `ui_*` family
+  cleanup (flag-proof echo, CLI EOF spin fixed, honest countdown gate), backup pipeline
+  pv/compressor guards + zstd arm fixed, root-device detection made exact, xz size-parse
+  fix for older xz — also carried the **xz-as-default** experiment (reverted 2026-10-24, see above)
+- **1.2.12-beta.4** — Clarified the "no media found" backup message (GitHub issue #55):
+  explains the hidden boot disk and the explicit-device workaround
+- **beta.5** — **retracted** 2026-10-18; never a published surface (published betas: 2, 3, 4)
+- **1.2.12-beta.6** — Full function-by-function review pass (R1–R17), 78/78 functions reviewed:
+  shellcheck clean, quoting and edge-case hardening, GUI/CLI polish (includes the earlier gz
+  restore-refusal and size-listing fixes; the final gz creation gate ships in beta.7)

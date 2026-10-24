@@ -1161,3 +1161,11 @@ Verification (all agent-safe — no device touched):
 * **main fix (user "fix", 2026-10-24):** main `437374b` — README `Default: zip 1` restored (undoes `3d5b4ef`, which contradicted main's own 1.2.11 code); main tree verified clean incl. `pisafe_icon.png` (the app's install icon URL resolves).
 * **Bookkeeping (user "go ahead"):** `REVIEW_STATUS.md` updated to final position (ladder line now (a)✓ (b)✓ (c) pending); `testing/pisafe_test_punchlist.txt` committed to dev.
 * **Remaining (user decisions):** v1.2.12-beta.7 **or** straight `v1.2.12` stable — either way the SCRIPTVER bump + tag are separate explicit ladder steps (straight-stable adds the dev→main sync round); PRs #54/#57 still open; `update`'s beta≡stable equality note (optional, legacy) on the table.
+
+## README release-notes tightening (user-directed, 2026-10-24)
+
+* **User:** "just have the 1.2.12 beta6 with an appropriate 'hardening' statement… ~30 changes… the details of beta1-beta6 should go elsewhere (maybe another doc?)."
+* **dev `README.md`:** the three beta bullets (`v1.2.12-beta.6` / `-beta.4` / `-beta.1`) collapsed to a **single** `v1.2.12-beta.6` line — "Pure hardening pass over 1.2.11: about 30 reliability, standards, and bug fixes across the full function review (R1–R17) — no new features, no default changes" + pointer to `RELEASE_NOTES_1.2.12.md`. All other version bullets (v1.2.11 down) untouched.
+* **`RELEASE_NOTES_1.2.12.md`:** new **Appendix — beta trail (beta.1 → beta.6)** sourced from the campaign log's release entries (beta.2 lock-in + SemVer bump; beta.3 the big one incl. the xz-default experiment later reverted; beta.4 = #55; beta.5 **retracted**; beta.6 = R1–R17 pass, with the caveat that the final gz creation gate ships in beta.7). The "Gate before tag" section also updated: ladder (b) GREEN line (10-24 trixie 12/12 + 10-23 Manjaro 12/12).
+* **Precision corrections while sourcing:** xz-as-default rode in **beta.3**, not beta.4 (log: "Also in beta.3 … #7 make xz the default") — appendix corrected accordingly; beta.6 tag → `40a6683` confirmed pre-`fe47be2`.
+* **Flag (pending GO):** `main`'s README carries the same three beta bullets — the same one-line treatment there is a separate main-branch + push action.
