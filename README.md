@@ -25,20 +25,21 @@ PiSafe lets you create compressed image files of SD cards, USB drives, HDDs, SSD
 ## Install
 Paste or type this into a terminal window:
 
+**Stable** (v1.2.11)
 ```bash
 wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
 bash pisafe install
 ```
 
-**Beta Version** (v1.2.12-beta.1)
+**Beta Version** (v1.2.12-beta.6)
 ```bash
-wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/v1.2.12-beta.1/pisafe -O pisafe
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/archive/pisafe_1.2.12-beta.6 -O pisafe
 bash pisafe install
 ```
 
 **Old Stable** (in case current version has issues)
 ```bash
-wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.2.9 -O pisafe
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/archive/pisafe_1.2.9 -O pisafe
 bash pisafe install
 ```
 
@@ -65,6 +66,10 @@ Install your OS (e.g. Raspberry Pi OS, Debian, Ubuntu, Manjaro) on a smaller SD 
 Originally developed and tested on Raspberry Pi 4 running Raspberry Pi OS Buster.  
 Also tested on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.04 for Raspberry Pi, Linux Mint, LMDE.
 
+- **v1.2.12-beta.6** — Full function-by-function review pass (R1–R17): shellcheck clean, quoting and edge-case hardening, GUI/CLI polish
+- **v1.2.12-beta.4** — Clarified the "no media found" backup message (GitHub issue #55)
+- **v1.2.12-beta.1** — Cleaned up and standardized a lot of code with shellcheck
+- **v1.2.11** — The stable release since Dec 2023
 - **v1.2.10** — Adds support for Bookworm and NVMe media  
 - **v1.2.9** — Started adding command-line settings override options (undocumented)  
 - **v1.2.7** — Fixed issue with pigz and xz  
@@ -104,7 +109,7 @@ Compressing the image file with zip, xz, gz, or zst reduces the size of the imag
 Standard compression levels are 1 through 9. A higher number will compress the file a little more but take a lot more time.
 - **Fastest:** `zst 1`  
 - **Smallest:** `xz 8` (or higher, limited by memory)  
-- **Default:** `xz 1`
+- **Default:** `xz 1` (industry-standard balance)
 ---
 
 ### Overlay FS (Raspberry Pi Desktop x86 & Overlay Mode)
