@@ -1,0 +1,19 @@
+this version
+for ubuntu, add gnome-text-editor  - done
+change backup estimate msg from gz to xz  - 
+refuse to go gz if over 3.9GB - done?
+
+
+future versions. not now
+consider adding an eject button to pisafe
+
+add features to make a smaller image file:
+add a feature to delete junk from the drive (first?)
+add a feature to zero out empty space so it compresses more.
+how do we handle not having the ext4 partition at the end?  like raspberry pi desktop where there is a swap file at the end.
+
+
+improve update:
+only check once a week (adjustable)
+move ver to a latest_version.txt file to check
+maybe put an (update) button on the UI?
