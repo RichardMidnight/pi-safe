@@ -1137,3 +1137,17 @@ Verification (all agent-safe — no device touched):
 * **Ladder:** behavior change in `install` → the pending destructive-harness pass before the beta.7 tag covers this too (it was already pending for `05c13ac` + `fe47be2`).
 * **Status:** committed on `dev` 2026-10-24 and pushed (user "fix").
 * **Flag:** `REVIEW_STATUS.md` is user-owned (untracked) — two lines still describe the old fetch behavior ("install pulls dev/pisafe" in the branch line; "install improved: pulls newest beta…" in the done list), and its `dev @ ee98af6` hash predates a95996a — user to refresh.
+
+## Default compression back to `zip 1` — 1.2.12 becomes a pure-hardening release (2026-10-24)
+
+* **Rationale (user: "for simplicity, let's set the default back to zip"):** the xz default came from `7faa594` (2026-09-25, `things to fix` #7) and `b627d95` (same day, "xz required", which also **deleted `OPTIONAL_TOOLS`** and folded xz into `REQUIRED_TOOLS`; the `bc` drop in `414f607` is a pure-bash improvement, unaffected). Reverting the default makes 1.2.12 a **pure hardening release** against stable 1.2.11: same default, same dependencies, no behavior delta of its own.
+* **Changes (dev):**
+  * `config_var_set_defaults` — `default_extension xz` → **`zip`** (level stays `1` → fresh/factory conf is exactly 1.2.11's `zip 1`; the `FORCE=false` path never touches existing users' values);
+  * `REQUIRED_TOOLS` — `xz` dropped (`dd pishrink.sh zip unzip pv whiptail file nano`); xz stays fully usable as a menu option — the extension picker installs it on demand (the `xz → pisafe_install_tool xz` arm, `pisafe`:1485) exactly as 1.2.11's OPTIONAL_TOOLS scheme did;
+  * copy: header `# 3- compresses with 'zip' (default), …`; `menu_get_outfile` — `.zip is the default ( faster, larger )` / `.xz is ~25% smaller but takes 3x-4x longer`; `menu_settings_default_extension` — radiolist `zip "(default) faster, larger"` / xz without the `(default)` tag, and the unknown-extension radio fallback `XZ_SEL=on` → `ZIP_SEL=on`;
+  * dev `README.md` — `**Default:** xz 1` → **`zip 1` (industry-standard balance)** (the original 1.2.11 line).
+* **Correction (own error, logged per policy):** the "R1 fix" entry above main-`3d5b4ef` changed main's README `Default: zip 1` → `xz 1` — **wrong for main**: main's code is 1.2.11 which defaults to `zip`; the README now contradicted the very branch it described. Restoring `zip 1` on **main** is a pending one-line README fix needing its own explicit GO (main branch + push).
+* **Net diff (dev):** `pisafe` 8 lines (all default/option/copy), `README.md` 1 line.
+* **Verification (all agent-safe):** `bash -n` ✓ · `bash pisafe -v` → `1.2.12-beta.6` ✓ · `lint.sh` 0 findings ✓ · "(default)/the default" sweep — every occurrence now consistent with `zip` default ✓ (the `5 (default)` in `menu_set_compression` is the pre-existing level-menu preselect, unrelated) · xz arms (size read `xz -l -v`, compress arm, on-demand install) untouched — xz remains a first-class option.
+* **Release-note effect:** the "xz-1 default" item **drops off** too — 1.2.12 now has **zero default/feature changes** vs 1.2.11; the only user-visible behavior delta is the gz ≥ ~3.9 GiB creation refusal (1.2.11 silently produced images whose size was unverifiable — that defect is the fixed one).
+* **Status:** committed on `dev` 2026-10-24 and pushed (user go-ahead for this round). Flagged, pending explicit GO: the matching one-line `Default: zip 1` fix on `main`'s README.
