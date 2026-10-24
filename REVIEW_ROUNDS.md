@@ -1058,7 +1058,53 @@ Verification (all agent-safe — no device touched):
 * **Verification (all agent-safe, no device I/O):** `bash -n` ✓ · `bash pisafe -v` → `1.2.12-beta.6` ✓ · `./lint.sh` **0 findings** ✓ · **new battery 6 cases / 19 assertions green** (`/tmp/opencode/restpvgate_battery.sh` — real `media_restore` + `media_restore_checklist` + `get_bytes` + `file_ext` extracted in place; A: CLI `-y` → gate measures → `pv -s 5725117440` + `5.33gb to write`; B: GUI arm b → gui pv without `-s`, `unknown … to write`; C: xz numeric + stale `MEAS_SZ=999` → unchanged, stale cleared; D: stale + arm b → no `-s` leak; E: GUI arm a → `pv -n -s 5725117440`; F: measure-fail → rc 1, no dd/pv). Battery self-correction: the gate calls `whiptail` under `3>&1 1>&2 2>&3` — the fake must answer on **fd 2** (first gen answered on stdout → `CH` empty → silent quit; fixed and re-greened). Re-runs: backup-gate battery green ✓ · harness battery **34/34** ✓.
 * **User-facing delta:** big-gz restores that went through the *calculate* path (harness `-y`, interactive `a`) now show `pv -s <bytes>` → bar gets percentage + ETA, and the CLI prints the real size to write. All other paths byte-identical.
 * **Status: committed on `development` as `8a1c9f7` (2026-10-19, incl. the user's help/wording hunks, per user "push it") and pushed to GitHub (explicitly approved). Note: the pushed blob carried a truncated warning line from a concurrent live-surface edit — repaired by `1c8eea5`, see next entry.**
-  ⚠ **Bookkeeping gap (flagged 2026-10-24):** that "next entry" was never added, and the rounds after it also have no records here — `1c8eea5` repair, install-from-GitHub (`b4a8451`), parse-failure repair, harness v2.2 (`a02ca8f`, `05c13ac`), editor chain (`d8d5d4d`), final gz sizing (`fe47be2`). Per AGENTS.md the user may hold their own copy — user to decide before any back-fill.
+
+## Parse-failure repair — the compress-arm gz warning lost its closing quote (`1c8eea5`) (2026-10-19)
+
+* **What happened:** the `8a1c9f7` push (Restore polish) carried a truncated line — a concurrent live-surface edit cut the trailing period + closing quote off the compress-arm warning (`ui_msg_warning … "gz is NOT RECOMMENDED for images over 4GB … very slow"`), leaving the string unterminated in that revision.
+* **Fix:** `1c8eea5` — one line (+1/−1), restores the lost period + closing quote.
+* **Status:** committed on `development` 2026-10-19 and pushed (approved with the round). The `3c8c83a` log pointer ("…repaired by `1c8eea5`, see next entry") is satisfied by this entry — back-filled 2026-10-24 by user request ("fix").
+
+## Install from GitHub — pull the newest beta, fall back to the running copy (`b4a8451`) (2026-10-19)
+
+* **Change:** `pisafe_install` — when installing from anywhere other than `/usr/local/bin/pisafe`, first try to fetch the newest beta from GitHub into `$SCRIPTNAME.tmp`; the download is accepted only if **non-empty and `bash -n`-clean**. Accepted → **that copy** is what gets installed (a user running an older local script still lands on the newest beta). Rejected → warning + the running copy is installed instead (offline installs keep working). The `.tmp` file is removed on both paths.
+* **Net diff:** `pisafe` +11/−1.
+* **Follow-up:** R3 (`848fa53`, 2026-10-24) renames the URL `development/` → `dev/` after the branch rename; the `update` path already targets `main/pisafe` (stable).
+* **Status:** committed on `development` 2026-10-19 and pushed; the renamed `dev/pisafe` raw URL was fetched + parsed live after R3.
+
+## Testing — harness v2.2 + fleet test plan (`a02ca8f`, `05c13ac`) (2026-10-22/23)
+
+* **`a02ca8f` (2026-10-22):** harness `pisafe_test` → `pisafe_test.sh`, v2.2 per the commit subject (setup mode, report save, native-surface capture); adds the 355-line fleet test plan `pisafe_test_plan.txt` (destructive + non-destructive case matrix). 2 files, +676/−27 total.
+* **`05c13ac` (2026-10-23):** adds a non-destructive `env` mode (environment checks, no device touched); `set -u` fix — `xte=` initialized; harness + plan moved under `testing/`. +50/−2.
+* **Status:** committed on `development` 2026-10-22/23; published with the R2 rename (`71e4731`, 2026-10-24).
+* **Evidence:** last full destructive pass **12/12 — 2026-10-23 10:57**, on the `a02ca8f`+`d8d5d47` state; the two later commits (`05c13ac`, `fe47be2`) are unverified on hardware (see R14 entry).
+
+## Editor chain — `gnome-text-editor` added (`d8d5d47`) (2026-10-22)
+
+* **Change:** the `env_texteditor` chain is now `… geany gnome-text-editor nano` (Ubuntu coverage — matches the punchlist note "for ubuntu, add gnome-text-editor"); the `SCRIPTVER` **comment date** bumped to 2026/10/22 (version string unchanged: `1.2.12-beta.6`).
+* **Net diff:** `pisafe` +2/−2.
+* **Status:** committed on `development` 2026-10-22 and pushed; covered by the 2026-10-23 10:57 harness pass.
+
+## R14 — final gz sizing: refuse to *make* gz ≥ ~3.9 GiB; one uniform reader (`fe47be2`) (2026-10-23)
+
+* **Resolution (as logged in the known-issues backlog):** gz trailers carry the raw size mod 2^32, so a raw image ≥ 4 GiB cannot read back a verifiable size → the Oct 19 work added "measure it (slow) / continue anyway" escape hatches. Final position: **stop making such files** (refuse at ≈3.9 GiB, headroom below 2^32) and **trust the footer** for everything the app creates — one uniform size path for every format on read.
+* **Machinery removed (the measure-or-bludge through paths are gone):**
+  * `exact_gz_image_size` setting + `EXACT_GZ_IMAGE_SIZE` (defaults + getter);
+  * `measure_gz_size()` (the full-decompress measurement pass);
+  * all `MEAS_SZ` plumbing — checklist top-of-function init, the `SZ_WRITE` override in `media_restore`, the `RESTORE_BYTES` fallback;
+  * the "size not carried in the file" decision tree — interactive a/b/c menu, the `-y` auto-calculate arm, the no-confirmer refusal — replaced by: read the size (footer), numeric → normal compare, unreadable → refuse, exactly like any other unreadable size (`Could not determine the size of …`);
+  * the `unknown (>= ~4 GiB)` display → plain `unknown`.
+* **Refusals added/sharpened (creation side, both decision points per the plan's round note):**
+  * pre-backup guard threshold: 4 GiB → **~3.9 GiB** (`1073741824 * 39 / 10`);
+  * `-y` → **refuse** (was: warn + carry on); no-TTY without `-y` → fail-safe refuse (was: no explicit guard); interactive → y switches this backup to xz (no limit), **n cancels** (was: carry on with gz);
+  * compress-arm backstop: if the actual raw is still ≥ 4 GiB when the gz arm runs → `ui_msg_error`, the `.img` work file is removed, rc 1;
+  * GUI backup prompt copy: "Pi 4 … 11 min zip / 8 min gz" → "Pi 5 … 6 min zip / 10 min xz".
+* **Restore pipeline:** gz `pigz -d -k -c` → `pigz -d -c` — verified behavior-neutral 2026-10-24 (empirical check: `pigz -dc` leaves the input `.gz` in place, rc 0; with `-c` the input is never removed, the `-k` was redundant).
+* **Net diff:** `pisafe` 209 changed lines + plan round-note re-scope (`testing/pisafe_test_plan.txt`, 262 lines); 2 files, +296/−175 total. The plan's big-gz backup cases now **end in refusal** (interactive SIZE-LIMIT screen, `-y` refusal line, no file made).
+* **Verification (agent-safe):** `bash -n` ✓ · `bash pisafe -v` → `1.2.12-beta.6` ✓ · `lint.sh` 0 findings ✓ · `pigz -dc` input-preservation check ✓. (Deviations from the old battery are expected — the old "b/continue anyway" and `MEAS_SZ` cases no longer exist; the plan was re-scoped in-commit.)
+* **Status:** committed on `development` 2026-10-23; published with the R2 rename (`71e4731`). `08bbeb5` (1 line) marks the known-issues backlog entry as "done in `fe47be2`".
+* **Post-tag:** `fe47be2` (2026-10-23 22:46) is **after** the `v1.2.12-beta.6` tag (→`40a6683`) — the published beta.6 does not carry it; it ships in **beta.7**.
+* **Ladder:** the last hardware pass (2026-10-23 10:57) **predates `05c13ac` + `fe47be2`** — a destructive-harness pass on dev HEAD is required before the beta.7 tag.
 
 ## Repo restructure — standard GitHub layout (main = stable, dev = beta, archive/) (2026-10-24)
 
@@ -1070,4 +1116,4 @@ Verification (all agent-safe — no device touched):
 * **R4 — dev `5aa5b0d`, main `70c94d7`:** `snapshot.png` renamed to `screenshot.png` on dev, re-added to main under the new name. Tag `v1.2.11` pushed to GitHub (was local-only); local tag `v1.3.0-beta.1` deleted (never-published Dec 2025 experiment).
 * **Verification (per round, all agent-safe):** `bash -n` ✓ · `bash pisafe -v` → `1.2.12-beta.6` ✓ · `lint.sh` 0 findings ✓ · archive pins parse + self-report ✓ · `bash pisafe update` dry-run → `~ PiSafe 1.2.12-beta.6 is up to date. Server ver is '1.2.11'.` rc0 ✓ · live raw-URL fetch of `dev/pisafe` parses ✓ · git-protocol clone vs commit-URL raw vs branch-URL raw cross-check ✓ (post-R2, GitHub's raw-CDN briefly served the pre-rename `dev` content; converged within ~3 min — no persistent config change, git protocol was correct throughout).
 * **Ops notes:** pushes authenticated with the `/mnt/dev/github` ed25519 key via one-off `GIT_SSH_COMMAND` (read-only 600 copy under `/tmp/opencode/gh/`) over `ssh://` — no credential config persisted on this host. Scratch worktrees used for main edits so the live working tree was never switched.
-* **Outstanding (ladder):** destructive-harness pass on current dev HEAD before any beta.7 tag — the last 12/12 hardware run (2026-10-23 10:57) predates `d8d5d4d` + `fe47be2`.
+* **Outstanding (ladder):** destructive-harness pass on current dev HEAD before any beta.7 tag — the last 12/12 hardware run (2026-10-23 10:57) covers through `d8d5d47` and predates `05c13ac` + `fe47be2` (see the R14 entry).
