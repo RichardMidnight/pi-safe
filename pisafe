@@ -211,20 +211,12 @@ pisafe_install(){
     ui_echo "Installing $PRODUCTNAME v $SCRIPTVER..." white
 
     # Install the CLI script (skip if already running from the install location)
-    # Pull the latest beta from GitHub (dev branch); if the download
-    # fails, fall back to the running copy so offline installs still work
+    # 'install' installs the running script (this copy), whatever its file name -
+    # 'pisafe update' is the path that fetches a newer stable from GitHub
     if [[ "$(readlink -f "$0" 2> /dev/null)" != "/usr/local/bin/$SCRIPTNAME" ]]; then
-        if wget "https://raw.githubusercontent.com/RichardMidnight/pi-safe/dev/$SCRIPTNAME" -O "$SCRIPTNAME.tmp" 2> /dev/null && [[ -s "$SCRIPTNAME.tmp" ]] && bash -n "$SCRIPTNAME.tmp" 2> /dev/null; then
-            SOURCE_FILE="$SCRIPTNAME.tmp"
-        else
-            ui_msg_warning $LINENO "latest beta download failed - installing the running copy instead"
-            SOURCE_FILE="$0"
-            rm -f "$SCRIPTNAME.tmp"
-        fi
-        sudo cp --backup=numbered "$SOURCE_FILE" /usr/local/bin/"$SCRIPTNAME"
+        sudo cp --backup=numbered -- "$0" /usr/local/bin/"$SCRIPTNAME"
         sudo chmod +x /usr/local/bin/"$SCRIPTNAME"
     fi
-    rm -f "$SCRIPTNAME.tmp"
     echo "Installed ver=$("/usr/local/bin/$SCRIPTNAME" -v)"
 
     # download the icon; install system-wide so any user's menu entry can find it
