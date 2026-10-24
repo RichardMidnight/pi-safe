@@ -180,7 +180,7 @@ pisafe_help() {
     echo " - -y answers 'y' to prompts."
     echo " - There are a number of settings that can be changed in the settings file. "
     echo
-    echo ".zip was raspberry pi's origional image format. An old standard"
+    echo ".zip was raspberry pi's original image format. An old standard"
     echo ".img.xz was adopted in 2022.  A new standard with higher compression"
     echo ".gz is good for fast, high compression on images < 4GB"
     echo

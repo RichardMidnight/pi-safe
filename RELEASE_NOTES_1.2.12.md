@@ -19,7 +19,7 @@ final gz sizing or the 2026-10-24 install/default rounds — those ride in beta.
 > which broke restore for them.
 
 Short variants:
-- **Tag line:** `1.2.12: hardening only — everything works as in 1.2.11` — set as the dev-branch README tagline 2026-10-24
+- **Tag line:** `1.2.12: hardening only — everything works as in 1.2.11` — approved 2026-10-24; shows as the dev **file-listing tagline** (last-commit message on the `pisafe` row), not app copy
 - **README version-history line:** `1.2.12 — extensive hardening, no new features, no default changes`
 
 ## What did NOT change (state it so it isn't misread)
