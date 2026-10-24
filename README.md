@@ -25,6 +25,7 @@ PiSafe lets you create compressed image files of SD cards, USB drives, HDDs, SSD
 ## Install
 Paste or type this into a terminal window:
 
+**Stable** (v1.2.11)
 ```bash
 wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
 bash pisafe install
@@ -32,13 +33,13 @@ bash pisafe install
 
 **Beta Version** (v1.2.12-beta.6)
 ```bash
-wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/v1.2.12-beta.6/pisafe -O pisafe
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/archive/pisafe_1.2.12-beta.6 -O pisafe
 bash pisafe install
 ```
 
 **Old Stable** (in case current version has issues)
 ```bash
-wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe_1.2.9 -O pisafe
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/archive/pisafe_1.2.9 -O pisafe
 bash pisafe install
 ```
 
