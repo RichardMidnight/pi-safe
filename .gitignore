@@ -1,0 +1,11 @@
+# local scratch (never commit)
+junk/
+old/
+archive/
+
+# transient
+*.tmp
+
+# harness run outputs (regenerated each run)
+testing/pisafe_test_log.txt
+testing/pisafe_test_results.txt
