@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# pisafe_test v2.1 - pisafe integration test harness (2026-10-20)
+# pisafe_test v2.2 - pisafe integration test harness (2026-10-20)
 #
 # DESTRUCTIVE tool: it formats $DEVICE and writes backup images onto it.
 # (except 'setup' mode, which only copies the pisafe pair from GitHub and, if the box has no
@@ -11,6 +11,9 @@
 # Usage:
 #   pisafe_test DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
 #   pisafe_test setup [DIR|-y]                  (non-destructive bootstrap)
+#   pisafe_test env                             (non-destructive: prints the
+#                                                 box's environment only - no
+#                                                 battery, no device needed)
 #   Example:  pisafe_test /dev/sda --full
 #
 #   DEVICE    target block device to test (required), e.g. /dev/sdb.
@@ -135,6 +138,7 @@ pisafe_test v$VERSION - destructive pisafe integration test harness
 
 Usage: pisafe_test DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
        pisafe_test setup [DIR|-y]
+       pisafe_test env
 
 Arguments:
   DEVICE      target block device to test (required), e.g. /dev/sdb.
@@ -180,12 +184,21 @@ Setup mode (non-destructive, no card needed - bootstrap for a new test box):
                exactly that (the dependency check stays ON). The file running
                this command is never overwritten.
 
+Env mode (non-destructive, no card needed - record the box without running it):
+  env        print the machine header (hostname, OS, arch, kernel) plus the
+             native-surface snapshot the battery report would carry (TUI
+             backend, installer, terminal, editor, which, sound, shell/user),
+             then exit. Nothing is installed, no device is touched, no battery
+             is run - use it to record a box's environment row without
+             re-running the backup/restore tests.
+
 Examples:
   bash pisafe_test /dev/sda --full                # all four arms + byte checks
   bash pisafe_test /dev/sda --compress=zip,zst    # a subset of arms
   bash pisafe_test /dev/sdb /media/pi/imgs -y     # images elsewhere, no prompts
   bash pisafe_test setup                          # new box: ~/Downloads + pair
   bash pisafe_test setup /opt/pisafe -y           # other dir, no prompts
+  bash pisafe_test env                            # record the box's env (no battery, no card)
 
 Per step, both modes check:  pisafe exit status == 0  AND  the log window of
 this exact step contains its "complete" marker and no error/abort lines.
@@ -245,7 +258,9 @@ chain_probe(){
 }
 
 native_surface(){
-  local tui inst whichp t ed snd xte
+  # xte starts empty: on a box without x-terminal-emulator the var is never
+  # assigned, and an unset local dies under set -u (log 10-23, Manjaro env)
+  local tui inst whichp t ed snd xte=""
   # a box with no whiptail passes the CLI battery yet cannot open a menu - the
   # single most important "does it actually work" fact to record per box
   if command -v whiptail >/dev/null 2>&1; then
@@ -278,6 +293,27 @@ native_surface(){
   echo "  sound tool   : $snd"
   echo "  shell/user   : $(id -un 2>/dev/null || echo ?) (EUID $(id -u 2>/dev/null || echo ?))"
   echo "  -------------------------------------------------------"
+  return 0
+}
+
+# 'env' mode: the report header plus the native-surface snapshot, printed and
+# done - no device, no battery, no installs, no prompts. Gives the box's
+# environment block on demand (e.g. to record a box's environment row)
+# without paying for the backup/restore run.
+env_mode(){
+  local pver os_stamp
+  pver=$(grep -m1 '^[[:space:]]*SCRIPTVER=' "$PISAFE" 2>/dev/null | cut -d'"' -f2)
+  # sourced inside $( ): /etc/os-release defines its own VERSION=, and the
+  # subshell confines that assignment - the harness's own VERSION stays intact
+  os_stamp=$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-}")
+  echo "============================= ENV ====================================="
+  echo "  machine  : $(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown)${os_stamp:+ - $os_stamp}"
+  echo "  arch     : $(uname -m 2>/dev/null || echo unknown) (kernel $(uname -r 2>/dev/null || echo unknown))"
+  echo "  date     : $(date '+%Y-%m-%d %H:%M:%S')"
+  echo "  pisafe   : $PISAFE${pver:+ ($pver)}"
+  echo "  harness  : v$VERSION"
+  native_surface
+  echo "========================================================================"
   return 0
 }
 
@@ -814,6 +850,18 @@ main(){
       esac
     done
     setup_mode "$sd"
+    exit 0
+  fi
+
+  # 'env' as first argument = environment-only mode: print the report header
+  # and the native-surface snapshot, then exit - no device, no battery, no
+  # installs, nothing read from stdin
+  if [[ ${1:-} == env ]]; then
+    if (( ${#@} != 1 )); then
+      echo "error: 'env' takes no arguments" >&2
+      exit 2
+    fi
+    env_mode
     exit 0
   fi
 
