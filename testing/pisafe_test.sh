@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# pisafe_test v2.2 - pisafe integration test harness (2026-10-20)
+# pisafe_test.sh v2.2 - pisafe integration test harness (2026-10-20)
 #
 # DESTRUCTIVE tool: it formats $DEVICE and writes backup images onto it.
 # (except 'setup' mode, which only copies the pisafe pair from GitHub and, if the box has no
@@ -9,12 +9,12 @@
 # Human-driven only: AI agents must never execute this script.
 #
 # Usage:
-#   pisafe_test DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
-#   pisafe_test setup [DIR|-y]                  (non-destructive bootstrap)
-#   pisafe_test env                             (non-destructive: prints the
+#   pisafe_test.sh DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+#   pisafe_test.sh setup [DIR|-y]               (non-destructive bootstrap)
+#   pisafe_test.sh env                          (non-destructive: prints the
 #                                                 box's environment only - no
 #                                                 battery, no device needed)
-#   Example:  pisafe_test /dev/sda --full
+#   Example:  pisafe_test.sh /dev/sda --full
 #
 #   DEVICE    target block device to test (required), e.g. /dev/sdb.
 #             must not be mounted anywhere; if it is, the script offers to
@@ -66,7 +66,7 @@
 #
 # Environment:
 #   PISAFE      path to the pisafe script (default: the pisafe alongside this harness)
-#   PISAFE_REF  ref for setup mode downloads (default: 'development')
+#   PISAFE_REF  ref for setup mode downloads (default: 'dev')
 #
 set -u
 
@@ -134,11 +134,11 @@ DIE()   { echo "${RED}FATAL: $*${RST}" >&2; exit 2; }
 
 usage(){
   cat <<EOF
-pisafe_test v$VERSION - destructive pisafe integration test harness
+pisafe_test.sh v$VERSION - destructive pisafe integration test harness
 
-Usage: pisafe_test DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
-       pisafe_test setup [DIR|-y]
-       pisafe_test env
+Usage: pisafe_test.sh DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+       pisafe_test.sh setup [DIR|-y]
+       pisafe_test.sh env
 
 Arguments:
   DEVICE      target block device to test (required), e.g. /dev/sdb.
@@ -172,8 +172,8 @@ Arguments:
 
 Setup mode (non-destructive, no card needed - bootstrap for a new test box):
   setup [DIR]  1. create DIR (default: ~/Downloads),
-                2. copy the latest pisafe plus a fresh pisafe_test from GitHub
-                   into it (ref 'development'; set PISAFE_REF to a tag, e.g.
+                2. copy the latest pisafe plus a fresh pisafe_test.sh from GitHub
+                   into it (ref 'dev'; set PISAFE_REF to a tag, e.g.
                    v1.2.12-beta.6, to pin),
                 3. leave you in DIR (prints the ready-to-paste one-line cd +
                    test command).
@@ -193,18 +193,18 @@ Env mode (non-destructive, no card needed - record the box without running it):
              re-running the backup/restore tests.
 
 Examples:
-  bash pisafe_test /dev/sda --full                # all four arms + byte checks
-  bash pisafe_test /dev/sda --compress=zip,zst    # a subset of arms
-  bash pisafe_test /dev/sdb /media/pi/imgs -y     # images elsewhere, no prompts
-  bash pisafe_test setup                          # new box: ~/Downloads + pair
-  bash pisafe_test setup /opt/pisafe -y           # other dir, no prompts
-  bash pisafe_test env                            # record the box's env (no battery, no card)
+  bash pisafe_test.sh /dev/sda --full                # all four arms + byte checks
+  bash pisafe_test.sh /dev/sda --compress=zip,zst    # a subset of arms
+  bash pisafe_test.sh /dev/sdb /media/pi/imgs -y     # images elsewhere, no prompts
+  bash pisafe_test.sh setup                          # new box: ~/Downloads + pair
+  bash pisafe_test.sh setup /opt/pisafe -y           # other dir, no prompts
+  bash pisafe_test.sh env                            # record the box's env (no battery, no card)
 
 Per step, both modes check:  pisafe exit status == 0  AND  the log window of
 this exact step contains its "complete" marker and no error/abort lines.
 
 Environment: PISAFE=/path/to/pisafe    (default: the pisafe alongside this harness)
-            PISAFE_REF=REF            (setup mode; default 'development')
+            PISAFE_REF=REF            (setup mode; default 'dev')
 
 Human-driven only: this script will format the target card.
 EOF
@@ -681,14 +681,14 @@ confirm(){
 
 # ------------------------------------------------------------------ setup --
 
-# 'bash pisafe_test setup [DIR]': bootstrap a new test machine. Non-destructive:
+# 'bash pisafe_test.sh setup [DIR]': bootstrap a new test machine. Non-destructive:
 # no device is ever touched. Creates DIR (default: ~/Downloads), shows a plan
 # and waits for one ENTER to confirm (-y bypasses), then copies the latest
-# pisafe plus a fresh pisafe_test from GitHub ref SETUP_REF into it.
+# pisafe plus a fresh pisafe_test.sh from GitHub ref SETUP_REF into it.
 # The file running THIS command is never overwritten, because bash reads its
 # script incrementally.
 SETUP_BASE="https://raw.githubusercontent.com/RichardMidnight/pi-safe"
-SETUP_REF="${PISAFE_REF:-development}"
+SETUP_REF="${PISAFE_REF:-dev}"
 
 # The ONLY install setup may do on its own: a web-fetch tool, needed to
 # download the pair. Every other runtime tool (pv, pishrink, xz, ...) is
@@ -737,8 +737,8 @@ setup_mode(){   # [DIR]
   else
     plan_a="fetch (new)"
   fi
-  if [[ -f $dest/pisafe_test ]]; then
-    if [[ $(readlink -f -- "$dest/pisafe_test" 2>/dev/null) == "$self" ]]; then
+  if [[ -f $dest/pisafe_test.sh ]]; then
+    if [[ $(readlink -f -- "$dest/pisafe_test.sh" 2>/dev/null) == "$self" ]]; then
       plan_b="keep (this is the running harness)"
     else
       plan_b="replace (existing file)"
@@ -755,11 +755,11 @@ setup_mode(){   # [DIR]
   echo "   this will:"
   echo "     1. create the directory : $dest"
   echo "     2. copy from GitHub into it:"
-  echo "          pisafe      : $plan_a"
-  echo "          pisafe_test : $plan_b"
+  echo "          pisafe          : $plan_a"
+  echo "          pisafe_test.sh  : $plan_b"
   echo "          ref: $SETUP_REF @ $SETUP_BASE"
-  if [[ $SETUP_REF == development ]]; then
-    echo "          'development' is the LIVE beta branch - set PISAFE_REF to a tag to pin"
+  if [[ $SETUP_REF == dev ]]; then
+    echo "          'dev' is the LIVE beta branch - set PISAFE_REF to a tag to pin"
   fi
   echo "     3. leave you in that directory (see the cd line at the end)"
   if (( fetch_need )); then
@@ -783,9 +783,13 @@ setup_mode(){   # [DIR]
     info "Installing web fetch tool 'wget' ..."
     ensure_fetcher
   fi
-  for out in "$dest/pisafe" "$dest/pisafe_test"; do
-    f=${out##*/}
-    if [[ $f == pisafe_test ]]; then
+  # 'remote repo path : local file name' - the harness now lives in testing/
+  # on GitHub, so its remote path is no longer the bare root file name
+  for pair in "pisafe:pisafe" "testing/pisafe_test.sh:pisafe_test.sh"; do
+    f=${pair%%:*}
+    o=${pair##*:}
+    out="$dest/$o"
+    if [[ $o == pisafe_test.sh ]]; then
       # refuse to replace the very script that is executing right now
       if [[ -f $out && $(readlink -f -- "$out" 2>/dev/null) == "$self" ]]; then
         info "keeping the running harness: '$out'"
@@ -793,7 +797,7 @@ setup_mode(){   # [DIR]
       fi
     fi
     info "Fetching ${f} (ref ${SETUP_REF}) ..."
-    tmp="$dest/.${f}.setup.tmp"
+    tmp="$dest/.$o.setup.tmp"
     if ! setup_fetch "$SETUP_BASE/${SETUP_REF}/${f}" "$tmp" || [[ ! -s $tmp ]]; then
       rm -f -- "$tmp"
       DIE "download of '${f}' failed (ref '${SETUP_REF}')"
@@ -809,7 +813,7 @@ setup_mode(){   # [DIR]
   echo
   echo "============================= SETUP =================================="
   echo "  dir     : $dest"
-  ls -l -- "$dest/pisafe" "$dest/pisafe_test" 2>/dev/null | sed 's/^/  /'
+  ls -l -- "$dest/pisafe" "$dest/pisafe_test.sh" 2>/dev/null | sed 's/^/  /'
   # 'pisafe -v' is the safe, non-interactive version probe (prints and exits)
   pver=$(bash "$dest/pisafe" -v 2>/dev/null | head -1)
   echo "  version : ${pver:-unknown}"
@@ -828,7 +832,7 @@ setup_mode(){   # [DIR]
   cd -- "$dest" 2>/dev/null || :
   warn "test mode is DESTRUCTIVE - it formats the target card"
   echo "  when ready (paste as one line):"
-  echo "    cd ${dest} && bash pisafe_test /dev/sdX [--full]"
+  echo "    cd ${dest} && bash pisafe_test.sh /dev/sdX [--full]"
   echo
 }
 

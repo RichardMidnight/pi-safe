@@ -406,9 +406,9 @@ Distro :
   or, if the pair is already on the box:
     cd <pair-dir>
   Environment record only (no battery, no card, nothing installed):
-    bash pisafe_test env
+    bash pisafe_test.sh env
   Run:
-    bash pisafe_test /dev/sdX -y       # erases the card at every step
+    bash pisafe_test.sh /dev/sdX -y       # erases the card at every step
   Output:
     report block on screen, plus <CWD>/pisafe_test-report.txt
   Append the report (or env) block, plus any manual notes, to testing/pisafe_test_log.txt.
