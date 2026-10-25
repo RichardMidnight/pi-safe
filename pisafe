@@ -3002,7 +3002,7 @@ if [[ $1 = -v ]]; then
     exit
 fi
 
-echo "$PRODUCTNAME $SCRIPTVER"
+echo "$PRODUCTNAME $SCRIPTVER - $PRODUCTHOME"
 
 # if uninstall then uninstall and exit
 if [[ $1 = uninstall ]]; then
