@@ -41,7 +41,9 @@
 #       -l  levels, plain numbers (e.g. 1 5 9); env COMPRESSORS / LEVELS
 #          act as the built-in defaults
 #       -d  the description line shown first under 'notes:'
-#          (default: auto-detected hardware - model, cores, ram, OS)
+#          (default: auto-detected - host model, cores, ram, OS; the boot
+#          drive (nvme/emmc/usb/ssd + name + size); and the test card's
+#          vendor, model and measured size)
 #
 #   caveats:
 #     - gz: cards with a post-shrink size >= ~3.9 GiB are refused by pisafe
@@ -81,7 +83,9 @@ usage: bash pisafe_benchmark_test.sh [-h] [-c COMPRESSORS] [-l LEVELS] [-d DESC]
   -c   compressors to run, space- or comma-separated (from: zip gz xz zst)
   -l   compression levels to run, space- or comma-separated (e.g. 1 5 9)
   -d   the description line shown first under 'notes:'
-       (default: auto-detected hardware - model, cores, ram, OS)
+       (default: auto-detected - host model, cores, ram, OS; the boot
+       drive (nvme/emmc/usb/ssd + name + size); and the test card's
+       vendor, model and measured size)
   -h   this help
 
   env: COMPRESSORS LEVELS (defaults for -c / -l) and
@@ -139,8 +143,8 @@ hw_desc() {
     echo "${L:-hardware unknown}"
 }
 
-# description line: -d / env DESC win; otherwise the detected hardware
-DESC=${DESC:-$(hw_desc)}
+# description line: -d / env DESC win; otherwise auto-detected (set after
+# the card size above is read, so the card can be named)
 
 # notes block shown at the bottom (edit or extend as you like)
 # __CARD_MB__ is replaced at runtime with the measured card size (mb)
@@ -163,6 +167,82 @@ CARD_MB=0
 if [[ ${CARD_BYTES:-} =~ ^[0-9]+$ ]] && [[ ${CARD_BYTES:-0} -gt 0 ]]; then
     CARD_MB=$(( (CARD_BYTES + 500000) / 1000000 ))
 fi
+
+# card vendor + model, read-only from sysfs (empty if the device has none)
+CARD_NAME=
+BNAME=${DEVICE##*/}
+if [[ -r /sys/block/$BNAME/device/model ]]; then
+    CV=$(tr -d '\0' < "/sys/block/$BNAME/device/vendor" 2> /dev/null | head -n 1 \
+         | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]*$//' || true)
+    CM=$(tr -d '\0' < "/sys/block/$BNAME/device/model" 2> /dev/null | head -n 1 \
+         | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]*$//' || true)
+    CARD_NAME="${CV:+$CV }$CM"
+fi
+
+# which disk the OS runs from: type, vendor/model (when present), size
+# sets BOOT_LINE ("boot: ...") and BOOT_DISK (disk name, e.g. nvme0n1)
+boot_desc() {
+    local SRC DISK T R V="" M="" BYTES MB SZ="" L="" P
+    BOOT_LINE=""
+    BOOT_DISK=""
+    SRC=$(findmnt -n -o SOURCE / 2> /dev/null | head -n 1 || true)
+    [[ $SRC == /dev/* ]] || return 0
+    DISK=$(lsblk -no PKNAME "$SRC" 2> /dev/null | head -n 1 || true)
+    [[ -n $DISK ]] || return 0
+    T=""
+    case $DISK in
+        nvme*)   T="nvme" ;;
+        mmcblk*) T="emmc" ;;
+        sd*)     if [[ -r /sys/block/$DISK/device/transport ]]; then
+                     T=$(tr -d '[:space:]' < "/sys/block/$DISK/device/transport" | head -n 1 || true)
+                 fi
+                 [[ -n $T ]] || T="sd"
+                 R=$(cat "/sys/block/$DISK/queue/rotational" 2> /dev/null || true)
+                 if [[ $R == 0 ]]; then T="$T ssd"; fi ;;
+    esac
+    if [[ -r /sys/block/$DISK/device/vendor ]]; then
+        V=$(tr -d '\0' < "/sys/block/$DISK/device/vendor" | head -n 1 \
+             | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]*$//' || true)
+    fi
+    if [[ -r /sys/block/$DISK/device/model ]]; then
+        M=$(tr -d '\0' < "/sys/block/$DISK/device/model" | head -n 1 \
+             | tr '[:upper:]' '[:lower:]' | sed 's/[[:space:]]*$//' || true)
+    fi
+    BYTES=$(blockdev --getsize64 "/dev/$DISK" 2> /dev/null || true)
+    if [[ ${BYTES:-} =~ ^[0-9]+$ ]]; then
+        MB=$(( (BYTES + 500000) / 1000000 ))
+        if (( MB >= 1000 )); then SZ="$((MB / 1000))gb"; else SZ="${MB}mb"; fi
+    fi
+    for P in "$T" "$V $M" "$SZ"; do
+        [[ -n ${P// /} ]] || continue
+        L+="${L:+ }$P"
+    done
+    BOOT_DISK=$DISK
+    [[ -n $L ]] && BOOT_LINE="boot: $L"
+    return 0
+}
+
+# description line: -d / env DESC win; otherwise auto-detected:
+# the hardware we run on, what the OS booted from, and the test card
+# (name + measured size); if the card IS the boot disk it says so
+DESC_LINE=$(hw_desc)
+boot_desc
+CARD=""
+[[ -n $CARD_NAME ]] && CARD+="$CARD_NAME"
+[[ $CARD_MB -gt 0 ]] && CARD+="${CARD:+ }${CARD_MB}mb"
+
+SAME_BOOT=0
+if [[ -n ${BOOT_DISK:-} && $BOOT_DISK == "$BNAME" ]]; then
+    SAME_BOOT=1
+fi
+if (( SAME_BOOT )); then
+    [[ -n $CARD ]] && CARD+=" (boot)"
+    [[ -z $CARD ]] && DESC_LINE+=", ${BOOT_LINE}"
+else
+    [[ -n ${BOOT_LINE:-} ]] && DESC_LINE+=", ${BOOT_LINE}"
+fi
+[[ -n $CARD ]] && DESC_LINE+=", against $CARD"
+DESC=${DESC:-$DESC_LINE}
 
 echo
 echo "================================================================"
