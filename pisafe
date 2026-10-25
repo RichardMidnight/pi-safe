@@ -1170,7 +1170,7 @@ media_backup(){
     echo "Done copying media '$INDEV'"
     echo_white "'$(ls -s -h "$OUTFILE_BASE".img)'"
     TIME2=$(date +%s)
-    echo_white "Step 1 took $(get_elapsed_time "$TIME1" "$TIME2")"
+    ui_echo "Step 1 took $(get_elapsed_time "$TIME1" "$TIME2")" white log
     echo
 
     #################################################
@@ -1194,11 +1194,12 @@ media_backup(){
         sleep 5    # to allow file size to register with the OS
         echo Done shrinking filesystem.
         echo_white "'$(ls -s -h "$OUTFILE_BASE".img)'"
+        ui_echo "Shrunken image: '$OUTFILE_BASE.img' $(file_size "$OUTFILE_BASE".img) bytes ($(file_size "$OUTFILE_BASE".img -h))" white log
     else
         echo Not shrinking iso file
     fi
         TIME3=$(date +%s)
-        echo_white "Step 2 took $(get_elapsed_time "$TIME2" "$TIME3")"
+        ui_echo "Step 2 took $(get_elapsed_time "$TIME2" "$TIME3")" white log
 
     #################################################
     # Step 3 compress the file
@@ -1323,7 +1324,7 @@ media_backup(){
     echo "Done compressing '$OUTFILE_BASE.img' to '$OUTFILE' "
     echo_white "$(ls -s -h "$OUTFILE")"
     TIME4=$(date +%s)
-    echo_white "Step 3 took $(get_elapsed_time "$TIME3" "$TIME4")"
+    ui_echo "Step 3 took $(get_elapsed_time "$TIME3" "$TIME4")" white log
 
     # check if "$OUTFILE" was created
     if [[ ! -f $OUTFILE ]]; then
@@ -2017,7 +2018,7 @@ ui_log(){
     INFO=$(printf '%s\n' "$INFO" | sed 's/\\n/ -/g')  # literal '\n' -> ' -' (keeps log lines single)
 
     if [[ "$LOG" = on ]]; then
-        echo "$(date "+%Y-%m-%d %H:%M") $INFO" >> "$LOG_FILE"
+        echo "$(date "+%Y-%m-%d %H:%M:%S") $INFO" >> "$LOG_FILE"
     fi
 }
 
