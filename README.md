@@ -31,9 +31,9 @@ wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pi
 bash pisafe install
 ```
 
-**Beta Version** (v1.2.12-beta.6)
+**Beta Version** (v1.2.12-beta.7)
 ```bash
-wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/archive/pisafe_1.2.12-beta.6 -O pisafe
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/archive/pisafe_1.2.12-beta.7 -O pisafe
 bash pisafe install
 ```
 
@@ -66,7 +66,7 @@ Install your OS (e.g. Raspberry Pi OS, Debian, Ubuntu, Manjaro) on a smaller SD 
 Originally developed and tested on Raspberry Pi 4 running Raspberry Pi OS Buster.  
 Also tested on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.04 for Raspberry Pi, Linux Mint, LMDE.
 
-- **v1.2.12-beta.6** — Pure hardening pass over 1.2.11: about 30 reliability, standards, and bug fixes across the full function review (R1–R17) — no new features, no default changes. Details: `RELEASE_NOTES_1.2.12.md` (incl. the beta.1 → beta.6 trail)
+- **v1.2.12-beta.7** — Everything in beta.6 (pure hardening over 1.2.11: about 30 reliability, standards, and bug fixes across the full function review, no default changes), plus the final gz sizing gate (refuses to create images ~3.9 GiB and up) and a per-run compression level option (`-1`–`-9` or `--level=N`; zst goes 1–19, over-max levels clamped with a warning). Details: `RELEASE_NOTES_1.2.12.md` (incl. the beta.1 → beta.6 trail)
 - **v1.2.11** — The stable release since Dec 2023
 - **v1.2.10** — Adds support for Bookworm and NVMe media  
 - **v1.2.9** — Started adding command-line settings override options (undocumented)  
