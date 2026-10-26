@@ -40,9 +40,15 @@ echo_red()   { echo -e "\033[1;31m$*\033[0m"; }
 echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 
 
-# notes_desktop_environment — DEAD FUNCTION (zero call sites); body kept as reference documentation:
+# reference documentation:
 
 # DISTRO                      TERMINAL            TEXT EDITOR
+# Raspberry Pi OS trixie      lxterminal          mousepad
+# LMDE 7 (gigi)               gnome-terminal      xed
+# Ubuntu 24.04 GNOME          gnome-terminal      gnome-text-editor
+# Manjaro XFCE                xfce4-terminal      mousepad
+#
+# earlier releases, historical (pre-2026):
 # RaspberryPiOS-stretch       lxterminal          leafpad?
 # RaspberrypiOS-buster        lxterminal          mousepad
 # Debian-GNOME                gnome-terminal      gedit
@@ -58,16 +64,34 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 # mint cinnamon               gnome-terminal      xed
 # mint MATE                   mate-terminal       xed
 # Mint Xfce                   xfce4-terminal      Xed
-
 # bionic puppy    - ppm       lxterminal          geany
 # arch / manjaro  - pacman -S
 # zorin - ubuntu based
 # manjaro kde                 konsole             kate
 # manjaro xfce                xfce-terminal       mousepad
 # kali 2022 -apt              xterm               mousepad   -ver 1.2.5
-
-
+#
 # Tested with
+#
+# 1.2.12 (2026-10, full 12/12 battery per machine):
+# --- ARM ---
+# Raspberry Pi OS bookworm (32)      good
+# Debian trixie (32 / 64 / lite)     good
+# Debian bullseye (64)               good
+# DietPi (trixie)                    good
+# Manjaro ARM (RPi5)                 good
+# Note: buster + Manjaro (RPi4) got 10/12 - only the [zst] step, zstd not installed (optional tool).
+#
+# --- x86-64 ---
+# Debian trixie                      good
+# Debian bullseye                    good
+# LMDE 7 (gigi)                      good
+# Note: Ubuntu 24.04 got 12/12 on aarch64 Pi hardware.
+#
+# 1.2.12 behavior vs 1.2.11: creating gz images ~>= 3.9 GiB is refused (gz 32-bit size
+# footer class); .xz remains the unrestricted large-image path.
+#
+# earlier releases, historical:
 # --- ARM ---
 # Raspios Buster      good
 # Raspbian Stretch    good
@@ -75,7 +99,7 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 # Manjaro             good    no whiptail on lite ver
 # Ubuntu              good
 # Note: overlay filesystem cannot be turned on
-
+#
 # --- x86-64 ---
 # debian Strech, Buster           no shrink, last is logical swap.
 # RPD Buster                      no shrink, last is logical swap.
@@ -87,27 +111,45 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 # Note: if you custom partition with ext4 as last, it shrinks.
 
 
-# notes_performance — DEAD FUNCTION (zero call sites); body kept as reference documentation:
-#
-# Creating image from raspi-os image expanded on an 8GB SD card.  Size=837mb
-#
-# SETTING             SIZE GB     SECONDS     mb removed/sec
-# img                 3.99        210
-#
-# zip 1               1.71        511             4.59
-# pigz 1              1.71        340             6.90
-# xz 1                1.38        783             3.43
-# zst 1               1.68        321             7.40
-#
-# zip 5               1.62        651             3.74
-# pigz 5              1.62        361             6.75
-# xz 5                1.24        1588            1.78
-# zst 5               1.52        407             6.24
-#
-# zip 9               1.61        1446            1.69
-# pigz 9              1.61        586             4.18
-# xz 8                1.2         1990            1.44
-# zst 9               1.42        527             4.92
+
+# ==================================================================
+#  Pisafe benchmark testing 2026
+# ==================================================================
+
+# compressor     level     size(mb)  time(sec)  mb removed per second
+# sd card                      7948          0  --
+# img  (raw)                   7859        189  0.5
+# img (shrunk)      
+
+# zip            1             2007        368  16.1
+# xz             1             1536        495  13.0
+# zst            1             1946        335  17.9
+
+# zip            3             1956        382  15.7
+# xz             3             1464        648  10.0
+# zst            3             1772        315  19.6
+
+# zip            5             1874        416  14.6
+# xz             5             1352        847  7.8
+# zst            5             1720        335  18.6
+
+# zip            7             1864        517  11.8
+# xz             7             1321        971  6.8
+# zst            7             1669        397  15.8
+
+# zip            9             1853        894  6.8
+# xz             9             1260       2733  2.4
+# zst            9             1618        384  16.5
+
+# notes:
+#  run on a pi-5 against an 8gb sd card with an expanded trixie64 image.
+#  zip set the standard years ago
+#  gz is limited to < 4g, so is not recommended.
+#  zst is the fastest
+#  xz is the smallest
+#  mb removed per second = (sd card 7948mb - size) / time(sec)
+#  xz-1 will be pisafe's new default.
+
 
 
 run_command(){
