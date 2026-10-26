@@ -442,13 +442,13 @@ pisafe_update() {
     SERVER_VER=$(wget -q -O - https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/latest_version.txt 2> /dev/null)
     ES=$?
     if (( ES )); then
-        ui_msg ERROR "~ Can't connect to server.  Update check failed." red "" log
+        ui_msg ERROR "~ No version available from the server.  Update check failed." red "" log
         return "$ES"
     fi
     SERVER_VER=${SERVER_VER//[$' \t\r\n']/}
     # did we get a usable version from the server?
     if [[ -z $SERVER_VER ]]; then
-        ui_msg ERROR "~ Can't connect to server.  Update check failed." red "" log
+        ui_msg ERROR "~ No version available from the server.  Update check failed." red "" log
         return 1
     fi
 
