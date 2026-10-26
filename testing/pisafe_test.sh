@@ -27,7 +27,8 @@
 #             '.img' into the output name, so the files actually written are
 #             BASE.img.zip, BASE.img.gz, BASE.img.xz, BASE.img.zst - or only
 #             the ones you select with --compress (default: all four). pisafe
-#             also refuses an existing raw BASE.img.
+#             also refuses an existing raw BASE.img. the battery removes its
+#             own images at the end of the run, so a re-run starts clean.
 #   --full    additionally verify bytes (slower, uses extra disk):
 #                 * keeps a raw reference image of the card (harness does its own dd)
 #                 * each backup is decompressed and cmp'd against that reference
@@ -52,7 +53,9 @@
 #                        umount a mounted device / delete existing images
 #   3  backup            the selected compressions           (card untouched)
 #   4  per compression   format card (fat32) -> verify -> restore its image -> verify
-#   5  report            PASS/FAIL per step, tally, exit 1 if any FAIL
+#   5  cleanup           remove the images the battery wrote (only after every
+#                        restore + check is done)
+#   6  report            PASS/FAIL per step, tally, exit 1 if any FAIL
 #
 # Checks per step (std mode):
 #   1. pisafe exit status == 0
@@ -155,7 +158,8 @@ Arguments:
               ones selected with --compress are tested (default: all four).
               pisafe also refuses an existing raw BASE.img. Existing files
               under those names are deleted only after an explicit yes
-              (-y auto-yes).
+              (-y auto-yes). The battery removes its own images at the end
+              of the run, so a re-run starts clean.
   --full      also verify bytes: keep a raw reference image of the card and
               cmp each decompressed backup, the erased card state, and the
               restored card against it. (slower, needs ~2x more free space)
@@ -664,6 +668,7 @@ confirm(){
   echo "   target device : $DEVICE"
   echo "   compressions  : ${EXTS[*]}   ($n arm(s))"
   echo "   images        :$files"
+  echo "   (the images are REMOVED after the run - the report and log are kept)"
   echo "   pisafe        : $PISAFE"
   echo "   log file      : $LOG_FILE"
   echo "   mode          : $desc"
@@ -839,7 +844,7 @@ setup_mode(){   # [DIR]
 # --------------------------------------------------------------------- main --
 
 main(){
-  local POSITIONAL=() a ext F FILE
+  local POSITIONAL=() a ext F FILE R
 
   # 'setup' as first argument = non-destructive bootstrap mode:
   # setup [DIR] [-y]  (order-insensitive; anything else is an error)
@@ -954,6 +959,20 @@ main(){
       run_verify "restore bytes [$ext]" check_restore "$ext" "$FILE"
     fi
   done
+
+  # ---------------------------------------------------------- image cleanup --
+  # The battery's images have served their purpose: every selected backup has
+  # been restored and (in --full mode) checked. Remove the compressed images
+  # and any raw .img a failed step left behind, so the next run does not trip
+  # the "delete existing images" prompt. The report (pisafe_test-report.txt)
+  # and the pisafe log remain as the record of what happened.
+  info "Cleaning up: removing the test images..."
+  for ext in "${EXTS[@]}"; do
+    F=$(img_path "$ext")
+    if [[ -f $F ]]; then rm -f -- "$F"; info "  removed '$F'"; fi
+  done
+  R=$(raw_img)
+  if [[ -f $R ]]; then rm -f -- "$R"; info "  removed '$R'"; fi
 
   # ------------------------------------------------------------------ report --
   local pver os_stamp rep rf

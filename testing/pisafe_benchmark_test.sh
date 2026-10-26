@@ -8,9 +8,9 @@
 #       pisafe as --level=<n> (config is never modified)
 #     - the card is only ever READ
 #     - old benchmark_* files with the names this run will create are removed
-#       up front (pisafe refuses to overwrite), and each successful run's
-#       .img + compressed result are deleted again afterwards to keep $OUTDIR
-#       clear for the next run
+#       up front (pisafe refuses to overwrite), and after every run the
+#       .img + compressed result (or whatever partial files a failed run
+#       left) are deleted again to keep $OUTDIR clear for the next run
 #     - every report number comes from the PISAFE LOG (no screen capture),
 #       so the config needs log=on (checked before running)
 #
@@ -360,12 +360,14 @@ for LEVEL in $LEVELS; do
     for COMPRESSOR in $COMPRESSORS; do
         OUTFILE="$OUTDIR/$(benchmark_name "$COMPRESSOR" "$LEVEL")"
         if run_one "$COMPRESSOR" "$LEVEL" "$OUTFILE"; then
-            # report data is already in the log - make room for the next run
-            echo "run ok - removing $OUTFILE (and the .img) to keep the disk clear"
-            rm -f -- "$OUTFILE" "${OUTFILE%.*}"
+            echo "run ok for $COMPRESSOR level $LEVEL"
         else
-            echo "run FAILED for $COMPRESSOR level $LEVEL (see $LOGFILE) - continuing"
+            echo "run FAILED for $COMPRESSOR level $LEVEL (see $LOGFILE)"
         fi
+        # report data is already in the log - delete what the run created
+        # (a failed run can leave partial files) to keep the disk clear
+        echo "  removing $OUTFILE (and the .img)"
+        rm -f -- "$OUTFILE" "${OUTFILE%.*}"
     done
 done
 
