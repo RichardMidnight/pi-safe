@@ -305,7 +305,7 @@ env_mode(){
   pver=$(grep -m1 '^[[:space:]]*SCRIPTVER=' "$PISAFE" 2>/dev/null | cut -d'"' -f2)
   # sourced inside $( ): /etc/os-release defines its own VERSION=, and the
   # subshell confines that assignment - the harness's own VERSION stays intact
-  os_stamp=$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-}")
+  os_stamp=$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-} [ID=${ID:-?}]")
   echo "============================= ENV ====================================="
   echo "  machine  : $(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown)${os_stamp:+ - $os_stamp}"
   echo "  arch     : $(uname -m 2>/dev/null || echo unknown) (kernel $(uname -r 2>/dev/null || echo unknown))"
@@ -960,7 +960,7 @@ main(){
   pver=$(grep -m1 '^[[:space:]]*SCRIPTVER=' "$PISAFE" 2>/dev/null | cut -d'"' -f2)
   # sourced inside $( ): /etc/os-release defines its own VERSION=, and the
   # subshell confines that assignment - the harness's own VERSION stays intact
-  os_stamp=$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-}")
+  os_stamp=$(. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-} [ID=${ID:-?}]")
   rep=$(
     echo "============================= REPORT ================================="
     echo "  machine  : $(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown)${os_stamp:+ - $os_stamp}"

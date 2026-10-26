@@ -1,25 +1,28 @@
-pisafe review campaign — high level status (updated 2026-10-24 — final position)
-Full log: REVIEW_ROUNDS.md (complete through the 2026-10-24 rounds incl. ladder state)
+pisafe review campaign — high level status (updated 2026-10-26 — final position)
+Full log: REVIEW_ROUNDS.md (complete through the 2026-10-26 rounds incl. ladder state)
 
 position
   started:   v1.2.11 (fresh branch dev)
-  now:       1.2.12-beta.6 code on dev (SCRIPTVER=1.2.12-beta.6); stable = 1.2.11 on main
+  now:       1.2.12-beta.7 code on dev (SCRIPTVER=1.2.12-beta.7); stable = 1.2.11 on main
   stance:    1.2.12 = a PURE HARDENING release — same defaults (zip 1), same interface,
              same dependencies as 1.2.11, no new features (headline approved 2026-10-24;
              RELEASE_NOTES_1.2.12.md)
-  repos:     main @ 437374b = clean stable — pisafe (1.2.11), archive/ (1.2.6, 1.2.9, 1.2.11, beta.6),
+  repos:     main @ e8432d4 = clean stable — pisafe (1.2.11), archive/ (1.2.6, 1.2.9, 1.2.11, beta.6, beta.7),
              README (Default: zip 1; install blocks → main + main/archive/…),
              pisafe_icon.png, screenshot.png, LICENSE
-             dev @ 22d8595 = campaign branch — beta pipeline (install = the running script),
+             dev @ a842113 = campaign branch — beta pipeline (install = the running script),
              lint.sh, AGENTS.md, REVIEW_* docs, RELEASE_NOTES_1.2.12.md,
              testing/ harness v2.2 + plan + punchlist, screenshot.png
-  releases:  beta.2, beta.3, beta.4, beta.6 tagged + on GitHub (beta.5 retracted 2026-10-18);
+  releases:  beta.2, beta.3, beta.4, beta.6, beta.7 tagged + on GitHub (beta.5 retracted 2026-10-18);
+             beta.7 shipped 2026-10-26 (tag v1.2.12-beta.7 → a842113; main e8432d4 = archive + README);
              v1.2.11 tag pushed 2026-10-24 (stable marker); local v1.3.0-beta.1 experiment tag deleted
   branches:  dev + main only (stale remote dev and development merged away 2026-10-24, R2)
   ladder:    (a) code done + agent battery green ✓ · (b) destructive pass GREEN — 12/12 × 2
-             (2026-10-23 10:57 Manjaro RPi; 2026-10-24 08:44 Debian-trixie RPi) ✓ ·
-             (c) tag + push: PENDING — user call beta.7 vs straight 1.2.12, then the
-             explicit SCRIPTVER bump + tag steps
+             (2026-10-23 10:57 Manjaro RPi; 2026-10-24 08:44 Debian-trixie RPi) + beta.7 pass
+             (2026-10-26 12:09 LMDE 7 (gigi): 10/12, the 2 gz steps refused by design — card
+             raw over ~3.9 GiB = the new gate; all other 10 PASS) ✓ ·
+             (c) tag + push: beta.7 DONE 2026-10-26 — stable 1.2.12 is the remaining
+             ladder call (dev→main sync + SCRIPTVER + tag, each explicit)
 
 done (beyond the 2026-10-18 position)
   R1–R17 function review (get_* leaves → menus/main) — all green, lint.sh 0 findings locked
@@ -35,7 +38,10 @@ done (beyond the 2026-10-18 position)
      (testing/pisafe_test_punchlist.txt); last destructive passes 12/12 × 2 (2026-10-23, 2026-10-24)
   repo restructured to standard layout (R1–R4, 2026-10-24): main=stable+archive, dev=beta,
      README install URLs into archive/, screenshot.png on both branches, v1.2.11 tagged on GitHub
-  bookkeeping: REVIEW_ROUNDS.md complete through 2026-10-24; RELEASE_NOTES_1.2.12.md drafted
+  gz ≥ ~3.9 GiB creation gate: machine evidence of the refusal path landed 2026-10-26 —
+     bench 0018 (raw 7.9 GiB): gz FAILED all levels while zip/xz/zst completed; LMDE battery:
+     gz backup refused in 1s at the pre-backup guard — punchlist "done?" closed
+  bookkeeping: REVIEW_ROUNDS.md complete through 2026-10-26; RELEASE_NOTES_1.2.12.md drafted
      with the approved headline; main README Default line fixed (437374b)
   dev tagline: "1.2.12: hardening only — everything works as in 1.2.11" (file-listing tagline, 22d8595)
   harness setup mode fixed post-rename: pulls dev/pisafe + dev/testing/pisafe_test.sh (was
@@ -54,9 +60,13 @@ real bugs fixed along the way (not only cosmetic)
   copy: "origional" → "original" + zip-default label consistency
 
 outstanding
-  user call: v1.2.12-beta.7 or straight v1.2.12 stable after the 2026-10-24 pass
-     (either way: SCRIPTVER bump + tag as separate explicit actions per the ladder;
-     straight-stable also needs a dev→main sync round first)
+  user call: release v1.2.12 stable from beta.7 (dev→main sync round first; SCRIPTVER bump +
+     tag as separate explicit actions per the ladder) or ship another beta
+  --level over-max clamp+warn: written + lint-clean but never machine-exercised (bench drove
+     levels 1–9 only) — one over-max -L run on any box closes it
+  untracked bench/scratch files (10) + gitignored testing/pisafe_test_log.txt: keep, junk/
+     them, or gitignore the bench outputs — user call
+  dead Text*) case arm in menu_settings (pisafe ~2885) — user call (logged in R18)
   PRs #54 / #57 still open on GitHub — user to close in the browser (#54 superseded, do not merge)
   (design note, optional/legacy): `update` treats 1.2.12-beta.N ≡ 1.2.12 (numeric prefix),
      so beta users won't be offered the stable via `update` after release — intentional?
