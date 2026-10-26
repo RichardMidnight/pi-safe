@@ -1,0 +1,2 @@
+Version 1.2.12 beta 7 is ready for testing.
+https://github.com/RichardMidnight/pi-safe
