@@ -98,8 +98,6 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 # Raspberry Pi Desktop (bullseye, 64)         good   12/12
 # LMDE 7 (gigi)                               good   10/12    gz refused (card over ~3.9 GiB)
 #
-# v 1.2.12 behavior vs 1.2.11: creating gz images ~>= 3.9 GiB is refused;
-#
 #
 # v 1.2.11 historical:
 # --- ARM ---
