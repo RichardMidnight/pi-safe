@@ -434,19 +434,21 @@ pisafe_update() {
         ui_echo "Checking for $PRODUCTNAME $SCRIPTVER updates..." white
     fi
 
+    # Version probe: read the one-line main/latest_version.txt instead of
+    # downloading and executing the full script to read a number. The file is
+    # a release-time artifact ("bump SCRIPTVER + set latest_version.txt + tag");
+    # its absence just fails the check - same outcome as a network-down check.
     local SERVER_VER=
-    wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/"$SCRIPTNAME" -O "$SCRIPTNAME.tmp" 2> /dev/null
+    SERVER_VER=$(wget -q -O - https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/latest_version.txt 2> /dev/null)
     ES=$?
     if (( ES )); then
-        rm -f "$SCRIPTNAME.tmp"
         ui_msg ERROR "~ Can't connect to server.  Update check failed." red "" log
         return "$ES"
     fi
-
-    # did we get the new version from the server?
-    if [[ -f "$SCRIPTNAME.tmp" ]]; then
-        SERVER_VER=$(bash "$SCRIPTNAME.tmp" -v)
-    else
+    SERVER_VER=${SERVER_VER//[$' \t\r\n']/}
+    # did we get a usable version from the server?
+    if [[ -z $SERVER_VER ]]; then
+        ui_msg ERROR "~ Can't connect to server.  Update check failed." red "" log
         return 1
     fi
 
@@ -460,6 +462,13 @@ pisafe_update() {
 
         if [[ $RESULT = y ]]; then
             ui_echo "Updating $PRODUCTNAME to v $SERVER_VER..." white
+            wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/"$SCRIPTNAME" -O "$SCRIPTNAME.tmp" 2> /dev/null
+            ES=$?
+            if (( ES )); then
+                # keep any partial download for a retry; the running (old) copy is untouched
+                ui_msg ERROR "~ Update install failed.  Download kept at '$SCRIPTNAME.tmp'." red "" log
+                return 1
+            fi
             sudo cp --backup=numbered "$SCRIPTNAME.tmp" /usr/local/bin/"$SCRIPTNAME"
             ES=$?
             if (( ES )); then
@@ -479,7 +488,6 @@ pisafe_update() {
             exit 0
         fi
     else
-        rm -f "$SCRIPTNAME.tmp"
         if [[ $SUMMARY = yes ]]; then
             ui_msg UPDATE "~ $PRODUCTNAME $SCRIPTVER is up to date.  Server ver is '$SERVER_VER'." "" "" log
         fi
@@ -3099,8 +3107,9 @@ if [[ "$CHECK_DEPENDENCIES_ON_STARTUP" != off ]]; then
     fi
 fi
 
-# check-for-updates if not "backup and -y"
-if [[ "$CHECK_FOR_UPDATES_ON_STARTUP" != off ]] && ! { [[ $1 = backup ]] && [[ $4 = -y ]]; }; then
+# check-for-updates if not "backup and -y"; 'update' is excluded - the
+# menu_cli dispatch below runs it exactly once for that command
+if [[ "$CHECK_FOR_UPDATES_ON_STARTUP" != off ]] && [[ $1 != update ]] && ! { [[ $1 = backup ]] && [[ $4 = -y ]]; }; then
     ui_echo "Checking for $PRODUCTNAME updates..." "" nolog
     pisafe_update cli no
 fi
