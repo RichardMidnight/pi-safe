@@ -1,10 +1,14 @@
 # local scratch (never commit)
 junk/
 old/
-archive/
 
 # transient
 *.tmp
+
+# version development cycles (docs + testing + scratch) - kept on disk, never in git
+# (the root testing/ holds the CANONICAL harness tools - those stay tracked)
+ver 1.2.12 development/
+ver 1.3.0 development/
 
 # harness run outputs (regenerated each run)
 testing/pisafe_test_log.txt
