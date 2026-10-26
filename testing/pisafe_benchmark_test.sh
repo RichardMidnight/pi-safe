@@ -4,13 +4,13 @@
 #   defaults: compressors "zip gz xz zst"   levels "1 5 9"
 #
 #   how it works (matches pisafe itself):
-#     - compressor = the output file's extension; level = the config's
-#       compression_level, sed'd into each run and restored on exit
+#     - compressor = the output file's extension; level = passed per run to
+#       pisafe as --level=<n> (config is never modified)
 #     - the card is only ever READ
 #     - old benchmark_* files with the names this run will create are removed
 #       up front (pisafe refuses to overwrite), and each successful run's
-#       .img + compression are deleted again afterwards (~4GB per run won't
-#       fit on an 8gb card)
+#       .img + compressed result are deleted again afterwards to keep $OUTDIR
+#       clear for the next run
 #     - every report number comes from the PISAFE LOG (no screen capture),
 #       so the config needs log=on (checked before running)
 #
@@ -20,46 +20,70 @@
 #      Pisafe benchmark testing
 #     =========================
 #
-#     compressor     level     size(mb)  time(sec)  mb removed per second
-#     sd card                      ...          ...     --
-#     img                          ...          ...     ...
+#     item                   size(mb)  time(sec)  mb removed per second
+#     sd card                     ...        ...  --
+#     img (step 1 - copy)         ...        ...  0.0
+#     img (step 2 - shrink)       ...        ...  ...
 #
-#     zip              1          ...          ...     ...
+#     zip -1                      ...        ...  ...
 #     (blank line between level groups; failed rows show FAILED; then a
-#      notes: section with DESC + your NOTES lines)
+#      notes: section with the auto-detected description + your NOTES lines)
 #
 #   columns:  size(mb) = result size in the log ("reduced to ...mb")
 #             time(sec) = Step 1+2+3 ("Step N took ... sec")
 #             mb removed per second = (sd card mb - size) / time(sec)
-#             img row = shrunken image of the first successful run + its
-#             Step 1+2 times; sd card row = blockdev size of the device
-#             (in notes, __CARD_MB__ is replaced with the measured card size)
+#             item column   = the row: sd card, the two img pipeline steps,
+#                             or a compressor with its level (e.g. "zip -1");
+#                             the level shown is the one the run used (the
+#                             log's "Compression set to level N", so a clamp
+#                             by pisafe is reflected)
+#             img (step 1 - copy)   = the full card copy: device size,
+#                                   copy time (step 1), 0 mb removed;
+#                                   from the first run
+#             img (step 2 - shrink) = the pishrink-ed image: its size
+#                                   (log line "Shrunken image: ..."), the
+#                                   shrink time (step 2) and the rate
+#                                   measured over that same time
+#             sd card row = blockdev size of the device
+#             (in notes, __CARD_MB__ is replaced with the measured size,
+#              e.g. "7948 mb" - or "n/a" if the card size could not be read)
 #
 #   usage:
-#     bash pisafe_benchmark_test.sh [-h] [-c COMPRESSORS] [-l LEVELS] [-d DESC]
-#       -c  compressors from: zip gz xz zst   (space- or comma-separated)
+#     bash pisafe_benchmark_test.sh [-h] [-c COMPRESSORS] [-l LEVELS]
+#       -c  compressors from: zip gz xz zst   (space- or comma-separated,
+#          quoted if several, e.g. -c "xz zst")
 #       -l  levels, plain numbers (e.g. 1 5 9); env COMPRESSORS / LEVELS
-#          act as the built-in defaults
-#       -d  the description line shown first under 'notes:'
-#          (default: auto-detected - host model, cores, ram, OS; the boot
-#          drive (nvme/emmc/usb/ssd + name + size); and the test card's
-#          vendor, model and measured size)
+#          act as the built-in defaults; each run is passed to pisafe as
+#          --level=<n> (config untouched)
+#
+#   the 'notes:' description is always auto-detected: host model, cores,
+#   ram, OS; the boot drive (nvme/emmc/usb/ssd + name + size); and the
+#   test card's vendor, model and measured size
 #
 #   caveats:
 #     - gz: cards with a post-shrink size >= ~3.9 GiB are refused by pisafe
 #       before backup - that row shows FAILED, which is the right outcome
-#     - 9 is the max zip/gz/xz take; zstd goes to 19. Run zst-19 alone
-#       (-c zst -l 19) - xz/zip silently take the last digit (xz -19 == -9)
-#       and would print mislabelled rows
+#     - levels above a compressor's max (xz/zip/gz go to 9, zst to 19) are
+#       clamped down by pisafe with a warning - e.g. a single level 19 run
+#       does 9 for zip/xz/gz and 19 for zst; the row name (e.g. "xz -9")
+#       shows the level each run actually used
 
 set -euo pipefail
 
 find_pisafe() {
-    command -v pisafe 2> /dev/null && return
     local c
+    c=$(command -v pisafe 2> /dev/null) || c=
+    if [[ -n $c ]]; then
+        echo "$c"
+        return 0
+    fi
     for c in /usr/local/bin/pisafe /mnt/dev/pisafe/pisafe; do
-        [[ -x $c ]] && { echo "$c"; return; }
+        if [[ -f $c ]]; then
+            echo "$c"
+            return 0
+        fi
     done
+    return 1
 }
 
 PISAFE=${PISAFE:-$(find_pisafe || true)}
@@ -78,18 +102,22 @@ LEVELS=${LEVELS:-1 5 9}
 
 usage() {
     cat <<EOF
-usage: bash pisafe_benchmark_test.sh [-h] [-c COMPRESSORS] [-l LEVELS] [-d DESC]
+usage: bash pisafe_benchmark_test.sh [-h] [-c COMPRESSORS] [-l LEVELS]
 
-  -c   compressors to run, space- or comma-separated (from: zip gz xz zst)
-  -l   compression levels to run, space- or comma-separated (e.g. 1 5 9)
-  -d   the description line shown first under 'notes:'
-       (default: auto-detected - host model, cores, ram, OS; the boot
-       drive (nvme/emmc/usb/ssd + name + size); and the test card's
-       vendor, model and measured size)
+  -c   compressors to run, space- or comma-separated (from: zip gz xz zst);
+       quote a multi-word list, e.g. -c "xz zst"
+  -l   compression levels to run, space- or comma-separated (e.g. 1 5 9);
+       each run is passed to pisafe as --level=<n> (your config is
+       untouched); levels above a compressor's max are clamped by pisafe
+       (xz/zip/gz: 9, zst: 19)
   -h   this help
 
+  the 'notes:' description is always auto-detected: host model, cores,
+  ram, OS; the boot drive (nvme/emmc/usb/ssd + name + size); and the test
+  card's vendor, model and measured size
+
   env: COMPRESSORS LEVELS (defaults for -c / -l) and
-       PISAFE DEVICE OUTDIR CONFIG LOGFILE DESC
+       PISAFE DEVICE OUTDIR CONFIG LOGFILE
 EOF
 }
 
@@ -97,15 +125,21 @@ if [[ ${1:-} == -h || ${1:-} == --help ]]; then
     usage
     exit 0
 fi
-while getopts ':c:l:d:h' opt; do
+while getopts ':c:l:h' opt; do
     case $opt in
         c) COMPRESSORS=${OPTARG//,/ } ;;
         l) LEVELS=${OPTARG//,/ } ;;
-        d) DESC=${OPTARG} ;;
         h) usage; exit 0 ;;
         \?) echo "unknown option: -${OPTARG:-?}" >&2; usage >&2; exit 1 ;;
     esac
 done
+# getopts stops at the first non-option (e.g. -c xz zst unquoted) - make that loud
+if (( OPTIND - 1 < $# )); then
+    shift $((OPTIND - 1))
+    echo "ERROR: unexpected argument(s): $*" >&2
+    echo "       (quote multi-word lists, e.g. -c \"xz zst\")" >&2
+    exit 1
+fi
 
 [[ -n ${COMPRESSORS// /} ]] || { echo "ERROR: no compressors selected." >&2; exit 1; }
 [[ -n ${LEVELS// /} ]]     || { echo "ERROR: no levels selected." >&2; exit 1; }
@@ -115,13 +149,14 @@ for c in $COMPRESSORS; do
         *) echo "ERROR: unknown compressor '$c' (choose from: zip gz xz zst)." >&2; exit 1 ;;
     esac
 done
+# level values here are just validated as numbers; each compressor's own
+# range (and clamp) is enforced by pisafe at the compress step
 for l in $LEVELS; do
-    [[ $l =~ ^[0-9]+$ && $l -gt 0 ]] \
+    [[ $l =~ ^[0-9]+$ ]] \
         || { echo "ERROR: invalid compression level '$l' (use plain numbers, e.g. 1 5 9)." >&2; exit 1; }
 done
 
-# one-line description of the hardware we are running on (used for the
-# 'notes:' line unless -d / DESC is given)
+# one-line description of the hardware we are running on (the 'notes:' line)
 hw_desc() {
     local DT MODEL="" CORES RAM OS P L=""
     DT=$(tr -d '\0' < /sys/firmware/devicetree/base/model 2> /dev/null | head -n 1 || true)
@@ -143,16 +178,14 @@ hw_desc() {
     echo "${L:-hardware unknown}"
 }
 
-# description line: -d / env DESC win; otherwise auto-detected (set after
-# the card size above is read, so the card can be named)
-
 # notes block shown at the bottom (edit or extend as you like)
-# __CARD_MB__ is replaced at runtime with the measured card size (mb)
+# __CARD_MB__ is replaced at runtime with the measured size ("7948 mb")
+# or "n/a"
 NOTES="zip set the standard years ago
 gz is limited to < 4g, so is not recommended.
 zst is the fastest
 xz is the smallest
-mb removed per second = (sd card __CARD_MB__mb - size) / time(sec)
+mb removed per second = (sd card __CARD_MB__ - size) / time(sec)
 xz-1 will be pisafe's new default."
 
 # ---- card size, read once up front (the card is never written) ----
@@ -222,9 +255,9 @@ boot_desc() {
     return 0
 }
 
-# description line: -d / env DESC win; otherwise auto-detected:
-# the hardware we run on, what the OS booted from, and the test card
-# (name + measured size); if the card IS the boot disk it says so
+# the 'notes:' description: the hardware we run on, what the OS booted
+# from, and the test card (name + measured size); if the card IS the boot
+# disk it says so. Set after the card size above is read, so it can be named.
 DESC_LINE=$(hw_desc)
 boot_desc
 CARD=""
@@ -242,14 +275,15 @@ else
     [[ -n ${BOOT_LINE:-} ]] && DESC_LINE+=", ${BOOT_LINE}"
 fi
 [[ -n $CARD ]] && DESC_LINE+=", against $CARD"
-DESC=${DESC:-$DESC_LINE}
 
 echo
 echo "================================================================"
 echo "  PiSafe compression benchmark"
 echo "================================================================"
 echo
-echo "  PREPARE: put a trixie-lite image on an 8GB SD card, card in $DEVICE"
+CARD_HINT=""
+[[ $CARD_MB -gt 0 ]] && CARD_HINT=" ($CARD_MB mb)"
+echo "  PREPARE: put a trixie-lite image on an SD card${CARD_HINT}, card in $DEVICE"
 echo
 
 N_RUNS=0
@@ -263,8 +297,8 @@ echo "  What this script will do:"
 echo "    1. back up $DEVICE to $OUTDIR $N_RUNS times"
 echo "       ($N_RUNS FULL READS of the card - the card is never written to)"
 echo "    2. compressors: $COMPRESSORS   (picked by the output extension)"
-echo "    3. levels:      $LEVELS        (set in $CONFIG,"
-echo "                                       your original level is restored at the end)"
+echo "    3. levels:      $LEVELS        (passed to pisafe per run, --level=<n>;"
+echo "                                       your config is never modified)"
 echo "    4. each image is measured, then deleted to keep the disk clear"
 echo "    5. the report is built from the new lines of the pisafe log:"
 echo "         $LOGFILE"
@@ -290,33 +324,29 @@ if [[ $CARD_MB -eq 0 ]]; then
     echo "WARNING: could not read the size of $DEVICE - the 'sd card' and rate rows will show less."
 fi
 
-# remember the user's level so we don't silently leave it at '9'
-ORIG_LEVEL=$(grep -oP '^compression_level=\K.*' "$CONFIG" 2> /dev/null || true)
-restore_level() {
-    [[ -n $ORIG_LEVEL ]] && sed -i "s/^compression_level=.*/compression_level=$ORIG_LEVEL/" "$CONFIG"
-    return 0
-}
-trap restore_level EXIT
-
 # where in the log this benchmark's lines start
 LOG_START=$(wc -l < "$LOGFILE" 2> /dev/null | tr -dc '0-9' || true)
 LOG_START=${LOG_START:-0}
 
-# ---- helper: run one backup straight to the terminal ----
+# the one place the benchmark's output file names are built
+benchmark_name() {   # comp lvl -> full name (e.g. benchmark_zst_L1.img.zst)
+    echo "benchmark_${1}_L${2}.img.${1}"
+}
+
 run_one() {
     local comp=$1 lvl=$2 outfile=$3
     echo "=== $comp level $lvl -> $outfile ==="
-    "$PISAFE" backup "$DEVICE" "$outfile" -y
+    "$PISAFE" backup "$DEVICE" "$outfile" -y --level="$lvl"
 }
 
 # ---- drop our own leftovers from an earlier run of this matrix ----
-# pisafe refuses to overwrite an existing output file, and ~4GB per run
-# won't fit on the card - so only the exact benchmark_* names we are
-# about to (re)create get removed; everything else is left alone
+# pisafe refuses to overwrite an existing output file - so only the exact
+# benchmark_* names we are about to (re)create get removed; everything
+# else is left alone
 for LEVEL in $LEVELS; do
     for COMPRESSOR in $COMPRESSORS; do
-        for F in "$OUTDIR/benchmark_${COMPRESSOR}_L${LEVEL}.img" \
-                 "$OUTDIR/benchmark_${COMPRESSOR}_L${LEVEL}.img.${COMPRESSOR}"; do
+        N=$(benchmark_name "$COMPRESSOR" "$LEVEL")
+        for F in "$OUTDIR/$N" "$OUTDIR/${N%.*}"; do
             if [[ -e $F ]]; then
                 echo "removing old benchmark file: $F"
                 rm -f -- "$F"
@@ -325,11 +355,10 @@ for LEVEL in $LEVELS; do
     done
 done
 
-# ---- the runs ----
+# ---- the runs ---- (level is passed per run with --level=<n>; config untouched)
 for LEVEL in $LEVELS; do
-    sed -i "s/^compression_level=.*/compression_level=$LEVEL/" "$CONFIG"
     for COMPRESSOR in $COMPRESSORS; do
-        OUTFILE="$OUTDIR/benchmark_${COMPRESSOR}_L${LEVEL}.img.${COMPRESSOR}"
+        OUTFILE="$OUTDIR/$(benchmark_name "$COMPRESSOR" "$LEVEL")"
         if run_one "$COMPRESSOR" "$LEVEL" "$OUTFILE"; then
             # report data is already in the log - make room for the next run
             echo "run ok - removing $OUTFILE (and the .img) to keep the disk clear"
@@ -343,7 +372,6 @@ done
 # ---- build the report from the new lines of the pisafe log ----
 echo
 echo "all runs done - building the report from $LOGFILE (lines $((LOG_START + 1))+) ..."
-echo "note: your original compression_level (${ORIG_LEVEL:-n/a}) is restored on exit"
 
 RESULTS_FILE="$PWD/benchmark_results_$(date +%Y%m%d_%H%M).txt"
 
@@ -351,18 +379,19 @@ NEWLOG=$(mktemp)
 if [[ -f $LOGFILE ]]; then
     tail -n +$((LOG_START + 1)) -- "$LOGFILE" > "$NEWLOG" 2> /dev/null || :
 fi
-trap 'restore_level; rm -f "$NEWLOG"' EXIT
+trap 'rm -f "$NEWLOG"' EXIT
 
 # the attempt list, in run order, "compressor|level|image-base-path"
 ATTEMPTS=
 for LEVEL in $LEVELS; do
     for COMPRESSOR in $COMPRESSORS; do
-        ATTEMPTS+="${COMPRESSOR}|${LEVEL}|${OUTDIR}/benchmark_${COMPRESSOR}_L${LEVEL}.img;"
+        N=$(benchmark_name "$COMPRESSOR" "$LEVEL")
+        ATTEMPTS+="${COMPRESSOR}|${LEVEL}|${OUTDIR}/${N%.*};"
     done
 done
 
 {
-    awk -v DESC="$DESC" -v NOTES="$NOTES" -v CARD_MB="$CARD_MB" \
+    awk -v DESC="$DESC_LINE" -v NOTES="$NOTES" -v CARD_MB="$CARD_MB" \
         -v ATTEMPTS="$ATTEMPTS" -v Q="'" '
         function round1(x) { if (x >= 0) return int(x + 0.5) + 0; return 0 - int(0.5 - x) + 0 }
 
@@ -394,6 +423,15 @@ done
             }
         }
 
+        # --- effective level: "Compression set to level N of M" (logged by
+        # --- pisafe after any clamp; the row shows the level actually used) ---
+        {
+            for (i = 1; i + 4 <= NF; i++)
+                if ($i == "Compression" && $(i + 1) == "set" && \
+                    $(i + 2) == "to" && $(i + 3) == "level" && lvl[b] == "")
+                    lvl[b] = $(i + 4) + 0
+        }
+
         # --- shrunken image: "Shrunken image: <path> N bytes (<human>)" ---
         /Shrunken image:/ {
             for (i = 1; i < NF; i++)
@@ -423,24 +461,30 @@ done
             rule = ""
             for (i = 0; i < n; i++) rule = rule "="
 
-            fm = "%-14s %-9s %8s  %9s  %s\n"
+            fm = "%-22s %8s  %9s  %s\n"   # 22 = "img (step 2 - shrink)" + gap
             print rule
             print title
             print rule
             print ""
-            printf fm, "compressor", "level", "size(mb)", "time(sec)", "mb removed per second"
-            if (CARD_MB + 0 > 0) printf fm, "sd card", "", CARD_MB, "0", "--"
+            printf fm, "item", "size(mb)", "time(sec)", "mb removed per second"
+            if (CARD_MB + 0 > 0) printf fm, "sd card", CARD_MB, "0", "--"
 
-            # img row: shrunken image size of the first run + its copy/shrink time
+            # img rows (first run): the two pipeline stages, each timed by
+            # its own step: the copy (step 1) removes nothing; the shrink
+            # (step 2) times and rates against the step-2 duration; 0.0 when
+            # a stage removed nothing
             did_img = 0
-            if (b > 0 && bytes[1] + 0 > 0) {
-                it = (t[1, 1] + 0) + (t[2, 1] + 0)
-                if (it > 0) {
-                    s = round1(bytes[1] / 1000000)
-                    r = (CARD_MB + 0) > s ? sprintf("%.1f", (CARD_MB - s) / it) : "--"
-                    printf fm, "img", "", s, it, r
-                    did_img = 1
-                }
+            it1 = (t[1, 1] + 0)
+            it2 = (t[2, 1] + 0)
+            if (b > 0 && it1 > 0 && CARD_MB + 0 > 0) {
+                printf fm, "img (step 1 - copy)", CARD_MB, it1, "0.0"
+                did_img = 1
+            }
+            if (b > 0 && bytes[1] + 0 > 0 && it2 > 0) {
+                s = round1(bytes[1] / 1000000)
+                r = (CARD_MB + 0) > s ? sprintf("%.1f", (CARD_MB - s) / it2) : "0.0"
+                printf fm, "img (step 2 - shrink)", s, it2, r
+                did_img = 1
             }
             if (did_img) print ""
 
@@ -470,17 +514,18 @@ done
                     if (tsum == 0) tsum = total[bb] + 0
                     has_size = (size[bb] != "")
                 }
+                shlvl = (bb && lvl[bb] + 0 > 0) ? lvl[bb] : f[2]
                 if (!bb || !has_size) {
-                    printf fm, f[1], f[2], "FAILED", (tsum > 0 ? tsum : "-"), "-"
+                    printf fm, f[1] " -" shlvl, "FAILED", (tsum > 0 ? tsum : "-"), "-"
                 } else {
                     ok++
                     s = round1(size[bb])
                     r = (tsum > 0 && CARD_MB > s) ? sprintf("%.1f", (CARD_MB - s) / tsum) : "--"
-                    printf fm, f[1], f[2], s, (tsum > 0 ? tsum : "-"), r
+                    printf fm, f[1] " -" shlvl, s, (tsum > 0 ? tsum : "-"), r
                 }
             }
             print ""
-            card_show = (CARD_MB + 0 > 0) ? CARD_MB : "n/a"
+            card_show = (CARD_MB + 0 > 0) ? CARD_MB " mb" : "n/a"
             print "notes:"
             if (DESC != "") print "  " DESC
             m = split(NOTES, ln, "\n")
