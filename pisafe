@@ -215,9 +215,12 @@ pisafe_help() {
     echo "  help | -h  | --h             - help"
     echo
     echo "Notes: "
-    echo " - Supports .xz .zip .gz .zst and .img files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
+    echo " - Supports .xz .zip .zst .gz and .img files.  Appends '.img.$DEFAULT_EXTENSION' if no extension is specified "
     echo " - An '.img' file is faster but twice the size because it is not compressed."
     echo " - -y answers 'y' to prompts."
+    echo " - backup compression level (overrides the settings file for this run only):"
+    echo "   -1 to -9, or --level=N   (xz zip gz take 1-9; zst takes 1-19)"
+    echo "   levels above the compressor's max are clamped down with a warning"
     echo " - There are a number of settings that can be changed in the settings file. "
     echo
     echo ".zip was raspberry pi's original image format. An old standard"
@@ -228,9 +231,10 @@ pisafe_help() {
     echo "$SCRIPTNAME "
     echo "$SCRIPTNAME list"
     echo "$SCRIPTNAME backup sda newimage"
-    echo "$SCRIPTNAME backup /dev/sdb newimage.xz -y"
+    echo "$SCRIPTNAME backup /dev/sda newimage.xz -y"
+    echo "$SCRIPTNAME backup /dev/sda newimage.zst -y --level=19"
     echo "$SCRIPTNAME restore newimage.img.zip sda"
-    echo "$SCRIPTNAME backup /dev/sda /home/pi/Downloads/backup_\$(date +%Y-%d-%m_%I%M%p).img.xz -y"
+    echo "$SCRIPTNAME backup /dev/sdb /home/pi/Downloads/backup_\$(date +%Y-%d-%m_%I%M%p).img.xz -y"
     echo "$SCRIPTNAME format /dev/sda fat32"
     echo "$SCRIPTNAME settings"
     echo "$SCRIPTNAME log"
@@ -823,6 +827,13 @@ get_args(){
             -8)                  COMPRESSION_LEVEL=8                  ;;
             -9)                  COMPRESSION_LEVEL=9                  ;;
 
+            --level=*)           if [[ ${ARG#--level=} =~ ^[0-9]+$ ]]; then
+                                     COMPRESSION_LEVEL=${ARG#--level=}
+                                 else
+                                     echo "ERROR: --level= expects a number, got '${ARG#--level=}'" >&2
+                                     exit 1
+                                 fi ;;
+
             --updates=on)           CHECK_FOR_UPDATES_ON_STARTUP=on   ;;
             --updates=off)          CHECK_FOR_UPDATES_ON_STARTUP=off  ;;
 
@@ -1249,7 +1260,16 @@ media_backup(){
     echo
     ui_echo "~ Step 3 of 3 - Compressing '$OUTFILE_BASE.img' to '$OUTFILE' ... " white log
     date
-    echo "Compression set to level $COMPRESSION_LEVEL of 9"
+    # xz/zip/pigz only take 0-9; zstd takes up to 19 - clamp out-of-range
+    # levels with a warning instead of letting the tool silently take the
+    # last digit (e.g. xz -19 behaving as -9)
+    LVLMAX=9
+    [[ "$(file_ext "$OUTFILE")" == zst ]] && LVLMAX=19
+    if (( COMPRESSION_LEVEL > LVLMAX )); then
+        echo "WARNING: level $COMPRESSION_LEVEL exceeds this compressor's max ($LVLMAX) - using $LVLMAX"
+        COMPRESSION_LEVEL=$LVLMAX
+    fi
+    echo "Compression set to level $COMPRESSION_LEVEL of $LVLMAX"
     echo "$(file_size "$OUTFILE_BASE".img -h) to compress."
 
     case $(file_ext "$OUTFILE") in
