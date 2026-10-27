@@ -1736,7 +1736,21 @@ media_backup_estimate() {
 
         ext4|ext3|ext2)
             if [[ $MEDIA_PARTITION_TABLE = gpt ]] || { [[ $MEDIA_PARTITION_TABLE = msdos ]] && [[ $MEDIA_LAST_PARTITION_TYPE = primary ]]; }; then
-                SHRINK_BYTES=$(sudo lsblk "$MEDIA" -lpbo name,fsavail | grep "$MEDIA_LAST_PARTITION_NAME" | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
+                # Free space of the last partition, read from the filesystem
+                # itself so the estimate works even when the partition is NOT
+                # mounted. (lsblk -o fsavail is EMPTY for unmounted partitions,
+                # which drove the estimate to 'will not shrink' -> full card size
+                # -> the gz guard false-refused legal backups.) e2fsprogs ships
+                # wherever ext + pishrink do; lsblk remains the fallback.
+                local _fsinfo _blk _free
+                _fsinfo=$(sudo tune2fs -l "$MEDIA_LAST_PARTITION_NAME" 2> /dev/null)
+                _blk=$(awk  '/^Block size:/{print $NF; exit}' <<<"$_fsinfo")
+                _free=$(awk '/^Free blocks:/{print $NF; exit}' <<<"$_fsinfo")
+                if [[ $_blk =~ ^[0-9]+$ && $_free =~ ^[0-9]+$ ]]; then
+                    SHRINK_BYTES=$(( _free * _blk ))
+                else
+                    SHRINK_BYTES=$(sudo lsblk "$MEDIA" -lpbo name,fsavail | grep "$MEDIA_LAST_PARTITION_NAME" | sed 's/^[[:blank:]]*//;s/[ ]\+/ /g'  | cut -d " " -f2)
+                fi
             else
                 MSG=$MSG"   Warning: The last partition type is '$MEDIA_LAST_PARTITION_TYPE'. This partition-type will not shrink and cannot be restored to a smaller media. PiSafe will still work.\n"
             fi
