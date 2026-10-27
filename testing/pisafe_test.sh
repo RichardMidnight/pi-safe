@@ -9,7 +9,7 @@
 # Human-driven only: AI agents must never execute this script.
 #
 # Usage:
-#   pisafe_test.sh DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+#   pisafe_test.sh DEVICE [BASE] [--full] [-c LIST] [-l LEVEL] [-y|--yes]
 #   pisafe_test.sh setup [DIR|-y]               (non-destructive bootstrap)
 #   pisafe_test.sh env                          (non-destructive: prints the
 #                                                 box's environment only - no
@@ -35,11 +35,15 @@
 #                 * after each format: first 1 MiB must have changed, FS must be vfat
 #                 * after each restore: card is read back and cmp'd against reference
 #             without --full (std mode): only exit status + fresh-log markers.
-#   --compress=L
-#             test only the listed compressions: any subset of zip, gz, xz,
-#             zst, comma-separated (e.g. --compress=zip,zst). Order and
-#             duplicates are ignored; the default is all four. A bare
-#             --compress or an empty list is a fatal error.
+#   -c LIST,  test only the listed compressions: any subset of zip, gz,
+#   --compress        xz, zst - comma- or space-separated (e.g. --compress=zip,zst
+#             or -c "zip zst"; accepted: -c=zip,zst, --compress zip,zst).
+#             Order and duplicates are ignored; the default is all four. A
+#             bare flag or an empty list is a fatal error.
+#   -l LEVEL, compression level for the backup step, passed to pisafe as
+#   --level   --level=N (1-19; xz/zip/gz clamp to 9 with a warning). ONE level
+#             per run; a list like -l=1,5,9 is refused - the level matrix is
+#             the bench's job: pisafe_benchmark_test.sh -l 1 5 9
 #
 #   -y, --yes automatically answer every prompt "yes" (umount a mounted
 #             device, delete existing image files, final confirmation);
@@ -75,7 +79,7 @@
 #
 set -u
 
-VERSION="2.3"
+VERSION="2.4"
 EXTS=(zip gz xz zst)
 # exact strings pisafe logs ONLY on fatal paths (verified against source):
 #   ~ Error at line ...   ui_msg_error  (pisafe:1995, all callers abort)
@@ -131,9 +135,13 @@ FULL=0
 # -y/--yes: auto-answer yes to every prompt (empty = always ask; a dead
 # stdin or any other answer is treated as "no", so it fails closed)
 YES=""
-# --compress=LIST: raw selection ("" = flag not given) and rebuilt arm list.
+# -c/--compress: raw selection ("" = flag not given) and rebuilt arm list.
 COMPRESS=""
 HAVE_COMPRESS=0
+# -l/--level: ONE compression level for the backup step ("" = not given),
+# passed to pisafe as --level=N; the app clamps per compressor (xz/zip/gz max 9)
+LEVEL=""
+HAVE_LEVEL=0
 TMPD=""
 REFERENCE=""
 SUCCESS_MARKER=""
@@ -160,7 +168,7 @@ usage(){
   cat <<EOF
 pisafe_test.sh v$VERSION - destructive pisafe integration test harness
 
-Usage: pisafe_test.sh DEVICE [BASE] [--full] [--compress=LIST] [-y|--yes]
+Usage: pisafe_test.sh DEVICE [BASE] [--full] [-c LIST] [-l LEVEL] [-y|--yes]
        pisafe_test.sh setup [DIR|-y]
        pisafe_test.sh env
 
@@ -184,11 +192,16 @@ Arguments:
   --full      also verify bytes: keep a raw reference image of the card and
               cmp each decompressed backup, the erased card state, and the
               restored card against it. (slower, needs ~2x more free space)
-  --compress  test only the listed compressions: any subset of zip, gz,
-              xz, zst, comma-separated, as --compress=LIST
-              (e.g. --compress=zip,zst). Order and duplicates are ignored.
-              A bare --compress or an empty list is a fatal error.
-              Default: all four.
+  -c LIST,  test only the listed compressions: any subset of zip, gz, xz,
+  --compress        zst, comma- or space-separated (quote a spaced list).
+              Accepted forms: -c zip,zst | -c=zip,zst | --compress zip,zst
+              | --compress=zip,zst. Order and duplicates are ignored. A
+              bare flag or an empty list is a fatal error. Default: all four.
+  -l LEVEL, compression level for the backup step, passed to pisafe as
+  --level   --level=N (1-19; xz/zip/gz clamp to 9 with a warning - that is
+              the app behavior under test). One level per run; a list such
+              as -l=1,5,9 is refused - the level matrix is the bench's job:
+              pisafe_benchmark_test.sh -l 1 5 9
   -y, --yes   answer every prompt "yes" without asking (umount a mounted
               device, delete existing image files, the final confirmation);
               nothing is read from stdin when set. use only on a target you
@@ -727,14 +740,14 @@ mounted_targets(){
 
 # ------------------------------------------------------------------- compress --
 
-# Validate the --compress selection and rebuild EXTS in canonical order.
+# Validate the -c/--compress selection and rebuild EXTS in canonical order.
 # No-op when the flag was not given (EXTS already holds all four arms).
 # Unknown tokens and an empty selection are fatal (exit 2) BEFORE any
 # preflight / state change, so a bad selection can never reach a step.
 validate_compress(){
   (( HAVE_COMPRESS )) || return 0
   local toks=() selected t
-  IFS=',' read -r -a toks <<< "$COMPRESS"
+  IFS=', ' read -r -a toks <<< "$COMPRESS"     # comma- or space-separated
   selected=" "
   for t in "${toks[@]}"; do
     t=${t//[[:space:]]/}               # trim: " zip , zst " == "zip,zst"
@@ -754,7 +767,21 @@ validate_compress(){
       *" $t "*) EXTS+=("$t") ;;
     esac
   done
-  (( ${#EXTS[@]} > 0 )) || DIE "empty --compress selection (valid: zip, gz, xz, zst)"
+  (( ${#EXTS[@]} > 0 )) || DIE "empty compress selection (valid: zip, gz, xz, zst)"
+  return 0
+}
+
+# Validate -l/--level: ONE level, a plain number 1-19. Lists are refused
+# and pointed at the bench; >19 is refused (the app clamps per compressor,
+# xz/zip/gz max 9, but 19 is the biggest level any compressor can take).
+validate_level(){
+  (( HAVE_LEVEL )) || return 0
+  if [[ $LEVEL == *,* || $LEVEL == *" "* ]]; then
+    DIE "-l takes ONE level per battery run (e.g. -l=9) - a level matrix like 1 5 9 is the bench's job: pisafe_benchmark_test.sh DEVICE -l 1 5 9"
+  fi
+  [[ $LEVEL =~ ^[0-9]+$ ]] || DIE "level must be a plain number (1-19), got '$LEVEL'"
+  LEVEL=$((10#$LEVEL))
+  (( LEVEL >= 1 && LEVEL <= 19 )) || DIE "level out of range (1-19): $LEVEL"
   return 0
 }
 
@@ -880,6 +907,9 @@ confirm(){
   echo " PISAFE test harness v$VERSION - DESTRUCTIVE"
   echo "   target device : $DEVICE"
   echo "   compressions  : ${EXTS[*]}   ($n arm(s))"
+  if (( HAVE_LEVEL )); then
+    echo "   level         : --level=$LEVEL (backup step; the app clamps it per compressor)"
+  fi
   echo "   images        :$files"
   echo "   (the images are REMOVED after the run - the report and log are kept)"
   echo "   pisafe        : $PISAFE  [build: $(file_date "$PISAFE")]"
@@ -1088,15 +1118,23 @@ main(){
     exit 0
   fi
 
-  for a in "$@"; do
-    case $a in
+  while (( $# )); do
+    case $1 in
       -h|--help)    usage; exit 0 ;;
-      --full)       FULL=1 ;;
-      -y|--yes)     YES=1 ;;
-      --compress)   echo "${RED}missing value for --compress (e.g. --compress=zip,zst)${RST}" >&2; exit 2 ;;
-      --compress=*) COMPRESS=${a#--compress=}; HAVE_COMPRESS=1 ;;
-      -*)           echo "${RED}unknown option '$a' (try -h)${RST}" >&2; exit 2 ;;
-      *)            POSITIONAL+=("$a") ;;
+      --full)       FULL=1; shift ;;
+      -y|--yes)     YES=1; shift ;;
+      -c|--compress)
+        [[ -n ${2:-} ]] || { echo "${RED}missing value for -c (e.g. -c=zip,zst)${RST}" >&2; exit 2; }
+        COMPRESS=$2; HAVE_COMPRESS=1; shift 2 ;;
+      -c=*)         COMPRESS=${1#-c=}; HAVE_COMPRESS=1; shift ;;
+      --compress=*) COMPRESS=${1#--compress=}; HAVE_COMPRESS=1; shift ;;
+      -l|--level)
+        [[ -n ${2:-} ]] || { echo "${RED}missing value for -l (e.g. -l=9)${RST}" >&2; exit 2; }
+        LEVEL=$2; HAVE_LEVEL=1; shift 2 ;;
+      -l=*)         LEVEL=${1#-l=}; HAVE_LEVEL=1; shift ;;
+      --level=*)    LEVEL=${1#--level=}; HAVE_LEVEL=1; shift ;;
+      -*)           echo "${RED}unknown option '$1' (try -h)${RST}" >&2; exit 2 ;;
+      *)            POSITIONAL+=("$1"); shift ;;
     esac
   done
 
@@ -1116,6 +1154,7 @@ main(){
   fi
 
   validate_compress
+  validate_level
 
   preflight
   confirm
@@ -1141,7 +1180,11 @@ main(){
   for ext in "${EXTS[@]}"; do
     F=$(img_path "$ext")
     SUCCESS_MARKER='~ Backup complete.'
-    run_step "backup [$ext]" backup "$DEVICE" "$F" -y "${STD_FLAGS[@]}"
+    if (( HAVE_LEVEL )); then
+      run_step "backup [$ext]" backup "$DEVICE" "$F" -y --level="$LEVEL" "${STD_FLAGS[@]}"
+    else
+      run_step "backup [$ext]" backup "$DEVICE" "$F" -y "${STD_FLAGS[@]}"
+    fi
     if (( FULL )); then
       run_verify "backup bytes [$ext]" check_backup "$ext" "$F"
     fi

@@ -59,10 +59,13 @@
 #     bash pisafe_benchmark_test.sh DEVICE [-h] [-c COMPRESSORS] [-l LEVELS] [-r REPEATS]
 #       DEVICE  target block device to read (required), e.g. /dev/sdb
 #               (the DEVICE env still works as a fallback)
-#       -c  compressors from: zip gz xz zst   (space- or comma-separated,
-#          quoted if several, e.g. -c "xz zst")
-#       -l  levels, plain numbers (e.g. 1 5 9)
-#       -r  repeat each (compressor, level) pair this many times (default 1)
+#       -c  compressors from: zip gz xz zst   (comma- or space-separated, quote
+#          a spaced list). accepted forms: -c, -c=, --compress, --compress=
+#          (e.g. -c "xz zst", -c=xz,zst, --compress=zip,zst,xz)
+#       -l  levels, plain numbers (e.g. 1 5 9). accepted forms:
+#          -l, -l=, --levels, --levels= (e.g. -l 1 5 9, -l=1,5,9)
+#       -r  repeat each (compressor, level) pair this many times (default 1).
+#          accepted forms: -r, -r=, --repeats, --repeats= (e.g. -r=3)
 #
 #   the 'notes:' description is always auto-detected: host model, cores,
 #   ram, OS; the boot drive (nvme/emmc/usb/ssd + name + size); and the
@@ -132,13 +135,16 @@ usage: bash pisafe_benchmark_test.sh DEVICE [-h] [-c COMPRESSORS] [-l LEVELS] [-
 
   DEVICE  target block device to read (required), e.g. /dev/sdb;
           the DEVICE env still works as a fallback
-  -c   compressors to run, space- or comma-separated (from: zip gz xz zst);
-       quote a multi-word list, e.g. -c "xz zst"
-  -l   compression levels to run, space- or comma-separated (e.g. 1 5 9);
-       the card is never re-read per level - every run compresses the ONE
-       shrunken image from the single phase-1 backup
+  -c   compressors to run (from: zip gz xz zst), comma- or space-separated;
+       a spaced list must be quoted. Accepted forms:
+       -c "xz zst" | -c xz,zst | -c=xz,zst | --compress xz,zst | --compress=xz,zst
+  -l   compression levels to run (e.g. 1 5 9); the card is never re-read
+       per level - every run compresses the ONE shrunken image from the
+       single phase-1 backup. Accepted forms:
+       -l 1 5 9 | -l=1,5,9 | --levels 1 5 9 | --levels=1,5,9
   -r   repeat each (compressor, level) pair this many times (default 1);
-       the report shows one row per run
+       the report shows one row per run. Accepted forms:
+       -r 3 | -r=3 | --repeats 3 | --repeats=3
   -h   this help
 
   the 'notes:' description is always auto-detected: host model, cores,
@@ -156,15 +162,27 @@ POSITIONAL=()
 while (( $# )); do
     case $1 in
         -h|--help) usage; exit 0 ;;
-        -c)
+        -c|--compress)
             [[ -n ${2:-} ]] || { echo "ERROR: missing value for -c (e.g. -c \"xz zst\")" >&2; exit 1; }
             COMPRESSORS=${2//,/ }; shift 2 ;;
-        -l)
+        -l|--levels)
             [[ -n ${2:-} ]] || { echo "ERROR: missing value for -l (e.g. -l \"1 5 9\")" >&2; exit 1; }
             LEVELS=${2//,/ }; shift 2 ;;
         -r|--repeats)
             [[ -n ${2:-} ]] || { echo "ERROR: missing value for -r (e.g. -r 3)" >&2; exit 1; }
             REPEATS=$2; shift 2 ;;
+        -c=*)
+            COMPRESSORS=${1#-c=}; COMPRESSORS=${COMPRESSORS//,/ }; shift ;;
+        --compress=*)
+            COMPRESSORS=${1#--compress=}; COMPRESSORS=${COMPRESSORS//,/ }; shift ;;
+        -l=*)
+            LEVELS=${1#-l=}; LEVELS=${LEVELS//,/ }; shift ;;
+        --levels=*)
+            LEVELS=${1#--levels=}; LEVELS=${LEVELS//,/ }; shift ;;
+        -r=*)
+            REPEATS=${1#-r=}; shift ;;
+        --repeats=*)
+            REPEATS=${1#--repeats=}; shift ;;
         -*)   echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
         *)    POSITIONAL+=("$1"); shift ;;
     esac
