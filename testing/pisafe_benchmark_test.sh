@@ -73,18 +73,25 @@
 set -euo pipefail
 
 find_pisafe() {
-    local c
-    c=$(command -v pisafe 2> /dev/null) || c=
-    if [[ -n $c ]]; then
-        echo "$c"
-        return 0
-    fi
-    for c in /usr/local/bin/pisafe /mnt/dev/pisafe/pisafe; do
+    local c parent
+    # by design the harnesses live in a folder INSIDE the app's folder (repo
+    # layout), so prefer the app in the parent folder; a copy alongside this
+    # harness stays as the fallback (the setup-mode layout: app + harness side
+    # by side). A system install is the last resort.
+    local sd
+    sd=$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+    parent=$(cd "$sd/.." && pwd -P 2> /dev/null) || parent="$sd/.."
+    for c in "$parent/pisafe" "$sd/pisafe" /usr/local/bin/pisafe; do
         if [[ -f $c ]]; then
             echo "$c"
             return 0
         fi
     done
+    c=$(command -v pisafe 2> /dev/null) || c=
+    if [[ -n $c ]]; then
+        echo "$c"
+        return 0
+    fi
     return 1
 }
 
@@ -93,6 +100,9 @@ PISAFE=${PISAFE:-$(find_pisafe || true)}
     echo "ERROR: can't find pisafe - rerun as:  PISAFE=/path/to/pisafe bash testing/pisafe_benchmark_test.sh"
     exit 1
 }
+# build date = the file's mtime. Stamped in the banner so a stale or wrong
+# copy of the app (or of this bench) is obvious at a glance - testing/punchList
+file_date(){ date -r "$1" '+%Y-%m-%d %H:%M' 2> /dev/null || echo '?unknown?'; }
 # the target device: the positional DEVICE (see usage) takes precedence;
 # the DEVICE env is the fallback - no silent /dev/sda default anymore
 DEVICE=${DEVICE:-}
@@ -325,7 +335,8 @@ echo "         $PWD/benchmark_results_$(date +%Y%m%d_%H%M).txt"
 echo
 echo "  Expected duration: ~30-90 minutes depending on the card and the Pi."
 echo
-echo "  PiSafe in use: $PISAFE"
+echo "  PiSafe in use: $PISAFE  [build: $(file_date "$PISAFE")]"
+echo "  bench harness : $(file_date "${BASH_SOURCE[0]}")"
 echo
 read -r -p "Proceed? [y/N] " ANSWER || { echo; echo "aborted."; exit 0; }
 [[ $ANSWER =~ ^[Yy]$ ]] || { echo "aborted."; exit 0; }

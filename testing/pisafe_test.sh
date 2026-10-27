@@ -68,7 +68,8 @@
 #      and then continues to backup-complete).
 #
 # Environment:
-#   PISAFE      path to the pisafe script (default: the pisafe alongside this harness)
+#   PISAFE      path to the pisafe script (default: ../pisafe, the app in the
+#               parent folder; alongside-copy = setup-mode fallback)
 #   PISAFE_REF  ref for setup mode downloads (default: 'dev')
 #
 set -u
@@ -85,11 +86,23 @@ EXTS=(zip gz xz zst)
 # marker check, so this scan is a supplement, not the primary signal.
 FAIL_RE='~ Error at line|~ Backup canceled|~ Restore stopped|~ Erase Media stopped|not erased'
 LOG_FILE="$HOME/.config/pisafe/pisafe.log"
-# default to the copy of pisafe that sits next to this harness, so the pair
-# can be run as two files from any CWD (e.g. straight off the share);
-# override with PISAFE=/path/to/pisafe
+# by design the test scripts live in a folder INSIDE the app's folder (repo
+# layout), so the default is the app in the parent folder; a copy alongside
+# this harness stays as the fallback (the setup-mode layout: app + harness
+# side by side). Both then run as files from any CWD (e.g. straight off the
+# share). An explicit PISAFE always wins - a bad path is a hard error (see
+# the existence check below), never a silent re-default.
 SCRIPT_DIR="$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-PISAFE="${PISAFE:-$SCRIPT_DIR/pisafe}"
+PARENT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+if [[ -z ${PISAFE:-} ]]; then
+  PISAFE="$PARENT_DIR/pisafe"
+  [[ -f $PISAFE ]] || PISAFE="$SCRIPT_DIR/pisafe"
+fi
+
+# build date of a script = the file's mtime. Logged in every banner/report so
+# a stale or wrong copy is obvious at a glance (the shadow-copy lesson: a
+# battery can silently run a months-old script next to it - testing/punchList).
+file_date(){ date -r "$1" '+%Y-%m-%d %H:%M' 2> /dev/null || echo '?unknown?'; }
 
 # deterministic, non-interactive flags for every pisafe invocation.
 # --dependencies=ON is deliberate: installing the missing runtime tools is
@@ -207,7 +220,7 @@ Examples:
 Per step, both modes check:  pisafe exit status == 0  AND  the log window of
 this exact step contains its "complete" marker and no error/abort lines.
 
-Environment: PISAFE=/path/to/pisafe    (default: the pisafe alongside this harness)
+Environment: PISAFE=/path/to/pisafe    (default: ../pisafe, the app in the parent folder)
             PISAFE_REF=REF            (setup mode; default 'dev')
 
 Human-driven only: this script will format the target card.
@@ -314,8 +327,8 @@ env_mode(){
   echo "  machine  : $(hostname 2>/dev/null || uname -n 2>/dev/null || echo unknown)${os_stamp:+ - $os_stamp}"
   echo "  arch     : $(uname -m 2>/dev/null || echo unknown) (kernel $(uname -r 2>/dev/null || echo unknown))"
   echo "  date     : $(date '+%Y-%m-%d %H:%M:%S')"
-  echo "  pisafe   : $PISAFE${pver:+ ($pver)}"
-  echo "  harness  : v$VERSION"
+  echo "  pisafe   : $PISAFE${pver:+ ($pver)}  [build: $(file_date "$PISAFE")]"
+  echo "  harness  : v$VERSION  [build: $(file_date "${BASH_SOURCE[0]}")]"
   native_surface
   echo "========================================================================"
   return 0
@@ -669,7 +682,8 @@ confirm(){
   echo "   compressions  : ${EXTS[*]}   ($n arm(s))"
   echo "   images        :$files"
   echo "   (the images are REMOVED after the run - the report and log are kept)"
-  echo "   pisafe        : $PISAFE"
+  echo "   pisafe        : $PISAFE  [build: $(file_date "$PISAFE")]"
+  echo "   harness build : $(file_date "${BASH_SOURCE[0]}")"
   echo "   log file      : $LOG_FILE"
   echo "   mode          : $desc"
   echo "   the card will be FORMATED $n $times (fat32) and restored $n $times"
@@ -988,8 +1002,8 @@ main(){
     # (e.g. 32-bit userland on an aarch64 kernel)
     echo "  arch     : $(uname -m 2>/dev/null || echo unknown) (kernel $(uname -r 2>/dev/null || echo unknown))"
     echo "  date     : $(date '+%Y-%m-%d %H:%M:%S')"
-    echo "  pisafe   : $PISAFE${pver:+ ($pver)}"
-    echo "  harness  : v$VERSION"
+    echo "  pisafe   : $PISAFE${pver:+ ($pver)}  [build: $(file_date "$PISAFE")]"
+    echo "  harness  : v$VERSION  [build: $(file_date "${BASH_SOURCE[0]}")]"
     printf '%s\n' "$SURFACE"
     for a in "${REPORT[@]}"; do
       printf '  %s\n' "$a"
