@@ -49,7 +49,9 @@
 #              e.g. "7948 mb" - or "n/a" if the card size could not be read)
 #
 #   usage:
-#     bash pisafe_benchmark_test.sh [-h] [-c COMPRESSORS] [-l LEVELS]
+#     bash pisafe_benchmark_test.sh DEVICE [-h] [-c COMPRESSORS] [-l LEVELS]
+#       DEVICE  target block device to read (required), e.g. /dev/sdb
+#               (the DEVICE env still works as a fallback)
 #       -c  compressors from: zip gz xz zst   (space- or comma-separated,
 #          quoted if several, e.g. -c "xz zst")
 #       -l  levels, plain numbers (e.g. 1 5 9); env COMPRESSORS / LEVELS
@@ -91,7 +93,9 @@ PISAFE=${PISAFE:-$(find_pisafe || true)}
     echo "ERROR: can't find pisafe - rerun as:  PISAFE=/path/to/pisafe bash testing/pisafe_benchmark_test.sh"
     exit 1
 }
-DEVICE=${DEVICE:-/dev/sda}
+# the target device: the positional DEVICE (see usage) takes precedence;
+# the DEVICE env is the fallback - no silent /dev/sda default anymore
+DEVICE=${DEVICE:-}
 OUTDIR=${OUTDIR:-/home/pi/Downloads}
 CONFIG=${CONFIG:-/home/$USER/.config/pisafe/pisafe.conf}
 # pisafe's log (same directory as its config) - the report's data source
@@ -102,8 +106,10 @@ LEVELS=${LEVELS:-1 5 9}
 
 usage() {
     cat <<EOF
-usage: bash pisafe_benchmark_test.sh [-h] [-c COMPRESSORS] [-l LEVELS]
+usage: bash pisafe_benchmark_test.sh DEVICE [-h] [-c COMPRESSORS] [-l LEVELS]
 
+  DEVICE  target block device to read (required), e.g. /dev/sdb;
+          the DEVICE env still works as a fallback
   -c   compressors to run, space- or comma-separated (from: zip gz xz zst);
        quote a multi-word list, e.g. -c "xz zst"
   -l   compression levels to run, space- or comma-separated (e.g. 1 5 9);
@@ -121,24 +127,36 @@ usage: bash pisafe_benchmark_test.sh [-h] [-c COMPRESSORS] [-l LEVELS]
 EOF
 }
 
-if [[ ${1:-} == -h || ${1:-} == --help ]]; then
-    usage
-    exit 0
-fi
-while getopts ':c:l:h' opt; do
-    case $opt in
-        c) COMPRESSORS=${OPTARG//,/ } ;;
-        l) LEVELS=${OPTARG//,/ } ;;
-        h) usage; exit 0 ;;
-        \?) echo "unknown option: -${OPTARG:-?}" >&2; usage >&2; exit 1 ;;
+# the device is the one positional argument (similar to pisafe_test.sh);
+# options may appear in any order; the DEVICE env still works as a fallback
+POSITIONAL=()
+while (( $# )); do
+    case $1 in
+        -h|--help) usage; exit 0 ;;
+        -c)
+            [[ -n ${2:-} ]] || { echo "ERROR: missing value for -c (e.g. -c \"xz zst\")" >&2; exit 1; }
+            COMPRESSORS=${2//,/ }; shift 2 ;;
+        -l)
+            [[ -n ${2:-} ]] || { echo "ERROR: missing value for -l (e.g. -l \"1 5 9\")" >&2; exit 1; }
+            LEVELS=${2//,/ }; shift 2 ;;
+        -*)   echo "ERROR: unknown option: $1" >&2; usage >&2; exit 1 ;;
+        *)    POSITIONAL+=("$1"); shift ;;
     esac
 done
-# getopts stops at the first non-option (e.g. -c xz zst unquoted) - make that loud
-if (( OPTIND - 1 < $# )); then
-    shift $((OPTIND - 1))
-    echo "ERROR: unexpected argument(s): $*" >&2
+
+if (( ${#POSITIONAL[@]} == 1 )); then
+    DEVICE=${POSITIONAL[0]}
+elif (( ${#POSITIONAL[@]} == 0 )) && [[ -n ${DEVICE:-} ]]; then
+    :   # no positional - the DEVICE env (if any) is the fallback
+elif (( ${#POSITIONAL[@]} == 0 )); then
+    usage >&2
+    echo
+    echo "ERROR: DEVICE is required (one positional argument, e.g. /dev/sda - or the DEVICE env)" >&2
+    exit 2
+else
+    echo "ERROR: too many positional arguments - only the DEVICE is expected." >&2
     echo "       (quote multi-word lists, e.g. -c \"xz zst\")" >&2
-    exit 1
+    exit 2
 fi
 
 [[ -n ${COMPRESSORS// /} ]] || { echo "ERROR: no compressors selected." >&2; exit 1; }
