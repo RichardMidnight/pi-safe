@@ -79,7 +79,7 @@
 #
 set -u
 
-VERSION="2.4"
+VERSION="2.5"
 EXTS=(zip gz xz zst)
 # exact strings pisafe logs ONLY on fatal paths (verified against source):
 #   ~ Error at line ...   ui_msg_error  (pisafe:1995, all callers abort)
@@ -406,6 +406,7 @@ req_installable(){   # tool -> single word
   case $t in
     pishrink.sh) echo "not a distro package - ships with the pisafe pair (setup mode provides it)"; return 0 ;;
     dd)          pkg=coreutils ;;
+    xz)          if command -v apt-cache >/dev/null 2>&1; then pkg=xz-utils; fi ;;
   esac
   if command -v apt-cache >/dev/null 2>&1; then
     out=$(apt-cache policy "$pkg" 2> /dev/null | sed -n 's/^[[:space:]]*Candidate:[[:space:]]*//p' | head -n 1)
@@ -471,6 +472,45 @@ check_requirements(){
   return 0
 }
 
+# the four compressors the backup step runs (zip, pigz, xz, zstd): installed
+# now, or installable from this box's repo (same read-only list checks as
+# check_requirements; xz -> xz-utils on apt). Never fatal: STD_FLAGS keeps
+# --dependencies=on, so a missing one follows pisafe's own install path and
+# the step record shows how that went.
+compressor_check(){   # $1: "env" (env-mode / report block) or "banner" (confirm screen)
+  local cmds=(zip pigz xz zstd)
+  local t w present=() missing=() n_inst=0 stale="" sec det
+  case ${1:-env} in
+    banner) sec="   compressors   :" det="                   " ;;
+    *)      sec="  compressors   :" det="     " ;;
+  esac
+  for t in "${cmds[@]}"; do
+    if command -v "$t" >/dev/null 2>&1; then present+=("$t")
+    else missing+=("$t")
+    fi
+  done
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    echo "$sec all present (${#cmds[@]}/${#cmds[@]}): $(IFS=,; echo "${present[*]}")"
+    return 0
+  fi
+  if [[ $REPO_STATE == offline ]]; then
+    stale="  [caution: repo probe said OFFLINE - the lists are stale, installing may still fail]"
+  elif [[ $REPO_STATE != online ]]; then
+    stale="  [note: repo state ${REPO_STATE:-unknown} - availability was read from this box's local lists only]"
+  fi
+  local plist=""
+  [[ ${#present[@]} -gt 0 ]] && plist=" ($(IFS=,; echo "${present[*]}"))"
+  echo "$sec ${#present[@]}/${#cmds[@]} present$plist"
+  for t in "${missing[@]}"; do
+    w=$(req_installable "$t")
+    case $w in installable*) n_inst=$((n_inst+1)) ;; esac
+    echo "$det MISSING        $t -> $w$stale"
+  done
+  echo "$det summary        : ${#missing[@]} missing, $n_inst installable via this box's repo"
+  echo "$det (the first step that needs one runs pisafe's own install path - the harness auto-answers that prompt)"
+  return 0
+}
+
 native_surface(){
   # xte starts empty: on a box without x-terminal-emulator the var is never
   # assigned, and an unset local dies under set -u (log 10-23, Manjaro env)
@@ -508,6 +548,7 @@ native_surface(){
   echo "  shell/user   : $(id -un 2>/dev/null || echo ?) (EUID $(id -u 2>/dev/null || echo ?))"
   repo_liveness
   check_requirements
+  compressor_check env
   echo "  -------------------------------------------------------"
   return 0
 }
@@ -910,6 +951,7 @@ confirm(){
   if (( HAVE_LEVEL )); then
     echo "   level         : --level=$LEVEL (backup step; the app clamps it per compressor)"
   fi
+  compressor_check banner
   echo "   images        :$files"
   echo "   (the images are REMOVED after the run - the report and log are kept)"
   echo "   pisafe        : $PISAFE  [build: $(file_date "$PISAFE")]"
