@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# pisafe_test.sh v2.2 - pisafe integration test harness (2026-10-20)
+# pisafe_test.sh v2.3 - pisafe integration test harness (2026-10-27)
 #
 # DESTRUCTIVE tool: it formats $DEVICE and writes backup images onto it.
 # (except 'setup' mode, which only copies the pisafe pair from GitHub and, if the box has no
@@ -68,13 +68,14 @@
 #      and then continues to backup-complete).
 #
 # Environment:
-#   PISAFE      path to the pisafe script (default: ../pisafe, the app in the
-#               parent folder; alongside-copy = setup-mode fallback)
+#   PISAFE      path to the pisafe script (default: ./pisafe in the CWD,
+#               then ../pisafe, the app in the parent folder; alongside-copy
+#               = setup-mode fallback)
 #   PISAFE_REF  ref for setup mode downloads (default: 'dev')
 #
 set -u
 
-VERSION="2.2"
+VERSION="2.3"
 EXTS=(zip gz xz zst)
 # exact strings pisafe logs ONLY on fatal paths (verified against source):
 #   ~ Error at line ...   ui_msg_error  (pisafe:1995, all callers abort)
@@ -86,17 +87,24 @@ EXTS=(zip gz xz zst)
 # marker check, so this scan is a supplement, not the primary signal.
 FAIL_RE='~ Error at line|~ Backup canceled|~ Restore stopped|~ Erase Media stopped|not erased'
 LOG_FILE="$HOME/.config/pisafe/pisafe.log"
-# by design the test scripts live in a folder INSIDE the app's folder (repo
-# layout), so the default is the app in the parent folder; a copy alongside
-# this harness stays as the fallback (the setup-mode layout: app + harness
-# side by side). Both then run as files from any CWD (e.g. straight off the
-# share). An explicit PISAFE always wins - a bad path is a hard error (see
-# the existence check below), never a silent re-default.
+# Resolution order (an explicit PISAFE env always wins - a bad path is a
+# hard error, see the existence check below, never a silent re-default):
+#   1. ./pisafe in the CWD        - run the battery from the folder holding
+#                                   the copy of the app under test (repo
+#                                   root, a scratch dir, straight off the share)
+#   2. the app in the parent      - the repo layout: harness in testing/,
+#      folder                       app one level up
+#   3. alongside the harness      - the setup-mode layout: app + harness
+#                                   side by side
 SCRIPT_DIR="$(cd "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PARENT_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
 if [[ -z ${PISAFE:-} ]]; then
-  PISAFE="$PARENT_DIR/pisafe"
-  [[ -f $PISAFE ]] || PISAFE="$SCRIPT_DIR/pisafe"
+  if [[ -f ./pisafe ]]; then
+    PISAFE="$PWD/pisafe"
+  else
+    PISAFE="$PARENT_DIR/pisafe"
+    [[ -f $PISAFE ]] || PISAFE="$SCRIPT_DIR/pisafe"
+  fi
 fi
 
 # build date of a script = the file's mtime. Logged in every banner/report so
@@ -220,7 +228,7 @@ Examples:
 Per step, both modes check:  pisafe exit status == 0  AND  the log window of
 this exact step contains its "complete" marker and no error/abort lines.
 
-Environment: PISAFE=/path/to/pisafe    (default: ../pisafe, the app in the parent folder)
+Environment: PISAFE=/path/to/pisafe    (default: ./pisafe in the CWD, then ../pisafe)
             PISAFE_REF=REF            (setup mode; default 'dev')
 
 Human-driven only: this script will format the target card.
@@ -274,6 +282,182 @@ chain_probe(){
   return 0
 }
 
+# ------------------------------------------------------- repo + req checks --
+# Two box-level diagnostics for the report/env block that no per-step check
+# can see, answering "could this box even have done that in the first place":
+#   repo liveness : does the distro repo still publish updates? (buster:
+#                   no - the EOL archive 404s, the installed lists are frozen
+#                   and nothing new can be installed any more)
+#   requirements  : are the tools pisafe declares (pisafe:28 REQUIRED_TOOLS)
+#                   present, or at least installable from that repo? (the box
+#                   whose repo simply has no zstd)
+# Both are informational: NEVER a gate or a failure, and read-only by
+# construction - bounded HTTP GETs and local package-list queries only
+# (apt-cache policy / pacman -Si / dnf --cacheonly). They must stay that way:
+# env mode runs on any box, including boxes the battery would not run on.
+REPO_STATE=""   # online | offline | unreachable | unknown (set by repo_liveness)
+
+# one bounded read-only HTTP GET; echoes exactly one word:
+# online (2xx/3xx) | offline (404) | unreachable (network/other/timeout)
+http_probe(){
+  local code rc
+  if command -v curl >/dev/null 2>&1; then
+    code=$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 8 --max-time 15 "$1" 2> /dev/null) || code=000
+    case $code in
+      2*|3*) echo online;      return 0 ;;
+      404)   echo offline;     return 0 ;;
+      *)     echo unreachable; return 0 ;;
+    esac
+  fi
+  if command -v wget >/dev/null 2>&1; then
+    wget -q -sp -O /dev/null --timeout=15 --tries=1 "$1" 2> /dev/null
+    rc=$?
+    case $rc in
+      0) echo online;      return 0 ;;
+      8) echo offline;     return 0 ;;
+      *) echo unreachable; return 0 ;;
+    esac
+  fi
+  echo unreachable
+  return 0
+}
+
+# up to 4 candidate repo URLs from this box's package configuration:
+#   apt    : .list lines (deb BASE DIST ...) + deb822 .sources (URIs, Suites);
+#            apt's URL scheme is BASE/dists/DIST/Release
+#   pacman : first Server= line of /etc/pacman.d/mirrorlist
+#            ($repo -> core, $arch -> uname -m)
+#   dnf    : first baseurl= under /etc/yum.repos.d
+# One URL per line.
+repo_urls(){
+  local u arch
+  if command -v apt >/dev/null 2>&1; then
+    {
+      grep -hE '^[[:space:]]*deb[[:space:]]' \
+        /etc/apt/sources.list /etc/apt/sources.list.d/*.list 2> /dev/null \
+        | awk '{print $2 "/dists/" $3 "/Release"}'
+      # deb822 keys are case-insensitive; the conventional spelling is
+      # 'URIs:'/'Suites:' - match case-insensitively for both
+      awk '/^[Uu][Rr][Ii][Ss]:/ { uri=$2; sub(/\/+$/, "", uri) }
+           /^[Ss][Uu][Ii][Tt][Ee][Ss]:/ { if (uri != "") print uri "/dists/" $2 "/Release"; uri="" }
+           ' /etc/apt/sources.list.d/*.sources 2> /dev/null
+    } | sort -u | head -n 4
+  elif command -v pacman >/dev/null 2>&1; then
+    if [[ -f /etc/pacman.d/mirrorlist ]]; then
+      arch=$(uname -m)
+      u=$(grep -m1 '^Server[[:space:]]*=' /etc/pacman.d/mirrorlist | cut -d= -f2- | sed 's/[[:space:]]*$//') || u=""
+      u=${u//\$repo/core}
+      u=${u//\$arch/$arch}
+      [[ -n $u ]] && printf '%s\n' "$u"
+    fi
+  elif command -v dnf >/dev/null 2>&1; then
+    u=$(grep -hE '^[[:space:]]*baseurl[[:space:]]*=' /etc/yum.repos.d/*.repo 2> /dev/null | head -n 1 | cut -d= -f2- | sed 's/[[:space:]]*$//') || u=""
+  fi
+  return 0
+}
+
+# probe the box's repos and print the report lines; sets REPO_STATE
+repo_liveness(){
+  local u st online=0 offline=0 unreach=0 n=0
+  REPO_STATE="unknown"
+  echo "  package repos : (bounded read-only probe)"
+  while IFS= read -r u; do
+    [[ -n $u ]] || continue
+    st=$(http_probe "$u")
+    n=$((n+1))
+    case $st in
+      online)  online=$((online+1)) ;;
+      offline) offline=$((offline+1)) ;;
+      *)       unreach=$((unreach+1)) ;;
+    esac
+    echo "     $u -> $st"
+  done < <(repo_urls)
+  if [[ $n -eq 0 ]]; then
+    echo "     (no repository URLs found to probe - check the box's repo config)"
+  elif [[ $online -gt 0 ]]; then
+    REPO_STATE="online"
+    echo "     liveness  : ONLINE ($online/$n sources answering; $offline 404, $unreach unreachable) - the box can still be updated"
+  elif [[ $offline -gt 0 ]]; then
+    REPO_STATE="offline"
+    echo "     liveness  : OFFLINE ($offline/$n sources 404 - EOL distro? the installed lists are frozen and nothing new can be installed)"
+  else
+    REPO_STATE="unreachable"
+    echo "     liveness  : UNREACHABLE ($unreach/$n - network or DNS? treat the repo state as unknown)"
+  fi
+  return 0
+}
+
+# for one missing tool: a human word on whether the box's repo can supply it
+req_installable(){   # tool -> single word
+  local t=$1 pkg=$1 out
+  case $t in
+    pishrink.sh) echo "not a distro package - ships with the pisafe pair (setup mode provides it)"; return 0 ;;
+    dd)          pkg=coreutils ;;
+  esac
+  if command -v apt-cache >/dev/null 2>&1; then
+    out=$(apt-cache policy "$pkg" 2> /dev/null | sed -n 's/^[[:space:]]*Candidate:[[:space:]]*//p' | head -n 1)
+    if [[ -n $out && $out != "(none)" ]]; then
+      echo "installable (apt lists: $out)"
+    else
+      echo "NOT obtainable - no such package in the box's apt lists"
+    fi
+    return 0
+  fi
+  if command -v pacman >/dev/null 2>&1; then
+    if pacman -Si "$pkg" >/dev/null 2>&1; then
+      echo "installable (pacman database)"
+    else
+      echo "NOT obtainable - no such package in the pacman database"
+    fi
+    return 0
+  fi
+  if command -v dnf >/dev/null 2>&1; then
+    if dnf --cacheonly list --available "$pkg" 2> /dev/null | grep -qE "^$pkg([[:space:]]|\$)"; then
+      echo "installable (dnf cached metadata)"
+    else
+      echo "NOT obtainable - no such package in the dnf metadata"
+    fi
+    return 0
+  fi
+  echo "unknown - no apt-cache/pacman/dnf on this box to ask"
+  return 0
+}
+
+# present now vs installable (see req_installable); never fatal
+check_requirements(){
+  # (named req_tools - a bare 'tools' would collide with the setup-mode
+  # string variable of the same name and trip shellcheck SC2128/SC2178)
+  local req_tools=(dd pishrink.sh zip unzip pv whiptail file nano)
+  local t w present=() missing=() n_inst=0 stale=""
+  for t in "${req_tools[@]}"; do
+    if command -v "$t" >/dev/null 2>&1; then
+      present+=("$t")
+    else
+      missing+=("$t")
+    fi
+  done
+  echo "  requirements  : pisafe's REQUIRED_TOOLS (pisafe:28)"
+  if [[ ${#missing[@]} -eq 0 ]]; then
+    echo "     all present (${#req_tools[@]}/${#req_tools[@]}): $(IFS=,; echo "${present[*]}")"
+    return 0
+  fi
+  if [[ $REPO_STATE == offline ]]; then
+    stale="  [caution: repo probe said OFFLINE - the lists are stale, installing may still fail]"
+  elif [[ $REPO_STATE != online ]]; then
+    stale="  [note: repo state $REPO_STATE - availability was read from this box's local lists only]"
+  fi
+  local plist=""
+  [[ ${#present[@]} -gt 0 ]] && plist=": $(IFS=,; echo "${present[*]}")"
+  echo "     present (${#present[@]}/${#req_tools[@]}):$plist"
+  for t in "${missing[@]}"; do
+    w=$(req_installable "$t")
+    case $w in installable*) n_inst=$((n_inst+1)) ;; esac
+    echo "     MISSING        $t -> $w$stale"
+  done
+  echo "     summary        : ${#missing[@]} missing, $n_inst installable via this box's repo"
+  return 0
+}
+
 native_surface(){
   # xte starts empty: on a box without x-terminal-emulator the var is never
   # assigned, and an unset local dies under set -u (log 10-23, Manjaro env)
@@ -309,6 +493,8 @@ native_surface(){
   [[ -n $xte ]] && echo "  x-term-emul  : -> $xte"
   echo "  sound tool   : $snd"
   echo "  shell/user   : $(id -un 2>/dev/null || echo ?) (EUID $(id -u 2>/dev/null || echo ?))"
+  repo_liveness
+  check_requirements
   echo "  -------------------------------------------------------"
   return 0
 }
