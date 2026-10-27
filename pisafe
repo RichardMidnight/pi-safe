@@ -17,7 +17,7 @@
 set -o pipefail
 
 SCRIPTNAME="${0##*/}"
-SCRIPTVER="1.2.12-beta.7"   # 2026/10/26
+SCRIPTVER="1.2.12-beta.8"   # 2026/10/27
 PRODUCTNAME="PiSafe"
 PRODUCTCOMMENT="Raspberry Pi Imaging App"
 PRODUCTHOME="https://github.com/RichardMidnight/pi-safe"
