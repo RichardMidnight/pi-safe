@@ -345,6 +345,7 @@ record(){   # label status duration detail
 run_step(){   # label pisafe-args...
   local label=$1; shift
   local seed es dur reason="" win hit t0=$SECONDS
+  local comp="" rawsize="" gzes="" imgnote=""   # size notes, backup steps only
   seed=$(log_seed)
   # feed the child ONE 'y' on stdin. The battery passes -y, which pisafe
   # honors on every prompt EXCEPT one: the "Install dependencies?" prompt
@@ -376,10 +377,23 @@ run_step(){   # label pisafe-args...
     reason+="log says: $hit"
   fi
 
+  # record the produced backup image's size in the report line, so a report is
+  # self-contained and the size no longer has to be noted by hand. For gz the
+  # raw (post-shrink) size is the number the guard gates on (must stay
+  # <3.9 GiB) - it now sits right in the report next to the compressed size.
+  # The erase/restore windows have none of these lines, so this is a no-op
+  # for those steps.
+  comp=$(sed -nE   's/.*reduced to ([0-9.]+[a-z]+b).*/\1/p'            <<<"$win" | head -n1)
+  rawsize=$(sed -nE 's/.*bytes \(([0-9.]+[a-z]+b)\).*/\1/p'             <<<"$win" | head -n1)
+  gzes=$(sed -nE   's/.*gz image is *~?([0-9.]+[a-z]+b) raw.*/\1/p'    <<<"$win" | head -n1)
+
   if [[ -z $reason ]]; then
     ok "$label"
-    record "$label" PASS "$dur"
+    [[ -n $comp ]] && imgnote="image $comp"
+    [[ -n $comp && -n $rawsize ]] && imgnote="image $comp (raw $rawsize)"
+    record "$label" PASS "$dur" "$imgnote"
   else
+    [[ -n $gzes ]] && { [[ -n $reason ]] && reason+=", "; reason+="gz image raw ~$gzes (guard: >~3.9 GiB)"; }
     bad "$label - $reason"
     echo "  | ---- log window (seed line $seed, $(wc -l <<<"$win") lines) ----"
     sed 's/^/  | /' <<<"$win"
