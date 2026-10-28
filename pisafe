@@ -360,8 +360,14 @@ pisafe_install_tool() {
         pishrink.sh)
             ui_echo "Installing pishrink..." white
             if wget https://raw.githubusercontent.com/Drewsif/PiShrink/master/pishrink.sh && [[ -s pishrink.sh ]]; then
+                sudo mkdir -p /usr/local/bin        # FHS slot for local, all-user binaries - create it on boxes missing it
                 sudo cp --backup=numbered pishrink.sh /usr/local/bin/
+                ES_CP=$?
                 sudo chmod +x /usr/local/bin/pishrink.sh
+                ES=$?
+                if (( ES_CP )) || (( ES )); then
+                    ui_msg_warning $LINENO "pishrink install failed (copy/chmod did not complete)"
+                fi
             else
                 ui_msg_warning $LINENO "pishrink download failed"
             fi
@@ -1253,10 +1259,15 @@ media_backup(){
         if [[ "$SHRINK_FS" = off ]]; then
             ui_echo "~ Filesystem not shrunk.  Setting is 'off'." red log
         else
-            run_command "sudo pishrink.sh $PI_SHRINK_OPTS '$OUTFILE_BASE.img' " "$LINENO"
-            ES=$?
-            if (( ES )); then
-                ui_echo "~ Continuing without shrinking the file system..." red log
+            PISHRINK_PATH=$(command -v pishrink.sh 2>/dev/null)
+            if [[ -z "$PISHRINK_PATH" ]]; then
+                ui_msg_warning $LINENO "pishrink.sh not found in PATH - skipping shrink"
+            else
+                run_command "sudo \"$PISHRINK_PATH\" $PI_SHRINK_OPTS '$OUTFILE_BASE.img' " "$LINENO"
+                ES=$?
+                if (( ES )); then
+                    ui_echo "~ Continuing without shrinking the file system..." red log
+                fi
             fi
         fi
         sleep 5    # to allow file size to register with the OS
