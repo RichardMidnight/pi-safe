@@ -723,21 +723,16 @@ env_texteditor(){
 
 
 env_which () {
-    #fixes manjaro's 'which' command
+    # command -v is a bash builtin - no 'which' package required, so no install
+    # side effect either. (The old body probed 'which which' and tried to install
+    # 'which' via apt/pacman/dnf; on a box where that install failed, every tool
+    # was wrongly reported missing. The test battery had routed around this
+    # whole time for exactly that reason - testing/pisafe_test.sh:278.)
     local FILE=$1
     local RC
 
-    # if which not installed, try to install it
-    which which 1>/dev/null 2>/dev/null
-    RC=$?
-    if (( RC )); then
-        sudo apt install which -y
-        sudo pacman -S which --noconfirm
-        sudo dnf install which -y
-    fi
-
     # local RC on purpose: this helper must not clobber the caller's global ES
-    which "$FILE" 1>/dev/null 2>/dev/null
+    command -v "$FILE" > /dev/null 2>&1
     RC=$?
     if (( RC )); then
         return 1
@@ -1219,7 +1214,7 @@ media_backup(){
     echo "Skipping $(get_bytes $(( $(media_size "$INDEV") - BYTES_TO_READ )) -h ) of freespace at end of media."
     echo "Reading $(get_bytes "$BYTES_TO_READ" -h)..."
 
-    if [[ -n $(which pv) ]]; then
+    if [[ -n $(command -v pv 2>/dev/null) ]]; then
         # NOTE: no file operand after '-s N' — a positional FILE makes pv read that file
         # itself (like cat) and ignore the pipe; N is only the expected total for the bar.
         run_command "sudo dd if=$INDEV bs=$BS count=$BLOCKS_TO_READ | pv -s $BYTES_TO_READ | sudo dd of='$OUTFILE_BASE.img' conv=fsync " "$LINENO"
@@ -1315,7 +1310,7 @@ media_backup(){
             # pv-pipe branch = progress bar; stdin has no name, so the archive entry
             # is stored as '-'.  the no-pv fallback below uses 'zip -j' so the entry
             # keeps a real name (no bar).
-            if [[ -n $(which pv) ]]; then
+            if [[ -n $(command -v pv 2>/dev/null) ]]; then
                 run_command "pv '$OUTFILE_BASE.img' | zip -$COMPRESSION_LEVEL '$OUTFILE' - " "$LINENO"
                 ES=$?
                 if (( ! ES )); then
@@ -1332,7 +1327,7 @@ media_backup(){
  ;;
 
         xz)
-            if [[ -n $(which pv) ]]; then
+            if [[ -n $(command -v pv 2>/dev/null) ]]; then
                 run_command "pv '$OUTFILE_BASE.img' | xz -z -T0 -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
                 ES=$?
                 if (( ! ES )); then
@@ -1361,7 +1356,7 @@ media_backup(){
                 rm -f "$OUTFILE_BASE".img
                 return 1
             fi
-            if [[ -n $(which pv) ]]; then
+            if [[ -n $(command -v pv 2>/dev/null) ]]; then
                 run_command "pv '$OUTFILE_BASE.img' | pigz -$COMPRESSION_LEVEL > '$OUTFILE'" "$LINENO"
                 ES=$?
                 if (( ! ES )); then
@@ -2305,7 +2300,7 @@ media_format(){
 
     case $FORMAT in
         fat16)
-            if [[ -z $(which mkfs.vfat) ]]; then
+            if [[ -z $(command -v mkfs.vfat 2>/dev/null) ]]; then
                 echo Installing vfat support ...
                 if [[ -z $INSTALL ]]; then
                     ui_msg_warning $LINENO "no supported package manager found - install dosfstools manually"
@@ -2318,7 +2313,7 @@ media_format(){
  ;;
 
         fat32)
-            if [[ -z $(which mkfs.vfat) ]]; then
+            if [[ -z $(command -v mkfs.vfat 2>/dev/null) ]]; then
                 echo Installing vfat support ...
                 if [[ -z $INSTALL ]]; then
                     ui_msg_warning $LINENO "no supported package manager found - install dosfstools manually"
@@ -2332,7 +2327,7 @@ media_format(){
 
         exfat)
             #https://unix.stackexchange.com/questions/61209/create-and-format-exfat-partition-from-linux
-            if [[ -z $(which mkfs.exfat) ]]; then
+            if [[ -z $(command -v mkfs.exfat 2>/dev/null) ]]; then
                 echo Installing exfat support ...
                 if [[ -z $INSTALL ]]; then
                     ui_msg_warning $LINENO "no supported package manager found - install exfat-utils manually"
@@ -2346,7 +2341,7 @@ media_format(){
  ;;
 
         ntfs)
-            if [[ -z $(which mkfs.ntfs) ]]; then
+            if [[ -z $(command -v mkfs.ntfs 2>/dev/null) ]]; then
                 echo Installing ntfs support...
                 if [[ -z $INSTALL ]]; then
                     ui_msg_warning $LINENO "no supported package manager found - install ntfs-3g/ntfsprogs manually"
