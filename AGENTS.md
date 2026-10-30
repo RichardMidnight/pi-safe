@@ -78,6 +78,31 @@ We are stepping through the code from the published `v1.2.11` baseline toward a 
 * Suggested commit message format: `review R<N>: <summary>` (e.g. `review R1: quote expansions, normalize whitespace, fix TB multiplier`).
 * **No remote operation — push, tag create/delete, force-push — without explicit user confirmation of that specific action** (standing rule from 2026-10-18). The version bump (`SCRIPTVER`), copyright header, and tag are separate explicit user actions at release time.
 
+## GitHub org map — the "alignment" reference
+
+`main` (remote) is the **stable/install surface** — the literal endpoint the app consumes:
+* `pisafe update` downloads `https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe` (`pisafe:470`)
+* the startup update check reads `…/main/latest_version.txt` (`pisafe:446`)
+* the README install block targets `main/archive/*`
+
+`dev` is the campaign branch (work-in-progress); nothing user-facing is ever pulled from it.
+`latest_version.txt` / `announcement.txt` in the dev working tree are untracked **staging copies**
+for the next publish to `main`.
+
+**Alignment invariants — if these disagree, the update check is lying; straighten `main` first:**
+* `main/latest_version.txt` ≡ `SCRIPTVER` in `main/pisafe` ≡ latest stable tag
+* `main/announcement.txt` = advertisement for whatever the stable channel currently offers;
+  set at publish (a beta ad is allowed to outlive a stable version)
+* Tags are frozen (advance, never re-tag); local `main` ≡ `origin/main` (fetch to check)
+
+**Agent audit (read-only):**
+    git fetch origin
+    git show origin/main:latest_version.txt
+    git show origin/main:pisafe | grep -m1 '^SCRIPTVER'
+    git show origin/main:announcement.txt
+    git tag -l --sort=-creatordate | head -3
+    git rev-list --count main..origin/main   # local main behind?
+
 ## Known-issues backlog
 
 (Current open items live in `ver 1.2.12 development/REVIEW_STATUS.md` → `outstanding`; future-version ideas in `ver 1.3.0 development/pisafe_test_punchlist.txt`. Historical table below.)
