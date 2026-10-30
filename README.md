@@ -31,9 +31,9 @@ wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pi
 bash pisafe install
 ```
 
-**Beta Version** (v1.2.12-beta.7)
+**Beta Version** (v1.2.12-beta.10)
 ```bash
-wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/archive/pisafe_1.2.12-beta.7 -O pisafe
+wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/archive/pisafe_1.2.12-beta.10 -O pisafe
 bash pisafe install
 ```
 
@@ -66,6 +66,7 @@ Install your OS (e.g. Raspberry Pi OS, Debian, Ubuntu, Manjaro) on a smaller SD 
 Originally developed and tested on Raspberry Pi 4 running Raspberry Pi OS Buster.  
 Also tested on RaspiOS-arm64, Raspberry Pi Desktop, Raspbian Stretch, Ubuntu 20.04 for Raspberry Pi, Linux Mint, LMDE.
 
+- **v1.2.12-beta.10** — Everything in beta.7, plus: backup estimates that no longer refuse legal gz images (the size is measured from the filesystem, not the partition table), the pishrink install/run fix for boxes where sudo's PATH hides /usr/local/bin (the Kali report), and tool detection with no `which` dependency
 - **v1.2.12-beta.7** — Everything in beta.6, plus the final gz sizing gate (refuses to create images ~3.9 GiB and up) and per-run compression levels (`-1`–`-9`, zstd 1–19, over-max clamped with a warning)
 - **v1.2.12-beta.6** — Pure hardening pass over 1.2.11: about 30 reliability, standards, and bug fixes across the full function review (R1–R17) — no new features, no default changes
 - **v1.2.11** — The stable release since Dec 2023
