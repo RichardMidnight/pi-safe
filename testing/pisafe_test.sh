@@ -79,7 +79,7 @@
 #
 set -u
 
-VERSION="2.5"
+VERSION="2.6"
 EXTS=(zip gz xz zst)
 # exact strings pisafe logs ONLY on fatal paths (verified against source):
 #   ~ Error at line ...   ui_msg_error  (pisafe:1995, all callers abort)
@@ -225,7 +225,7 @@ Setup mode (non-destructive, no card needed - bootstrap for a new test box):
 Env mode (non-destructive, no card needed - record the box without running it):
   env        print the machine header (hostname, OS, arch, kernel) plus the
              native-surface snapshot the battery report would carry (TUI
-             backend, installer, terminal, editor, which, sound, shell/user),
+             backend, installer, terminal, editor, sound, shell/user),
              then exit. Nothing is installed, no device is touched, no battery
              is run - use it to record a box's environment row without
              re-running the backup/restore tests.
@@ -276,10 +276,9 @@ log_window(){
 #                               qterminal x-terminal-emulator
 #   editor    (pisafe:665)   : leafpad xed gedit featherpad kwrite pluma
 #                               kate mousepad geany gnome-text-editor nano
-# Deliberately built on `command -v` (bash builtin) and never shelling out to
-# pisafe's env_which (pisafe:682), which has an install side effect - it tries
-# to `sudo install which` when the `which` binary is missing. This capture can
-# therefore never change the box.
+# Deliberately built on `command -v` (bash builtin) - a read-only probe that
+# never installs or changes anything, so this capture can never change
+# the box.
 
 # walk a chain: first present entry wins (that is what pisafe picks); the other
 # present entries are listed too, so the report carries both the choice and the
@@ -514,7 +513,7 @@ compressor_check(){   # $1: "env" (env-mode / report block) or "banner" (confirm
 native_surface(){
   # xte starts empty: on a box without x-terminal-emulator the var is never
   # assigned, and an unset local dies under set -u (log 10-23, Manjaro env)
-  local tui inst whichp t ed snd xte=""
+  local tui inst t ed snd xte=""
   # a box with no whiptail passes the CLI battery yet cannot open a menu - the
   # single most important "does it actually work" fact to record per box
   if command -v whiptail >/dev/null 2>&1; then
@@ -525,8 +524,6 @@ native_surface(){
     tui="MISSING - no TUI found, menus cannot render"
   fi
   inst=$(chain_probe apt pacman dnf)
-  if command -v which >/dev/null 2>&1; then whichp="present"
-  else whichp="ABSENT - pisafe's env_which will try to install it (pisafe:685)"; fi
   t=$(chain_probe lxterminal xfce4-terminal mate-terminal gnome-terminal xterm terminator konsole qterminal x-terminal-emulator)
   ed=$(chain_probe leafpad xed gedit featherpad kwrite pluma kate mousepad geany gnome-text-editor nano)
   if command -v speaker-test >/dev/null 2>&1; then snd="speaker-test"
@@ -540,7 +537,6 @@ native_surface(){
   echo "  ---- native surface (measured before the battery) ----"
   echo "  TUI backend  : $tui"
   echo "  installer    : $inst"
-  echo "  which binary : $whichp"
   echo "  terminal     : $t"
   echo "  editor       : $ed"
   [[ -n $xte ]] && echo "  x-term-emul  : -> $xte"
