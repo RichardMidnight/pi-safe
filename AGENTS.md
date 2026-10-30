@@ -4,7 +4,7 @@ Guidance for AI coding agents working in this repository.
 
 ## Project
 
-**PiSafe** — a single-file Raspberry Pi SD-card imaging app: backs up a device with `dd`, shrinks the last partition with `pishrink`, compresses with `zip`/`pigz`/`xz`/`zstd`.  It can also restore images. Pure bash (`#!/bin/bash`), ~2,900 lines, ~78 functions, no build system.
+**PiSafe** — a single-file Raspberry Pi SD-card imaging app: backs up a device with `dd`, shrinks the last partition with `pishrink`, compresses with `zip`/`pigz`/`xz`/`zstd`.  It can also restore images. Pure bash (`#!/bin/bash`), ~3,100 lines, no build system.
 
 ## File map
 
@@ -71,13 +71,16 @@ We are stepping through the code from the published `v1.2.11` baseline toward a 
 
 ## Git workflow
 
-* Work happens on branch `dev` (fresh at `v1.2.11` script state). `dev_old` holds the pre-review work; do not touch it.
+* Work happens on branch `dev` (the campaign branch). `dev_old` holds the pre-review work; do not touch it.
+* **Session-close handoff (2026-10-26):** local `dev` = `b4b705c` (R20 `ab42ce6` + reorg `b4b705c`) = **2 commits ahead of `origin/dev` (`a842113`), NOT pushed**. Push/tag only with the user's GO for that specific action. Campaign position + open user calls: `ver 1.2.12 development/REVIEW_STATUS.md`; latest round: R21 in `ver 1.2.12 development/REVIEW_ROUNDS.md`.
 * `main` tracks `origin/main`; it is the release branch. Nothing in the review campaign modifies `main`.
 * Small, focused commits — one per approved round — **only with explicit user approval**.
 * Suggested commit message format: `review R<N>: <summary>` (e.g. `review R1: quote expansions, normalize whitespace, fix TB multiplier`).
 * **No remote operation — push, tag create/delete, force-push — without explicit user confirmation of that specific action** (standing rule from 2026-10-18). The version bump (`SCRIPTVER`), copyright header, and tag are separate explicit user actions at release time.
 
 ## Known-issues backlog
+
+(Current open items live in `ver 1.2.12 development/REVIEW_STATUS.md` → `outstanding`; future-version ideas in `ver 1.3.0 development/pisafe_test_punchlist.txt`. Historical table below.)
 
 | Item | Location | Round |
 |---|---|---|
