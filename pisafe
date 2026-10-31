@@ -53,10 +53,10 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 # Ubuntu 24.04 GNOME          gnome-terminal      gnome-text-editor
 # Manjaro XFCE                xfce4-terminal      mousepad
 # Raspberry Pi OS bookworm    lxterminal          mousepad
-# (rows below: terminal and text editor not yet recorded - re-run to capture)
-# Kali Rolling
-# Armbian
-# DietPi
+# TwisterOS (RPi, 64)         xfce4-terminal      mousepad
+# Armbian (RPi5, 64)          terminator          kwrite
+# Kali Rolling (RPi, 64)      qterminal           mousepad
+# DietPi (trixie)             none                nano
 #
 # earlier releases, historical (pre-2026):
 # RaspberryPiOS-stretch       lxterminal          leafpad?
@@ -99,6 +99,7 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 # Manjaro ARM (RPi5)                          good   12/12
 # Kali Rolling (RPi, 64)                      good   10/12    gz refused (card over ~3.9 GiB)
 # Armbian (RPi5, 64)                          good   12/12    10/12 on a card over ~3.9 GiB (gz guard)
+# TwisterOS (RPi, 64)                         good   12/12    log note: twister os (reads as Debian 12 bookworm)
 # Ubuntu 24.04 (64)                           good   12/12
 #
 # --- x86-64 ---
