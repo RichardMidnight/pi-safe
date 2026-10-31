@@ -456,7 +456,7 @@ pisafe_update() {
         return 1
     fi
 
-    if [[ $(get_ver_to_int "$SERVER_VER") -gt $(get_ver_to_int "$SCRIPTVER") ]]; then
+    if is_newer "$SERVER_VER" "$SCRIPTVER"; then
         if [[ $YES = -y ]]; then
             RESULT="y"
         else
@@ -811,16 +811,132 @@ do_countdown(){
 }
 
 
-get_ver_to_int() {
-    # "MAJOR.MINOR.PATCH" -> MAJOR*1000000 + MINOR*1000 + PATCH
-    # a pre-release tail counts as its numeric prefix ("12-beta.3" -> 12)
-    local parts MAJOR MINOR PATCH
-    IFS='.' read -r -a parts <<< "$1"
-    MAJOR=${parts[0]:-0}
-    MINOR=${parts[1]:-0}
-    PATCH=${parts[2]:-0}
-    PATCH=${PATCH%%[^0-9]*}          # leading digits only ("12-beta" -> "12"; "beta" -> "")
-    echo "$(( 1000000*MAJOR + 1000*MINOR + PATCH ))"
+is_newer() {
+    # SemVer 2.0.0 §11 precedence (semver.org): return 0 only if "$1" is strictly
+    # newer than "$2" — 1.2.11 < 1.2.12-beta.1 < 1.2.12-beta.10 < 1.2.12.
+    # A pre-release tail sorts before its release and after any lower core.
+    # Tails compare left-to-right per dot-identifier: numeric as integers,
+    # numeric < alphanumeric, alphanumeric in character order; longer set wins
+    # when all prefixes are equal. Pure builtins (no external commands).
+    # Non-digit leading fields parse as 0, so junk sorts below real versions.
+    local -a va vb ta tb
+    local AN AM AP AT BN BM BP BT i j x y n
+    IFS='.' read -r -a va <<< "${1:-}"
+    IFS='.' read -r -a vb <<< "${2:-}"
+    AN=${va[0]-}
+    AM=${va[1]-}
+    AP=${va[2]-}
+    BN=${vb[0]-}
+    BM=${vb[1]-}
+    BP=${vb[2]-}
+    AN=${AN%%[!0-9]*}
+    AM=${AM%%[!0-9]*}
+    AP=${AP%%[!0-9]*}
+    BN=${BN%%[!0-9]*}
+    BM=${BM%%[!0-9]*}
+    BP=${BP%%[!0-9]*}
+    AT=
+    for (( i=2; i<${#va[@]}; i++ )); do
+        if (( i > 2 )); then
+            AT+="."
+        fi
+        if (( i == 2 )); then
+            AT+="${va[i]#"$AP"}"
+        else
+            AT+="${va[i]}"
+        fi
+    done
+    AT=${AT#-}
+    BT=
+    for (( i=2; i<${#vb[@]}; i++ )); do
+        if (( i > 2 )); then
+            BT+="."
+        fi
+        if (( i == 2 )); then
+            BT+="${vb[i]#"$BP"}"
+        else
+            BT+="${vb[i]}"
+        fi
+    done
+    BT=${BT#-}
+    AN=${AN:-0}
+    AM=${AM:-0}
+    AP=${AP:-0}
+    BN=${BN:-0}
+    BM=${BM:-0}
+    BP=${BP:-0}
+    if (( 10#$AN != 10#$BN )); then
+        if (( 10#$AN > 10#$BN )); then
+            return 0
+        fi
+        return 1
+    fi
+    if (( 10#$AM != 10#$BM )); then
+        if (( 10#$AM > 10#$BM )); then
+            return 0
+        fi
+        return 1
+    fi
+    if (( 10#$AP != 10#$BP )); then
+        if (( 10#$AP > 10#$BP )); then
+            return 0
+        fi
+        return 1
+    fi
+    if [[ $AT == "$BT" ]]; then
+        return 1
+    fi
+    if [[ -z $AT ]]; then
+        return 0
+    fi
+    if [[ -z $BT ]]; then
+        return 1
+    fi
+    IFS='.' read -r -a ta <<< "$AT"
+    IFS='.' read -r -a tb <<< "$BT"
+    n=${#ta[@]}
+    if (( ${#tb[@]} > n )); then
+        n=${#tb[@]}
+    fi
+    for (( j=0; j<n; j++ )); do
+        x=${ta[j]:-}
+        y=${tb[j]:-}
+        if [[ -z $x ]]; then
+            return 1
+        fi
+        if [[ -z $y ]]; then
+            return 0
+        fi
+        if [[ $x =~ ^[0-9]+$ ]]; then
+            if [[ $y =~ ^[0-9]+$ ]]; then
+                if (( 10#$x == 10#$y )); then
+                    continue
+                fi
+                if (( 10#$x > 10#$y )); then
+                    return 0
+                fi
+                return 1
+            fi
+            return 1
+        elif [[ $y =~ ^[0-9]+$ ]]; then
+            return 0
+        else
+            if [[ $x == "$y" ]]; then
+                continue
+            fi
+            if [[ $y == "$x"* ]]; then
+                return 1
+            fi
+            if [[ $x == "$y"* ]]; then
+                return 0
+            fi
+            if [[ $x < $y ]]; then
+                return 1
+            fi
+            return 0
+        fi
+    done
+    return 1
 }
 
 
