@@ -133,8 +133,8 @@ mount | grep -w overlay
 
 ```bash
 sudo apt install cifs-utils
-mkdir shared
-sudo mount.cifs //192.168.1.18/shared shared -o user=USERNAME,vers=3.0
+sudo mkdir /mnt/shared
+sudo mount.cifs //192.168.1.18/shared /mnt/shared -o user=USERNAME,vers=3.1.1
 ```
 
 ```bash
