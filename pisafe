@@ -52,8 +52,8 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 # LMDE 7 (gigi) CINN          gnome-terminal      xed
 # Ubuntu 24.04 GNOME          gnome-terminal      gnome-text-editor
 # Manjaro XFCE                xfce4-terminal      mousepad
+# Raspberry Pi OS bookworm    lxterminal          mousepad
 # (rows below: terminal and text editor not yet recorded - re-run to capture)
-# Raspberry Pi OS bookworm
 # Kali Rolling
 # Armbian
 # DietPi
@@ -109,21 +109,21 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 #
 # v 1.2.11 historical:
 # --- ARM ---
-# Raspios Buster      good
-# Raspbian Stretch    good
-# Raspbian Jessy      can work with limitations
-# Manjaro             good    no whiptail on lite ver
-# Ubuntu              good
+# Raspios Buster                              good
+# Raspbian Stretch                            good
+# Raspbian Jessy                              can work with limitations
+# Manjaro                                     good    no whiptail on lite ver
+# Ubuntu                                      good
 # Note: overlay filesystem cannot be turned on
 #
 # --- x86-64 ---
-# debian Stretch, Buster           no shrink, last is logical swap.
-# RPD Buster                      no shrink, last is logical swap.
-# mint  20.1                      no shrink, last is ext logical.
-# LMDE 4                          good
-# ubuntu                          good
-# lubuntu                         good
-# kali 2022                       good, noshrink, swap
+# debian Stretch, Buster                      no shrink, last is logical swap.
+# RPD Buster                                  no shrink, last is logical swap.
+# mint  20.1                                  no shrink, last is ext logical.
+# LMDE 4                                      good
+# ubuntu                                      good
+# lubuntu                                     good
+# kali 2022                                   good, noshrink, swap
 # Note: if you custom partition with ext4 as last, it shrinks.
 
 
