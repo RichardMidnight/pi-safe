@@ -13,12 +13,12 @@ Guidance for AI coding agents working in this repository.
 | `pisafe` | The application itself (single file) |
 | `testing/` | Canonical harness tools (`pisafe_test.sh` + `pisafe_benchmark_test.sh`) — tracked, version-independent |
 | `testing/pisafe_test.sh` | Interactive, **destructive** test harness (formats/restores a real device, defaults to `/dev/sda`). Human-driven only — agents must never run it. |
-| `ver 1.2.12 development/` | The 1.2.12 development cycle (2026-10-26 reorg; **gitignored — kept on disk only**): all REVIEW_* docs + round prompts, RELEASE_NOTES_1.2.12.md, lint.sh, testing/ (bench + logs + plan) |
-| `ver 1.3.0 development/` | Reserved for the next cycle (gitignored) — currently holds the 1.3.x punchlist |
-| `ver 1.2.12 development/REVIEW_ROUNDS.md` | Progress log for the review campaign (user may keep their own copy in the worktree — inspect before overwriting) |
-| `ver 1.2.12 development/REVIEW_STATUS.md` | High-level campaign position doc, **user-maintained** — treat as the source of truth for campaign state; update only when asked |
-| `ver 1.2.12 development/REVIEW_FUNCTION_INVENTORY.md` | Function checklist + dependency order (generated 2026-10-18 from `dev` @ `16158f3`; 78 functions, 12 groups) |
-| `ver 1.2.12 development/lint.sh` | shellcheck gate (0 findings required; runs shellcheck on `../pisafe`) |
+| `ver_1.2.12_development/` | The 1.2.12 development cycle (2026-10-26 reorg; **gitignored — kept on disk only**): all REVIEW_* docs + round prompts, RELEASE_NOTES_1.2.12.md, lint.sh, testing/ (bench + logs + plan) |
+| `ver_1.3.0_development/` | Reserved for the next cycle (gitignored) — currently holds the 1.3.x punchlist |
+| `ver_1.2.12_development/REVIEW_ROUNDS.md` | Progress log for the review campaign (user may keep their own copy in the worktree — inspect before overwriting) |
+| `ver_1.2.12_development/REVIEW_STATUS.md` | High-level campaign position doc, **user-maintained** — treat as the source of truth for campaign state; update only when asked |
+| `ver_1.2.12_development/REVIEW_FUNCTION_INVENTORY.md` | Function checklist + dependency order (generated 2026-10-18 from `dev` @ `16158f3`; 78 functions, 12 groups) |
+| `ver_1.2.12_development/lint.sh` | shellcheck gate (0 findings required; runs shellcheck on `../pisafe`) |
 | `archive/` | Known-good old release versions (tracked; byte-identical to `main`'s archive — the README install-block targets) |
 | `AGENTS_old.md` | Superseded workflow (kept for history) |
 | `junk/` | Untracked drafts — ignore |
@@ -27,10 +27,10 @@ Guidance for AI coding agents working in this repository.
 
 We are stepping through the code from the published `v1.2.11` baseline toward a new release. Rules:
 
-* Work one approved round at a time; the round prompt lives in `ver 1.2.12 development/REVIEW_ROUND_N.md`.
-* Read `ver 1.2.12 development/REVIEW_ROUNDS.md` and `REVIEW_STATUS.md` at the start of every session before touching code.
-* Update `ver 1.2.12 development/REVIEW_ROUNDS.md` at the end of every round (changes, test results, open items).
-* Function-review rounds work through `ver 1.2.12 development/REVIEW_FUNCTION_INVENTORY.md` **in document order** (leaves → menus). Flip each function's status column (`open` → `partial`/`reviewed` + evidence) as its round lands; regenerate the doc if function structure changes.
+* Work one approved round at a time; the round prompt lives in `ver_1.2.12_development/REVIEW_ROUND_N.md`.
+* Read `ver_1.2.12_development/REVIEW_ROUNDS.md` and `REVIEW_STATUS.md` at the start of every session before touching code.
+* Update `ver_1.2.12_development/REVIEW_ROUNDS.md` at the end of every round (changes, test results, open items).
+* Function-review rounds work through `ver_1.2.12_development/REVIEW_FUNCTION_INVENTORY.md` **in document order** (leaves → menus). Flip each function's status column (`open` → `partial`/`reviewed` + evidence) as its round lands; regenerate the doc if function structure changes.
 * **Function-review focus (set 2026-10-18):** reliability first, then standards and readability. **Don't make unneeded changes** — no refactoring or cosmetic rewrites unless they serve one of those three.
 * Release ladder (lesson of the 2026-10-18 beta.5 retraction — a published beta artifact is effectively frozen): **(a)** code done + agent battery green → **(b)** *user's* destructive-harness pass on that exact code → **(c)** tag + push. Step (c) always with explicit user confirmation.
 
@@ -54,7 +54,7 @@ We are stepping through the code from the published `v1.2.11` baseline toward a 
 
 ## Verification playbook (agent-safe only)
 
-* `bash -n pisafe` — parse check (before and after every round); shellcheck gate: `bash "ver 1.2.12 development/lint.sh"`
+* `bash -n pisafe` — parse check (before and after every round); shellcheck gate: `bash "ver_1.2.12_development/lint.sh"`
 * `bash pisafe -v` — prints the version and exits (safe, non-interactive)
 * Subshell spot-tests of pure functions: extract with `sed -n 'START,ENDp'` into a standalone file that stubs UI helpers, run test inputs, compare output
 * `git diff --stat` and a read-through of the full `git diff` before reporting
@@ -67,12 +67,12 @@ We are stepping through the code from the published `v1.2.11` baseline toward a 
 * **When it happens:** do *not* `reset --hard` / `restore` / `checkout --` to "clean" the status; work from the object DB instead (`git show dev:pisafe`, `git cat-file -s <ref>:pisafe`). Once the file is readable again, verify byte integrity with `git hash-object pisafe` vs `git rev-parse dev:pisafe`.
 * **Detection one-liner:** `fuser -v pisafe` — names the process holding the file.
 * **For the user (app-running tip):** run the app from a local copy so the share file isn't pinned while it's live — `cp pisafe /tmp/pisafe-run && bash /tmp/pisafe-run` (config/log writes still land where configured; only the script copy moves).
-* Parallel sessions have reworked `REVIEW_ROUNDS.md` and introduced `REVIEW_STATUS.md` (both under `ver 1.2.12 development/`) — inspect current contents before overwriting; prefer asking the user which doc is canonical for a given note.
+* Parallel sessions have reworked `REVIEW_ROUNDS.md` and introduced `REVIEW_STATUS.md` (both under `ver_1.2.12_development/`) — inspect current contents before overwriting; prefer asking the user which doc is canonical for a given note.
 
 ## Git workflow
 
 * Work happens on branch `dev` (the campaign branch). `dev_old` holds the pre-review work; do not touch it.
-* **Session-close handoff (2026-10-26):** local `dev` = `b4b705c` (R20 `ab42ce6` + reorg `b4b705c`) = **2 commits ahead of `origin/dev` (`a842113`), NOT pushed**. Push/tag only with the user's GO for that specific action. Campaign position + open user calls: `ver 1.2.12 development/REVIEW_STATUS.md`; latest round: R21 in `ver 1.2.12 development/REVIEW_ROUNDS.md`.
+* **Session-close handoff (2026-10-26):** local `dev` = `b4b705c` (R20 `ab42ce6` + reorg `b4b705c`) = **2 commits ahead of `origin/dev` (`a842113`), NOT pushed**. Push/tag only with the user's GO for that specific action. Campaign position + open user calls: `ver_1.2.12_development/REVIEW_STATUS.md`; latest round: R21 in `ver_1.2.12_development/REVIEW_ROUNDS.md`.
 * `main` tracks `origin/main`; it is the release branch. Nothing in the review campaign modifies `main`.
 * Small, focused commits — one per approved round — **only with explicit user approval**.
 * Suggested commit message format: `review R<N>: <summary>` (e.g. `review R1: quote expansions, normalize whitespace, fix TB multiplier`).
@@ -105,7 +105,7 @@ for the next publish to `main`.
 
 ## Known-issues backlog
 
-(Current open items live in `ver 1.2.12 development/REVIEW_STATUS.md` → `outstanding`; future-version ideas in `ver 1.3.0 development/pisafe_test_punchlist.txt`. Historical table below.)
+(Current open items live in `ver_1.2.12_development/REVIEW_STATUS.md` → `outstanding`; future-version ideas in `ver_1.3.0_development/pisafe_test_punchlist.txt`. Historical table below.)
 
 | Item | Location | Round |
 |---|---|---|

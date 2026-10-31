@@ -7,8 +7,8 @@ old/
 
 # version development cycles (docs + testing + scratch) - kept on disk, never in git
 # (the root testing/ holds the CANONICAL harness tools - those stay tracked)
-ver 1.2.12 development/
-ver 1.3.0 development/
+ver_1.2.12_development/
+ver_1.3.0_development/
 
 # harness run outputs (regenerated each run)
 testing/pisafe_test_log.txt

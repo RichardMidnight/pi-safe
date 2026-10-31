@@ -66,7 +66,7 @@ Install your OS (e.g. Raspberry Pi OS, Debian, Ubuntu, Manjaro) on a smaller SD 
 Originally developed and tested on Raspberry Pi 4 running Raspberry Pi OS Buster.  
 Also tested on Raspberry Pi OS (Bookworm / Trixie), Debian (Bullseye / Trixie), Raspberry Pi Desktop, Ubuntu 24.04, Linux Mint, LMDE 7, Manjaro ARM (RPi 5).
 
-- **v1.2.12-beta.7** — Everything in beta.6 (pure hardening over 1.2.11: about 30 reliability, standards, and bug fixes across the full function review, no default changes), plus the final gz sizing gate (refuses to create images ~3.9 GiB and up) and a per-run compression level option (`-1`–`-9` or `--level=N`; zst goes 1–19, over-max levels clamped with a warning). Details: `ver 1.2.12 development/RELEASE_NOTES_1.2.12.md` (incl. the beta.1 → beta.6 trail)
+- **v1.2.12-beta.7** — Everything in beta.6 (pure hardening over 1.2.11: about 30 reliability, standards, and bug fixes across the full function review, no default changes), plus the final gz sizing gate (refuses to create images ~3.9 GiB and up) and a per-run compression level option (`-1`–`-9` or `--level=N`; zst goes 1–19, over-max levels clamped with a warning). Details: `ver_1.2.12_development/RELEASE_NOTES_1.2.12.md` (incl. the beta.1 → beta.6 trail)
 - **v1.2.11** — The stable release since Dec 2023
 - **v1.2.10** — Adds support for Bookworm and NVMe media  
 - **v1.2.9** — Started adding command-line settings override options (undocumented)  
