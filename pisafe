@@ -46,11 +46,17 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 # ==================================================================
 #  Linux distro reference 2026
 # ==================================================================
+# tool: pisafe/testing/pisafe_test.sh
 # DISTRO                      TERMINAL            TEXT EDITOR
 # Raspberry Pi OS trixie      lxterminal          mousepad
 # LMDE 7 (gigi) CINN          gnome-terminal      xed
 # Ubuntu 24.04 GNOME          gnome-terminal      gnome-text-editor
 # Manjaro XFCE                xfce4-terminal      mousepad
+# (rows below: terminal and text editor not yet recorded - re-run to capture)
+# Raspberry Pi OS bookworm
+# Kali Rolling
+# Armbian
+# DietPi
 #
 # earlier releases, historical (pre-2026):
 # RaspberryPiOS-stretch       lxterminal          leafpad?
@@ -89,8 +95,10 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 # Raspberry Pi OS bullseye (64)               good   12/12
 # Raspberry Pi OS buster (32)                 good   10/12    zst not available
 # DietPi (trixie)                             good   12/12
-# Manjaro ARM (RPi4)                          good   10/12    zst not available
+# Manjaro ARM (RPi4)                          good   12/12    zstd installed on demand (first use)
 # Manjaro ARM (RPi5)                          good   12/12
+# Kali Rolling (RPi, 64)                      good   10/12    gz refused (card over ~3.9 GiB)
+# Armbian (RPi5, 64)                          good   12/12    10/12 on a card over ~3.9 GiB (gz guard)
 # Ubuntu 24.04 (64)                           good   12/12
 #
 # --- x86-64 ---
@@ -156,7 +164,7 @@ echo_blue()  { echo -e "\033[1;34m$*\033[0m"; }
 #  zst is the fastest
 #  xz is the smallest
 #  mb removed per second = (sd card 7948mb - size) / time(sec)
-#  xz-1 will be pisafe's new default.
+#  xz-1 will be pisafe's new default after ver 1.2.12.
 
 
 run_command(){
