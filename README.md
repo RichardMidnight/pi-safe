@@ -3,6 +3,8 @@
 **Backup and restore Raspberry Pi systems — and many Linux systems — quickly and easily.**
 PiSafe lets you create compressed image files of SD cards, USB drives, HDDs, SSDs or NVMes, and restore them whenever you need. Great for creating restore points. 
 
+[![downloads](https://img.shields.io/github/downloads/RichardMidnight/pi-safe/v1.2.11?label=downloads)](https://github.com/RichardMidnight/pi-safe/releases)
+
 - 🍓 Designed for Raspberry Pi — works with most Linux distros  
 - 🐧 Runs entirely on Linux — no Windows or Mac required  
 - 💾 Compatible with Raspberry Pi Imager and other imaging tools  
@@ -27,7 +29,7 @@ Paste or type this into a terminal window:
 
 **Stable** (v1.2.11)
 ```bash
-wget https://raw.githubusercontent.com/RichardMidnight/pi-safe/main/pisafe -O pisafe
+wget https://github.com/RichardMidnight/pi-safe/releases/download/v1.2.11/pisafe -O pisafe
 bash pisafe install
 ```
 
