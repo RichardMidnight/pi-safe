@@ -1,0 +1,63 @@
+name: download-counter
+
+# Daily snapshot of GitHub release-asset download counts (cumulative per
+# release). Per-day usage is read off consecutive entries in
+# tracking/download_history.json. Public API — no token needed to read.
+# Writes back to main via the built-in GITHUB_TOKEN (contents: write only).
+
+on:
+  schedule:
+    - cron: "0 6 * * *" # daily, 06:00 UTC
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Snapshot download counts and commit if changed
+        run: |
+          curl -sfS https://api.github.com/repos/RichardMidnight/pi-safe/releases?per_page=30 \
+            -o /tmp/releases.json
+
+          python3 - <<'PY'
+          import datetime, json
+
+          rels = json.load(open('/tmp/releases.json'))
+          assets = {}
+          for r in rels:
+              tag = r.get('tag_name') or ''
+              if tag:
+                  assets[tag] = sum(a.get('download_count', 0) for a in r.get('assets', []))
+
+          path = 'tracking/download_history.json'
+          try:
+              doc = json.load(open(path, encoding='utf-8'))
+          except FileNotFoundError:
+              doc = {'history': []}
+
+          entry = {'date': datetime.date.today().isoformat(),
+                   **{k: v for k, v in sorted(assets.items())}}
+          doc['history'] = [h for h in doc.get('history', []) if h.get('date') != entry['date']]
+          doc['history'].append(entry)
+          doc['history'].sort(key=lambda h: h.get('date', ''))
+
+          with open(path, 'w', encoding='utf-8') as f:
+              json.dump(doc, f, indent=2, sort_keys=True)
+              f.write('\n')
+          print('snapshot:', json.dumps(entry))
+          PY
+
+          git config user.name "pi-safe[bot]"
+          git config user.email "pi-safe[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- tracking/; then
+            git add tracking/
+            git commit -m "tracking: download counts $(date -u +%F)"
+            git push
+          else
+            echo "no change, nothing to commit"
+          fi
